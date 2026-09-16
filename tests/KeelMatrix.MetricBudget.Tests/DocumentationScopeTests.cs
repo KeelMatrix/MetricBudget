@@ -33,15 +33,15 @@ public sealed class DocumentationScopeTests
 
     private static readonly Regex[] SessionScopedBoundWording =
     {
-        new Regex(@"\bapplies\s+across\s+the\s+session\b", RegexOptions.IgnoreCase),
-        new Regex(@"\bapplies\s+across\s+all\s+selected\s+instruments\b", RegexOptions.IgnoreCase),
-        new Regex(@"\bapplies\s+once\s+per\s+session\b", RegexOptions.IgnoreCase),
+        new Regex(@"\b(?:applies|apply|applying|applied)\s+across\s+the\s+session\b", RegexOptions.IgnoreCase),
+        new Regex(@"\b(?:applies|apply|applying|applied)\s+across\s+all\s+selected\s+instruments\b", RegexOptions.IgnoreCase),
+        new Regex(@"\b(?:applies|apply|applying|applied)\s+once\s+per\s+session\b", RegexOptions.IgnoreCase),
         new Regex(@"\b(?:series|tag[- ]value)\s+(?:safety\s+)?bound\s+(?:is|applies\s+(?:to|across))\s+(?:the\s+)?session[- ]wide\b", RegexOptions.IgnoreCase),
         new Regex(@"\b(?:series|tag[- ]value)\s+(?:safety\s+)?bound\s+(?:is|applies\s+(?:to|across))\s+(?:the\s+)?session\b", RegexOptions.IgnoreCase),
         new Regex(@"\b(?:series|tag[- ]value)\s+(?:safety\s+)?bound\s+is\s+(?:one\s+)?shared\s+pool\s+for\s+the\s+session\b", RegexOptions.IgnoreCase),
         new Regex(@"\bthe\s+session\s+shares\s+one\s+(?:series|tag[- ]value)\s+bound\b", RegexOptions.IgnoreCase),
         new Regex(@"\b(?:one\s+)?(?:series|tag[- ]value)\s+bound\s+across\s+(?:the\s+)?session\b", RegexOptions.IgnoreCase),
-        new Regex(@"\b(?:MaxTrackedSeries|MaxTrackedValuesPerTag)\s+(?:is|applies\s+(?:to|across)|covers?)\s+(?:the\s+)?session(?:[- ]wide)?\b", RegexOptions.IgnoreCase),
+        new Regex(@"\b(?:MaxTrackedSeries|MaxTrackedValuesPerTag)\s+(?:is|(?:applies|apply|applying|applied)\s+(?:to|across)|covers?)\s+(?:the\s+)?session(?:[- ]wide)?\b", RegexOptions.IgnoreCase),
         new Regex(@"\b(?:the\s+)?session[- ]wide\s+(?:series|tag[- ]value|distinct[- ]value)\s+(?:safety\s+)?bound\b", RegexOptions.IgnoreCase),
     };
 
