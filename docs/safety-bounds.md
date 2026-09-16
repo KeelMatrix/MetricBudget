@@ -1,0 +1,44 @@
+# Safety bounds and bounded memory
+
+The verifier observes exactly the failure class that can create huge numbers of combinations, so its own memory
+has to be bounded and honest. Every session applies three explicit bounds.
+
+| Option | Default | What it bounds |
+| --- | --- | --- |
+| `MaxTrackedSeries` | 100,000 | Distinct observed series retained across all selected instruments in the session. |
+| `MaxTrackedValuesPerTag` | 5,000 | Distinct values retained per tag key and instrument identity. |
+| `MaxTagValueLength` | 256 | Length of a tag value's invariant text before it is replaced by a stable digest in the identity. |
+
+The defaults exist so an accidentally explosive workload cannot make the verifier unbounded. They are not budgets,
+they are not recommendations for an application, and reaching one never turns a failing workload into a passing
+report.
+
+## What happens when a bound is reached
+
+- The observation is still counted as delivered.
+- The observation is recorded as **untracked**; it is never matched to an existing series, so the session cannot
+  silently undercount.
+- The report names the bound, the instrument, and how many observations could not be tracked.
+- Counts that depend on the exhausted bound become explicit lower bounds:
+  `MetricBudgetInstrumentResult.SeriesTrackingIncomplete`,
+  `MetricBudgetTagResult.ValueTrackingIncomplete`, and `MetricBudgetSafetyReport.IsComplete` state this
+  machine-readably.
+- The session outcome becomes `ObservationIncomplete`, which is not a pass, and
+  `AssertWithinBudget()` fails with the bounded-state diagnostics.
+
+A definite budget breach that is already proven is reported as `Violation`; reaching a bound never hides it.
+
+## Memory characteristics
+
+- Series identity and tag-value identity are held as fixed-size SHA-256 digests, not as the canonical text, so no
+  raw tag value is retained.
+- Retained memory grows with tracked series and tracked distinct values, and stops growing when the bounds are
+  reached.
+- Canonicalization cost is linear in the number of delivered tags per measurement plus one ordinal sort of those
+  entries; the resource gate in the test suite measures per-measurement cost at representative series counts.
+
+## Choosing tighter bounds
+
+You can lower the bounds to fail faster on a workload you know well, for example `MaxTrackedSeries = 10_000`. Keep
+them above the cardinality you legitimately expect: a bound that is too low turns a valid verification into
+`ObservationIncomplete`, which is a louder failure, not a false pass.

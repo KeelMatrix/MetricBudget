@@ -1,84 +1,82 @@
 # Repository guide
 
-## Purpose
+## What this repository ships
 
-This repository is a Phase 0 feasibility probe for the proposed MetricBudget test-time metric-cardinality
-verifier. It measures `System.Diagnostics.Metrics` and `MeterListener` behavior and produces raw evidence. It is
-not a shipping package and defines no product API.
+`src/KeelMatrix.MetricBudget` is the single shipping library. It observes `System.Diagnostics.Metrics`
+measurements through `MeterListener` and reports **observed cardinality** for the workload a test ran, against the
+budgets that test declared. It targets `net8.0` and `netstandard2.0` and is the only packable project.
 
-## Layout
+The repository must never claim more than that: a report describes the exercised workload, not the maximum
+cardinality production can produce, and it is not an observability-cost estimate.
 
-- `src/MetricBudget.Probe.Core` — candidate series identity rule (`ProbeTagCanonicalizer`), bounded observed-series
-  accounting (`ProbeSeriesTracker`), and the `net8.0` `MeterListener` session (`MeterObservationSession`).
-- `src/MetricBudget.Probe.NetStandard` — the same identity rule and tracker compiled for `netstandard2.0` against
-  `System.Diagnostics.DiagnosticSource`, plus `NetStandardObservationSession` for parity evidence.
-- `tests/MetricBudget.Probe.Runner` — the only executable entry point. `Probes/` holds one file per acceptance
-  item: instrument coverage, instrument lifecycle, tag identity, parallel isolation, cardinality scale, and
-  target-framework parity. `ProbeReport.cs` holds the shared measurement and verdict helpers.
-- `tests/MetricBudget.Probe.Net472Host` — the bounded downlevel host. It runs the netstandard2.0-compiled session
-  on .NET Framework against the package's netstandard2.0 `System.Diagnostics.DiagnosticSource` asset, because a
-  net8.0 process always binds that session to the framework assembly.
+## Navigation
+
+- `src/KeelMatrix.MetricBudget` - public API, session lifecycle, accounting, diagnostics, assertions, telemetry.
+  - `Internal/TagIdentity.cs` - the deterministic series identity rule; `docs/series-identity.md` documents it and
+    must keep matching the code.
+  - `Internal/MetricBudgetState.cs` and `Internal/InstrumentAccount.cs` - the single writer path for every counter,
+    flag, and map.
+  - `Internal/ReportBuilder.cs` - the outcome ladder; nothing-verified must never become a pass.
+  - `Internal/Telemetry.cs` - the closed field allowlist and the shared telemetry sink.
+- `tests/KeelMatrix.MetricBudget.Tests` - behavior, edge, concurrency, safety, telemetry, ASP.NET Core integration,
+  and resource tests. Exercises both target frameworks.
+- `tests/KeelMatrix.MetricBudget.PackageConsumer` - isolated smoke test that consumes the built `.nupkg` from a
+  local package source and references no project.
+- `samples/KeelMatrix.MetricBudget.Sample` - runnable sample.
+- `docs/` - series identity, observed-vs-production, safety bounds, troubleshooting, privacy and telemetry, and
+  the Phase 0 probe evidence.
+- `src/MetricBudget.Probe.*`, `tests/MetricBudget.Probe.*` - Phase 0 feasibility probe and downlevel host. Keep
+  them non-shipping development evidence; do not lift their types into the product API and do not change their
+  recorded evidence.
 
 ## Commands
 
-Full probe from the repository root:
-
 ```text
-dotnet run --project tests/MetricBudget.Probe.Runner/MetricBudget.Probe.Runner.csproj -c Release
-```
-
-Single section while iterating (faster than the full run):
-
-```text
-dotnet run --project tests/MetricBudget.Probe.Runner/MetricBudget.Probe.Runner.csproj -c Release --no-build --probe=tags
-```
-
-Downlevel host for the netstandard2.0 decision (after a Release build):
-
-```text
-tests/MetricBudget.Probe.Net472Host/bin/Release/net472/MetricBudget.Probe.Net472Host.exe
-```
-
-Release build of everything:
-
-```text
-dotnet build MetricBudget.Probe.sln -c Release
+dotnet restore KeelMatrix.MetricBudget.sln
+dotnet build KeelMatrix.MetricBudget.sln -c Release
+dotnet test tests/KeelMatrix.MetricBudget.Tests/KeelMatrix.MetricBudget.Tests.csproj -c Release
+dotnet test tests/KeelMatrix.MetricBudget.Tests/KeelMatrix.MetricBudget.Tests.csproj -c Release --framework net472
+dotnet pack src/KeelMatrix.MetricBudget/KeelMatrix.MetricBudget.csproj -c Release -o artifacts/packages
+dotnet run --project tests/KeelMatrix.MetricBudget.PackageConsumer -c Release
+dotnet run --project samples/KeelMatrix.MetricBudget.Sample -c Release
+dotnet format --verify-no-changes
+dotnet list KeelMatrix.MetricBudget.sln package --vulnerable --include-transitive
 ```
 
 `Directory.Build.props` treats Release warnings as errors, so a Release build is the cheapest way to catch
-analyzer and nullability regressions.
+analyzer, nullability, and documentation regressions. The `net472` test target is not optional: it is the only
+honest way to exercise the `netstandard2.0` asset.
+
+`KeelMatrix.MetricBudget.sln` holds the library, tests, sample, and probe projects. The package-consumer project is
+deliberately outside it because it restores the built package from `artifacts/packages`; pack before running it.
+`MetricBudget.Probe.sln` remains the solution the Phase 0 evidence commands use.
 
 ## Invariants
 
-- Every project stays non-packable; the repository produces no package.
-- The session types (`MeterObservationSession`, `NetStandardObservationSession`) and every other probe type are
-  probe-only. They are public so the runner and the downlevel host can drive them, and nothing here may be lifted
-  into a product surface as-is.
-- The probe observes only BCL metrics APIs. Do not add a telemetry, exporter, or vendor dependency.
-- Tag data is copied out of the measurement callback. Never retain or store the callback span.
-- Bounded accounting must stay honest: when a safety cap is reached, produce an explicit incomplete/bounded
-  state and never report an untracked series as an existing one.
-- All accounting is shared with measurement threads. The tracker's series map, per-tag value maps, counters, and
-  flags are written under one writer lock, session summaries are single consistent snapshots, and a summary must
-  never report more tracked series than observed measurements.
-- The runner never lets an exception escape. A probe that throws becomes a named failed gate, and any failed gate
-  makes the runner exit non-zero. A finding that records measured platform behavior (for example that
-  `MeterListener.Dispose` does not stop delivery on .NET 8) is an observation, not a gate, so its `FAIL` never
-  changes the exit code.
-- The printed tag identity rule and the code must agree. A null key is the bare `null` marker in the key field; no
-  field is described as length-prefixed unless it is.
-- Sessions disable every instrument they enabled before disposal; `MeterListener.Dispose` is not sufficient for
-  containment on .NET 8.
-- Local diagnostics in the probe may include tag keys and counts, never raw tag values harvested from a session.
-- Keep the runner deterministic apart from timing and memory numbers, which are reported as measurements.
-
-## Validation
-
-Restore, build Release, then run the runner from the repository root. The runner is the only full-corpus command.
-Keep generated output (`bin/`, `obj/`) out of source control.
+- **Observed cardinality only.** Diagnostics say "observed series" or "observed cardinality". Never imply static
+  proof of production maximums, and never present a default budget as universally safe.
+- **Privacy.** Reports, diagnostics, assertion messages, and telemetry contain tag keys and counts, never tag
+  values, metric values, or workload samples. Only fixed-size digests of series and tag values are retained.
+- **Bounded accounting.** Series and per-tag distinct-value accounting stay inside explicit safety bounds. A
+  bounded run is reported as incomplete, counts become documented lower bounds, and an untracked observation is
+  never matched to an existing series.
+- **One writer path.** Measurement callbacks, session bookkeeping, and summaries all serialize on one lock, and a
+  summary is a single consistent snapshot. An impossible account fails loudly instead of passing.
+- **Explicit containment.** A session calls `DisableMeasurementEvents` for every instrument it enabled, because
+  `MeterListener.Dispose` does not stop delivery. Never present disposal as the containment mechanism.
+- **Honest isolation.** Instrument publication is process-global; delivery is scoped to the instruments a session
+  enabled. Do not promise isolation the platform cannot give.
+- **Deterministic identity.** Tag order never changes identity, duplicate keys are a sorted multiset, and the CLR
+  type of a value is part of identity.
+- **Telemetry.** Only the allowlisted aggregate fields may ever be attached, activation means a completed
+  verification that observed at least one selected instrument, and telemetry failure must never change a result.
+  Tests and local development run with telemetry opted out.
+- **Packaging.** The package ships only the library assembly, XML docs, README, icon, license, symbols, and
+  SourceLink. No probe, test, sample, generated report, or local-only file may be packed.
 
 ## Scope
 
-Do not add a shipping package, public product API, CLI, workflow, analyzer, or package metadata here. If a probe
-finding contradicts the product specification, record the finding instead of changing the probe to fit the
-specification.
+Do not add features the specification does not require: no raw tag-value exposure, no JSON report export, no
+vendor-specific types, no production-cost estimation, no hosted components, and no release workflow. Package
+identity, version, target frameworks, dependencies, and metadata are defined by the product specification; change
+them only with an approved specification change.

@@ -3,3 +3,8 @@
 *.csproj text eol=lf
 *.props text eol=lf
 *.sln text eol=lf
+*.targets text eol=lf
+*.txt text eol=lf
+*.json text eol=lf
+*.runsettings text eol=lf
+*.md text eol=lf

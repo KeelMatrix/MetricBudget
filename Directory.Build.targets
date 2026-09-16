@@ -1,4 +1,23 @@
 <Project>
+  <!--
+    Packable projects are decided in the project file, so package-wide defaults are applied here rather than in
+    Directory.Build.props, which is evaluated before a project can declare IsPackable.
+  -->
+  <PropertyGroup Condition="'$(IsPackable)' == 'true'">
+    <RepositoryUrl Condition="'$(RepositoryUrl)' == ''">https://github.com/KeelMatrix/MetricBudget</RepositoryUrl>
+    <RepositoryType Condition="'$(RepositoryType)' == ''">git</RepositoryType>
+    <PackageLicenseExpression Condition="'$(PackageLicenseExpression)' == ''">MIT</PackageLicenseExpression>
+    <PackageProjectUrl Condition="'$(PackageProjectUrl)' == ''">https://github.com/KeelMatrix/MetricBudget#readme</PackageProjectUrl>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(IsPackable)' == 'true'">
+    <PackageReference Include="Microsoft.SourceLink.GitHub" PrivateAssets="all" />
+  </ItemGroup>
+
   <!-- Pack the library README and the repository icon into the package root when they are present. -->
   <ItemGroup Condition="'$(IsPackable)' == 'true'">
     <None Include="$(MSBuildProjectDirectory)\README.md"

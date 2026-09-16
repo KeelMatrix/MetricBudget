@@ -6,6 +6,7 @@
     <IsPackable>true</IsPackable>
     <AssemblyName>KeelMatrix.MetricBudget</AssemblyName>
     <RootNamespace>KeelMatrix.MetricBudget</RootNamespace>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
 
     <Version>0.1.0</Version>
     <PackageVersion>$(Version)</PackageVersion>
@@ -13,7 +14,9 @@
     <FileVersion>0.1.0.0</FileVersion>
 
     <PackageId>KeelMatrix.MetricBudget</PackageId>
-    <Description>Verify observed metric cardinality in .NET tests and CI. Observe the metric series and tag values the exercised workload actually emits, and fail when an instrument exceeds an explicit observed-series or per-tag distinct-value budget.</Description>
+    <!-- The SDK defaults Authors to the assembly name, so the brand identity is set explicitly. -->
+    <Authors>KeelMatrix</Authors>
+    <Description>Verify observed metric cardinality in .NET tests and CI. Observe the metric series the exercised workload actually emits, count the distinct values each tag key produced, and fail when an instrument exceeds an explicit observed-series or per-tag distinct-value budget.</Description>
     <PackageTags>metrics;cardinality;opentelemetry;system-diagnostics-metrics;testing;ci;observability</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>

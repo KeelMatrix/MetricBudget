@@ -19,24 +19,6 @@
     <ContinuousIntegrationBuild Condition="'$(Configuration)' == 'Release'">true</ContinuousIntegrationBuild>
   </PropertyGroup>
 
-  <!-- Packable libraries ship XML documentation, symbols, SourceLink, and package metadata. -->
-  <PropertyGroup Condition="'$(IsPackable)' == 'true'">
-    <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <Authors Condition="'$(Authors)' == ''">KeelMatrix</Authors>
-    <RepositoryUrl Condition="'$(RepositoryUrl)' == ''">https://github.com/KeelMatrix/MetricBudget</RepositoryUrl>
-    <RepositoryType Condition="'$(RepositoryType)' == ''">git</RepositoryType>
-    <PackageLicenseExpression Condition="'$(PackageLicenseExpression)' == ''">MIT</PackageLicenseExpression>
-    <PackageProjectUrl Condition="'$(PackageProjectUrl)' == ''">https://github.com/KeelMatrix/MetricBudget#readme</PackageProjectUrl>
-    <PublishRepositoryUrl>true</PublishRepositoryUrl>
-    <EmbedUntrackedSources>true</EmbedUntrackedSources>
-    <IncludeSymbols>true</IncludeSymbols>
-    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
-  </PropertyGroup>
-
-  <ItemGroup Condition="'$(IsPackable)' == 'true'">
-    <PackageReference Include="Microsoft.SourceLink.GitHub" PrivateAssets="all" />
-  </ItemGroup>
-
   <!-- Public API baselines are analyzer inputs only for projects that own one. -->
   <ItemGroup Condition="Exists('$(MSBuildProjectDirectory)\PublicAPI.Shipped.txt')">
     <AdditionalFiles Include="$(MSBuildProjectDirectory)\PublicAPI.Shipped.txt" />

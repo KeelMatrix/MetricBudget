@@ -1,124 +1,80 @@
 # KeelMatrix.MetricBudget
 
-This repository contains a bounded feasibility probe for the proposed MetricBudget test-time metric-cardinality
-verifier. It is **not** a shipping package: there is no public product API, no package metadata, and no publishable
-artifact yet.
+Verify observed metric cardinality in .NET tests and CI. Run your normal workload, observe the metric series and
+tag values it actually emits, and fail when an instrument exceeds an explicit observed-series or per-tag
+distinct-value budget - without a collector, exporter, or observability backend.
 
-The probe observes real `System.Diagnostics.Metrics` behavior through `MeterListener` and records raw, reproducible
-numbers for the questions that decide whether the product can be built as specified:
+The package is `KeelMatrix.MetricBudget`. The user documentation is the package README:
 
-1. Instrument coverage for `Counter`, `UpDownCounter`, `Histogram`, `ObservableCounter`,
-   `ObservableUpDownCounter`, and `ObservableGauge` across every supported measurement type, plus the concrete
-   failure mode for unsupported types.
-2. Deterministic, order-independent, culture-independent series identity, including null, empty, duplicate, and
-   oversized tag values.
-3. Whether tag data must be copied out of the measurement callback, with measured buffer aliasing.
-4. What a process-global `MeterListener` actually observes when several tests run in parallel, and what disposal
-   really stops.
-5. Bounded canonicalization cost and explicit safety-cap behavior at one million distinct series.
-6. Whether `netstandard2.0` is viable, including the exact `System.Diagnostics.DiagnosticSource` version, the
-   dependency closure it adds, and the public API gap against the `net8.0` framework.
+- [Package README](src/KeelMatrix.MetricBudget/README.md) - installation, quick start, examples, budgets,
+  outcomes, safety bounds, privacy, telemetry, supported targets, and troubleshooting.
 
-## Running the probe
+## What is verified
 
-The whole probe runs with one command from the repository root:
+- the distinct **observed series** an instrument produced during the exercised workload;
+- the distinct **values** each configured tag key produced;
+- tag-set identity that is order-independent and deterministic, so the same combination never counts twice;
+- explicit outcomes for a budget breach, invalid configuration, an instrument that was never observed, and a
+  session that observed no measurements at all.
 
-```text
-dotnet run --project tests/MetricBudget.Probe.Runner/MetricBudget.Probe.Runner.csproj -c Release
-```
+A report describes the workload you ran. It never claims to prove the maximum cardinality production can produce,
+and it is not an observability-cost estimate.
 
-Add `--probe=<name>` to run a single section: `coverage`, `lifecycle`, `tags`, `isolation`, `scale`, `parity`.
-
-The runner prints the environment, one line of raw numbers per observation, and a `PASS` / `NARROW` / `FAIL`
-verdict per acceptance item, then a summary block and a final runner verdict. Verdicts are feasibility evidence,
-not release readiness.
-
-The `netstandard2.0` decision also has a bounded downlevel host, which runs the netstandard2.0-compiled session
-on .NET Framework against the package's own netstandard2.0 `System.Diagnostics.DiagnosticSource` asset:
+## Repository layout
 
 ```text
-dotnet build MetricBudget.Probe.sln -c Release
-tests/MetricBudget.Probe.Net472Host/bin/Release/net472/MetricBudget.Probe.Net472Host.exe
+src/KeelMatrix.MetricBudget/            the shipping library package (net8.0, netstandard2.0)
+tests/KeelMatrix.MetricBudget.Tests/     behavior, edge, concurrency, safety, telemetry, integration, resource tests
+tests/KeelMatrix.MetricBudget.PackageConsumer/ isolated package-consumer smoke test (consumes the built .nupkg)
+samples/KeelMatrix.MetricBudget.Sample/  runnable sample
+docs/                                    series identity, observed-vs-production, safety, privacy, troubleshooting
+src/MetricBudget.Probe.*, tests/MetricBudget.Probe.*  Phase 0 feasibility probe and its downlevel host
 ```
 
-Every finding is either a run gate or an observation. A failed gate makes the runner exit non-zero with a
-`GATE[FAIL]` line naming the finding, and a probe that throws is reported as a named failed gate instead of
-aborting the run. An observation records measured platform behavior, so a `FAIL` there (for example the
-`MeterListener.Dispose` result below) is an expected outcome and never changes the exit code.
+The `MetricBudget.Probe.*` projects are development evidence from the feasibility phase. They are not packable,
+they are not part of the product API, and nothing in the shipping library depends on them. They also keep their own
+`MetricBudget.Probe.sln`, which is the solution their evidence commands use.
 
-## What the probe has established
+`KeelMatrix.MetricBudget.sln` contains the library, its tests, the sample, and the probe projects. The
+package-consumer project is intentionally outside that solution: it restores the package from a local feed, so it
+is run explicitly after packing rather than as part of a normal build.
 
-- All six instrument kinds deliver measurements for `byte`, `short`, `int`, `long`, `float`, `double`, and
-  `decimal`, and the callback type delivered always matches the instrument's measurement type.
-- The supported measurement class is complete at those seven numeric types because the runtime validates the
-  instrument type against one fixed set. Every sampled unsupported type (including `sbyte`, `ushort`, `uint`,
-  `ulong`, `nint`, `Half`, `Guid`, `DateOnly`, `BigInteger`, an enum, a struct, and `int?`) fails loudly:
-  `Create*` throws `InvalidOperationException` listing the supported types, so there is no silently unusable
-  instrument. The unsupported class is a sample, not an exhaustive enumeration.
-- `net8.0` exposes no public `Measure` or `RecordMeasurement` member on `Instrument` or `Instrument<T>`.
-  A listener can only observe measurements through `SetMeasurementEventCallback<T>`.
-- Observable callbacks run once per `RecordObservableInstruments()` call, never at listener start, and the tags
-  they attach arrive on the measurement callback.
-- The measurement callback receives a `ReadOnlySpan<KeyValuePair<string, object?>>` that aliases caller-owned
-  memory, and the backing buffer of a `TagList` is reused across calls. Tag data must be copied out during the
-  callback; it cannot be retained.
-- `MeterListener.Dispose()` does **not** stop measurement delivery for instruments that listener already enabled
-  on .NET 8.0.31: after disposal the callbacks keep firing and `Instrument.Enabled` stays `true`. Explicit
-  `DisableMeasurementEvents` per instrument is required for containment, so the probe session disables every
-  instrument it enabled before disposal.
-- Instrument publication is process-global while delivery is scoped: an unselected listener observes other
-  parallel tests' measurements, a listener that selects its own instruments does not.
-- Concurrent delivery is accounted for exactly. Observed-series accounting is serialized behind one writer lock,
-  session summaries are consistent snapshots, and the parallel case asserts a strict contract: each of four
-  unselected sessions that is delivered `4 x 5` distinct series must report exactly 20 observed measurements and
-  20 tracked series, must never report more tracked series than observations, and must never lose a copied tag
-  set. Sessions that select their own instruments observe only their own measurements.
-- Canonicalization stays linear and bounded: one ordinal sort of the delivered entries and one key string per
-  series, with per-series memory in the low hundreds of bytes and a stable `sha256` descriptor replacing
-  oversized tag values. That claim is evidence-gated: raising the series count tenfold must not raise the measured
-  per-series time or the per-series allocation past the gate, and the verdict fails when it does.
-- The series safety cap produces an explicit bounded-state result, never a silent undercount: at a cap of
-  250,000 with one million generated combinations, the tracker reported 750,000 untracked observations, kept
-  the tracked set at the cap, and never matched an untracked key to an existing series.
-- `netstandard2.0` assets of `System.Diagnostics.DiagnosticSource` expose the same public metrics surface as the
-  `net8.0` framework from version 8.0.0 onward, at the cost of two direct package dependencies
-  (`System.Memory`, `System.Runtime.CompilerServices.Unsafe`) and five supporting packages.
-- The `netstandard2.0` implementation executes on a downlevel host, not only inside a `net8.0` process. On .NET
-  Framework 4.8, with the package's own `netstandard2.0` asset of `System.Diagnostics.DiagnosticSource` loaded
-  from the host's output directory, the netstandard2.0-compiled session delivers counter, histogram,
-  upDownCounter and observableCounter measurements, tracks one series per delivered measurement, folds three tag
-  orders into one series, runs observable callbacks once per `RecordObservableInstruments` call, and stops
-  delivery through explicit `DisableMeasurementEvents`. The host prints the loaded asset's target framework, so a
-  run in which the package's `net462` asset was loaded instead of the `netstandard2.0` asset cannot be reported
-  as a pass.
+## Documentation
 
-## Series identity rule
+- [docs/series-identity.md](docs/series-identity.md) - the exact, deterministic series identity rule.
+- [docs/observed-vs-production-cardinality.md](docs/observed-vs-production-cardinality.md) - what a passing run
+  does and does not tell you.
+- [docs/safety-bounds.md](docs/safety-bounds.md) - the bounded-memory contract and incomplete states.
+- [docs/troubleshooting.md](docs/troubleshooting.md) - "instrument not observed", selector ambiguity, and other
+  recurring problems.
+- [docs/privacy-and-telemetry.md](docs/privacy-and-telemetry.md) - what reaches logs, reports, and telemetry.
+- [PRIVACY.md](PRIVACY.md) and [SECURITY.md](SECURITY.md) - privacy summary and vulnerability reporting.
+- [docs/phase0-probe-evidence.md](docs/phase0-probe-evidence.md) - what the feasibility probe measured about
+  `MeterListener`, instrument coverage, parallel isolation, and the `netstandard2.0` decision.
+
+## Build and test
 
 ```text
-seriesKey  = entries joined by U+001F, entries sorted with StringComparer.Ordinal
-entry      = keyField U+001E valueField
-keyField   = {keyLength}:{key} for a delivered key, or the bare marker null for a null key
-valueField = {descriptorLength}:{descriptor}
-descriptor = {CLR type full name}:{value formatted with CultureInfo.InvariantCulture}
-null value = descriptor text "null", so its valueField is "4:null"
-oversized  = {type}#chars={count}#sha256={hex} when the descriptor exceeds the configured bound
+dotnet restore KeelMatrix.MetricBudget.sln
+dotnet build KeelMatrix.MetricBudget.sln -c Release
+dotnet test tests/KeelMatrix.MetricBudget.Tests/KeelMatrix.MetricBudget.Tests.csproj -c Release
+dotnet run --project samples/KeelMatrix.MetricBudget.Sample -c Release
 ```
 
-Duplicate keys are retained, so a tag set is a sorted multiset rather than a set. The CLR type is part of
-identity, so `int 1` and `string "1"` are different series even though a type-blind formatter would merge them.
-Each field carries its own length prefix, and a length-prefixed field always starts with an ASCII digit, so the
-bare `null` marker used for a null key can never be confused with a delivered key. A null key, the literal key
-`"null"`, and the empty key are three different series, and a null value is not the string value `"null"`. The
-runner prints the measured keys for those cases and fails if the printed rule and the measured rule disagree.
+The test project targets `net8.0` and `net472`. The `net472` run executes the library's `netstandard2.0` asset
+against `System.Diagnostics.DiagnosticSource` 8.0.1 on .NET Framework, which is the only way to exercise that
+asset honestly.
 
-## Layout
+Package validation:
 
-- `src/MetricBudget.Probe.Core` — candidate identity rule, bounded tracker, and the `net8.0` observation session.
-- `src/MetricBudget.Probe.NetStandard` — the same identity rule and tracker compiled for `netstandard2.0`
-  against `System.Diagnostics.DiagnosticSource`, plus the parity session.
-- `tests/MetricBudget.Probe.Runner` — the single executable probe entry point.
-- `tests/MetricBudget.Probe.Net472Host` — the downlevel host that runs the `netstandard2.0` implementation on
-  .NET Framework against the package's `netstandard2.0` asset.
+```text
+dotnet pack src/KeelMatrix.MetricBudget/KeelMatrix.MetricBudget.csproj -c Release -o artifacts/packages
+dotnet run --project tests/KeelMatrix.MetricBudget.PackageConsumer -c Release
+```
 
-All projects are non-packable. `IsPackable` is `false` for every project, and the repository intentionally
-contains no workflow configuration.
+The package-consumer project restores `KeelMatrix.MetricBudget` from `artifacts/packages` and references no
+project in this repository.
+
+## License
+
+MIT. See [LICENSE](LICENSE).

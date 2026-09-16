@@ -9,9 +9,12 @@
     <!-- Shared KeelMatrix telemetry for the anonymous activation/heartbeat signal. -->
     <PackageVersion Include="KeelMatrix.Telemetry" Version="[0.1.0]" />
 
+    <!-- Consumed only by the isolated package-consumer smoke test, which restores the built package. -->
+    <PackageVersion Include="KeelMatrix.MetricBudget" Version="[0.1.0]" />
+
     <!-- Build-only dependencies: API baselines, SourceLink, and the test toolchain. -->
     <PackageVersion Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" Version="3.3.4" />
-    <PackageVersion Include="Microsoft.SourceLink.GitHub" Version="8.0.0" />
+    <PackageVersion Include="Microsoft.SourceLink.GitHub" Version="10.0.401" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
     <PackageVersion Include="xunit" Version="2.7.1" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="2.5.7" />
