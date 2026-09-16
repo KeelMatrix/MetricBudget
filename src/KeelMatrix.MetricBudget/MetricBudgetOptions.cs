@@ -16,22 +16,22 @@ namespace KeelMatrix.MetricBudget;
 /// keeps the configuration it started with even if the options object is reused or changed later.
 /// </para>
 /// <para>
-/// The session-level limits are safety bounds, not budgets. They exist so that an unexpectedly explosive workload
-/// cannot make the verifier itself unbounded, and they are reported explicitly whenever they are reached. They are
-/// deliberately not described as safe values for any particular application.
+/// The configured tracking limits are safety bounds, not budgets. They exist so that an unexpectedly explosive
+/// workload cannot make the verifier itself unbounded, and they are reported explicitly whenever they are reached.
+/// They are deliberately not described as safe values for any particular application.
 /// </para>
 /// </remarks>
 public sealed class MetricBudgetOptions
 {
     /// <summary>
-    /// Default number of distinct observed series a session retains before it reports that series tracking is
-    /// incomplete. This is a safety bound, not a budget or a safe cardinality for any application.
+    /// Default number of distinct observed series retained per instrument identity before it reports that series
+    /// tracking is incomplete. This is a safety bound, not a budget or a safe cardinality for any application.
     /// </summary>
     public const int DefaultMaxTrackedSeries = 100_000;
 
     /// <summary>
-    /// Default number of distinct values a session retains per tag key before it reports that tag value tracking is
-    /// incomplete. This is a safety bound, not a budget or a safe cardinality for any application.
+    /// Default number of distinct values retained per tag key and instrument identity before it reports that tag
+    /// value tracking is incomplete. This is a safety bound, not a budget or a safe cardinality for any application.
     /// </summary>
     public const int DefaultMaxTrackedValuesPerTag = 5_000;
 
@@ -73,7 +73,7 @@ public sealed class MetricBudgetOptions
     public int MaxTrackedSeries { get; set; } = DefaultMaxTrackedSeries;
 
     /// <summary>
-    /// Maximum number of distinct values the session retains per tag key and instrument.
+    /// Maximum number of distinct values retained per tag key and instrument identity.
     /// </summary>
     /// <remarks>
     /// The value must be greater than zero. When the bound is reached, further distinct values are counted as

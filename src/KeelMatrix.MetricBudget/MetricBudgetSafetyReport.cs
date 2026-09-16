@@ -40,7 +40,7 @@ public sealed class MetricBudgetSafetyReport
     public int MaxTrackedSeries { get; }
 
     /// <summary>
-    /// Configured bound on distinct values retained per tag key and instrument.
+    /// Configured bound on distinct values retained per tag key and instrument identity.
     /// </summary>
     public int MaxTrackedValuesPerTag { get; }
 

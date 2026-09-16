@@ -57,8 +57,8 @@ public sealed class MetricBudgetTagResult
     public int ObservedDistinctValueCount { get; }
 
     /// <summary>
-    /// Whether the session reached its per-tag value bound for this key, which means the observed count is a lower
-    /// bound and no within-budget conclusion can be drawn from it.
+    /// Whether the per-tag value bound for this instrument identity was reached for this key, which means the
+    /// observed count is a lower bound and no within-budget conclusion can be drawn from it.
     /// </summary>
     public bool ValueTrackingIncomplete { get; }
 

@@ -75,12 +75,13 @@ public sealed class MetricBudgetInstrumentResult
     public int? ConfiguredMaxObservedSeries { get; }
 
     /// <summary>
-    /// Measurements whose series could not be tracked because the session safety bound was already reached.
+    /// Measurements whose series could not be tracked because the series safety bound for this instrument identity
+    /// was already reached.
     /// </summary>
     public long UntrackedSeriesObservations { get; }
 
     /// <summary>
-    /// Whether the session reached its series safety bound while observing this identity, which means
+    /// Whether the series safety bound for this instrument identity was reached, which means
     /// <see cref="ObservedSeriesCount"/> is a lower bound.
     /// </summary>
     public bool SeriesTrackingIncomplete { get; }

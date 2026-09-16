@@ -168,7 +168,7 @@ public sealed class MetricBudgetReport
                     builder.AppendLine(
                         "      series tracking incomplete: "
                         + instrument.UntrackedSeriesObservations.ToString(CultureInfo.InvariantCulture)
-                        + " measurement(s) could not be tracked because the session series bound was reached");
+                        + " measurement(s) could not be tracked because the instrument's series safety bound was reached");
                 }
 
                 // Tag keys are ordered by observed fan-out so the largest contributor to series growth is first.

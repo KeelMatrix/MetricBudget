@@ -17,10 +17,11 @@ public sealed class PerInstrumentBoundScopeTests
         using Meter meter = new Meter(meterName, "1.0.0");
         Counter<long> requests = meter.CreateCounter<long>("requests");
         Histogram<long> durations = meter.CreateHistogram<long>("durations");
+        UpDownCounter<long> activeRequests = meter.CreateUpDownCounter<long>("active_requests");
 
         const int seriesBound = 64;
-        const int generatedSeriesPerInstrument = 100;
-        const int instrumentCount = 2;
+        const int generatedSeriesPerInstrument = 500;
+        const int instrumentCount = 3;
 
         MetricBudgetOptions options = new MetricBudgetOptions
         {
@@ -33,6 +34,7 @@ public sealed class PerInstrumentBoundScopeTests
         {
             requests.Add(1, new KeyValuePair<string, object?>("tenant", i));
             durations.Record(i, new KeyValuePair<string, object?>("tenant", i));
+            activeRequests.Add(1, new KeyValuePair<string, object?>("tenant", i));
         }
 
         MetricBudgetReport report = session.Complete();
@@ -60,6 +62,8 @@ public sealed class PerInstrumentBoundScopeTests
         // is exactly why the documentation must not describe the bound as one session-wide pool.
         Assert.True(sessionObservedSeries > seriesBound);
         Assert.Equal(generatedSeriesPerInstrument * instrumentCount, report.TotalMeasurementsObserved);
+        Assert.Equal(192, sessionObservedSeries);
+        Assert.Equal(1308L, instruments.Sum(instrument => instrument.UntrackedSeriesObservations));
         Assert.True(report.AccountingIsConsistent);
     }
 }
