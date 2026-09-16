@@ -83,6 +83,39 @@ public sealed class SessionLifecycleTests
     }
 
     [Fact]
+    public void OptionsAreFrozenWhenTheSessionStarts()
+    {
+        string meterName = TestNames.Meter(nameof(OptionsAreFrozenWhenTheSessionStarts));
+        using Meter meter = new Meter(meterName, "1.0.0");
+        Counter<long> counter = meter.CreateCounter<long>("requests");
+
+        MetricBudgetOptions options = new MetricBudgetOptions();
+        InstrumentBudget configured = null!;
+        options.ForInstrument(meterName, "requests", budget =>
+        {
+            budget.MaxObservedSeries = 4;
+            budget.Tag("route").MaxDistinctValues = 4;
+            configured = budget;
+        });
+
+        using MetricBudgetSession session = MetricBudgetSession.Start(options);
+
+        // Mutating the options object must not change the running session: the configuration was copied at start.
+        configured.MaxObservedSeries = 1;
+        configured.Tag("route").MaxDistinctValues = 1;
+
+        counter.Add(1, new KeyValuePair<string, object?>("route", "/a"));
+        counter.Add(1, new KeyValuePair<string, object?>("route", "/b"));
+
+        MetricBudgetReport report = session.Complete();
+
+        Assert.Equal(MetricBudgetOutcome.Passed, report.Outcome);
+        Assert.Equal(2, report.ObservedSeriesCount);
+        Assert.Equal(4, report.Rules[0].Instruments[0].ConfiguredMaxObservedSeries);
+        Assert.Equal(4, report.Rules[0].Instruments[0].Tags.Single(tag => tag.Key == "route").ConfiguredMaxDistinctValues);
+    }
+
+    [Fact]
     public void CompletedSessionDoesNotObserveLaterInstruments()
     {
         string meterName = TestNames.Meter(nameof(CompletedSessionDoesNotObserveLaterInstruments));

@@ -32,6 +32,12 @@ public sealed class DiagnosticsPrivacyTests
 
         // The measured values themselves are never part of a report either.
         Assert.DoesNotContain("987654321", diagnostics, StringComparison.Ordinal);
+
+        // The one-line summary has the same boundary as the detailed report.
+        string summary = report.ToString();
+        Assert.Contains("MetricBudget", summary, StringComparison.Ordinal);
+        Assert.DoesNotContain(SecretValue, summary, StringComparison.Ordinal);
+        Assert.DoesNotContain(SecretUrl, summary, StringComparison.Ordinal);
     }
 
     [Fact]
