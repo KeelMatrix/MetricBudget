@@ -1,0 +1,41 @@
+<Project>
+  <!-- Pack the library README and the repository icon into the package root when they are present. -->
+  <ItemGroup Condition="'$(IsPackable)' == 'true'">
+    <None Include="$(MSBuildProjectDirectory)\README.md"
+          Pack="true"
+          PackagePath=""
+          Link="README.md"
+          Condition="Exists('$(MSBuildProjectDirectory)\README.md')" />
+    <None Include="$(MSBuildThisFileDirectory)icon.png"
+          Pack="true"
+          PackagePath=""
+          Link="icon.png"
+          Condition="Exists('$(MSBuildThisFileDirectory)icon.png') and '$(PackageIcon)' != ''" />
+  </ItemGroup>
+
+  <!-- Keep local telemetry and environment files out of every package. -->
+  <Target Name="ExcludeLocalFilesFromPack"
+          BeforeTargets="_GetPackageFiles"
+          Condition="'$(IsPackable)' == 'true'">
+    <ItemGroup>
+      <None Remove="keelmatrix.telemetry.json" />
+      <None Remove=".env" />
+      <None Remove=".env.local" />
+      <Content Remove="keelmatrix.telemetry.json" />
+      <Content Remove=".env" />
+      <Content Remove=".env.local" />
+    </ItemGroup>
+  </Target>
+
+  <!-- Fail closed if a later change reintroduces a local-only file into the package. -->
+  <Target Name="RejectLocalFilesInPack"
+          AfterTargets="_GetPackageFiles"
+          Condition="'$(IsPackable)' == 'true'">
+    <ItemGroup>
+      <_LocalPackageFile Include="@(_PackageFiles)"
+                         Condition="'%(_PackageFiles.Filename)%(_PackageFiles.Extension)' == 'keelmatrix.telemetry.json' Or '%(_PackageFiles.Filename)%(_PackageFiles.Extension)' == '.env' Or '%(_PackageFiles.Filename)%(_PackageFiles.Extension)' == '.env.local'" />
+    </ItemGroup>
+    <Error Condition="'@(_LocalPackageFile)' != ''"
+           Text="Refusing to pack local-only file(s): @(_LocalPackageFile, ', ')." />
+  </Target>
+</Project>

@@ -10,3 +10,21 @@ obj/
 ## Local probe output
 probe-artifacts/
 *.trx
+
+## NuGet packages and local feeds (never commit built packages)
+artifacts/
+*.nupkg
+*.snupkg
+local-packages/
+
+## Test output
+TestResults/
+*.coverage
+
+## Local telemetry opt-out (per-developer, never committed)
+keelmatrix.telemetry.json
+.env
+.env.local
+
+## Tooling caches
+.dotnet/

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RunSettings>
+  <RunConfiguration>
+    <!--
+      The test host must never emit production telemetry. This repository is KeelMatrix development, and the
+      shared telemetry package treats this opt-out variable as a hard process-level disable.
+    -->
+    <EnvironmentVariables>
+      <KEELMATRIX_NO_TELEMETRY>1</KEELMATRIX_NO_TELEMETRY>
+    </EnvironmentVariables>
+  </RunConfiguration>
+</RunSettings>

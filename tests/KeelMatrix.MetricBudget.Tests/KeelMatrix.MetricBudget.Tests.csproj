@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- Clears the repository-wide default so the multi-target list below takes effect. -->
+    <TargetFramework></TargetFramework>
+    <!--
+      net8.0 exercises the framework metrics implementation. net472 exercises the library's netstandard2.0 asset
+      on a runtime that is not .NET 8, which is the only honest way to test that asset.
+    -->
+    <TargetFrameworks>net8.0;net472</TargetFrameworks>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <AssemblyName>KeelMatrix.MetricBudget.Tests</AssemblyName>
+    <RootNamespace>KeelMatrix.MetricBudget.Tests</RootNamespace>
+    <RunSettingsFilePath>$(MSBuildProjectDirectory)/tests.runsettings</RunSettingsFilePath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/KeelMatrix.MetricBudget/KeelMatrix.MetricBudget.csproj" />
+  </ItemGroup>
+
+  <!--
+    The ASP.NET Core integration test exercises real framework instrumentation without an exporter or backend.
+    The shared framework reference is net8.0-only, so the test itself is compiled for net8.0 only.
+  -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net8.0'">
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+</Project>
