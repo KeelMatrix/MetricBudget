@@ -21,8 +21,9 @@ local-packages/
 TestResults/
 *.coverage
 
-## Local telemetry opt-out (per-developer, never committed)
-keelmatrix.telemetry.json
+## Local per-developer telemetry overrides. The repository-level opt-out in keelmatrix.telemetry.json is
+## intentionally committed: it is what keeps local development, samples, and the package-consumer run out of
+## production demand data. The repository root .env files stay developer-local because they can carry secrets.
 .env
 .env.local
 

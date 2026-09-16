@@ -31,8 +31,12 @@ public sealed class MetricBudgetSafetyReport
     }
 
     /// <summary>
-    /// Configured bound on distinct observed series retained across the session.
+    /// Configured bound on distinct observed series retained for one instrument identity.
     /// </summary>
+    /// <remarks>
+    /// The bound applies per instrument identity, so the series count a whole session can retain is this value
+    /// multiplied by the number of matched instrument identities, plus the per-tag value sets.
+    /// </remarks>
     public int MaxTrackedSeries { get; }
 
     /// <summary>

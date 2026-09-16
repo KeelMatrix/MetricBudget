@@ -53,12 +53,22 @@ public sealed class MetricBudgetOptions
     }
 
     /// <summary>
-    /// Maximum number of distinct observed series the session retains across all selected instruments.
+    /// Maximum number of distinct observed series the session retains for one instrument identity.
     /// </summary>
     /// <remarks>
-    /// The value must be greater than zero. When the bound is reached, further distinct series are counted as
-    /// untracked observations, the report says tracking is incomplete, and the session never presents that state as
-    /// a pass.
+    /// The bound applies per instrument identity, exactly like <see cref="MaxTrackedValuesPerTag"/>. When one
+    /// instrument reaches it, further distinct series of that instrument are counted as untracked observations,
+    /// the report says tracking is incomplete, and the session never presents that state as a pass.
+    /// <para>
+    /// The session does not share one series bound across selected instruments. Its ceiling is the number of
+    /// matched instrument identities multiplied by this value, plus the per-tag value sets, so a workload spread
+    /// over several instruments retains more series than a single instrument does. Size memory from that product,
+    /// and expect <see cref="MetricBudgetOutcome.ObservationIncomplete"/> as soon as any single instrument's bound
+    /// is reached.
+    /// </para>
+    /// <para>
+    /// The value must be greater than zero.
+    /// </para>
     /// </remarks>
     public int MaxTrackedSeries { get; set; } = DefaultMaxTrackedSeries;
 

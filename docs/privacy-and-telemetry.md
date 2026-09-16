@@ -40,7 +40,9 @@ KeelMatrix packages use the shared `KeelMatrix.Telemetry` client for a minimal a
 restoring the package, loading the assembly, or constructing a session is not activation. Later completed
 verifications request a low-frequency heartbeat, following the shared package cadence.
 
-The complete field allowlist for this product is:
+The field allowlist below is the complete set of aggregate fields this product is **permitted to supply**. It is a
+ceiling on what the product could ever attach, not a claim about the payload that is actually transmitted: the
+shared client decides what it emits, and it currently emits its own fixed schema with no product-specific fields.
 
 | Field | Value |
 | --- | --- |
@@ -53,12 +55,13 @@ The complete field allowlist for this product is:
 
 Never sent: meter names, instrument names, tag keys, tag values, metric values, URLs or connection information,
 application, repository, or project names, stack traces, user-provided budget text, exception messages, and file
-paths. The allowlist is a closed internal type with no free-form dictionary, and tests assert that every field is
-on it and that a hostile workload's names and values cannot appear in the signal.
+paths. The allowlist is a closed internal type with no free-form dictionary, and tests assert that every field the
+product supplies is on it and that a hostile workload's names and values cannot appear in the signal.
 
 `KeelMatrix.Telemetry` 0.1.0 exposes activation and heartbeat events with its own fixed schema and no
-product-specific fields, so this allowlist currently documents the only aggregate fields this product would ever
-attach; the transmitted payload is the shared schema alone.
+product-specific fields, and this product's sink forwards only those two calls. The transmitted payload is
+therefore the shared schema alone; nothing in the table above is currently sent, and no field can be sent without
+being added to this allowlist first.
 
 Telemetry is best effort. Every failure is swallowed, so a telemetry or network failure can never change, delay,
 or fail a verification.
@@ -66,6 +69,15 @@ or fail a verification.
 ## Opting out
 
 Set `KEELMATRIX_NO_TELEMETRY=1`. The shared opt-out set also honors `DOTNET_CLI_TELEMETRY_OPTOUT` and
-`DO_NOT_TRACK`, plus repo-local opt-out configuration files. KeelMatrix development and KeelMatrix CI run with
-telemetry opted out, and this repository's own test host sets the opt-out variable so the suite can never emit
-production demand data.
+`DO_NOT_TRACK`, plus repository-local opt-out files.
+
+This repository opts every local run path out mechanically, so local development, the sample, and the
+package-consumer smoke test cannot enter production demand data:
+
+- `tests/KeelMatrix.MetricBudget.Tests/tests.runsettings` sets `KEELMATRIX_NO_TELEMETRY=1` for the test host, and a
+  test asserts it, so a missing opt-out fails the suite instead of silently emitting;
+- the committed `keelmatrix.telemetry.json` at the repository root disables telemetry for every other process that
+  resolves this repository - `dotnet run` for the sample and the package-consumer smoke test included - because
+  the shared client resolves repository-local opt-out before it does any telemetry work.
+
+KeelMatrix CI runs the same repository, so it inherits the same repository-local opt-out.

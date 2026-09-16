@@ -257,13 +257,18 @@ Cardinality is exactly the failure mode this package observes, so its own accoun
 
 | Bound | Default | Behavior when reached |
 | --- | --- | --- |
-| `MaxTrackedSeries` | 100,000 | Further distinct series are counted as untracked observations, the report says series tracking is incomplete, and the outcome becomes `ObservationIncomplete`. |
+| `MaxTrackedSeries` | 100,000 | Applies per instrument identity. Further distinct series of an instrument at its bound are counted as untracked observations, the report says series tracking is incomplete, and the outcome becomes `ObservationIncomplete`. |
 | `MaxTrackedValuesPerTag` | 5,000 | Further distinct values for that tag key are counted as untracked, the report names the key, and the outcome becomes `ObservationIncomplete`. |
 | `MaxTagValueLength` | 256 | A longer tag value is replaced by a stable digest in the identity, so one pathological value cannot inflate the session. |
 
 A bounded run is never reported as a pass, and untracked observations are never matched to an existing series, so
 the session cannot silently undercount. The defaults are safety bounds for the verifier, not budgets, and not
 recommended cardinality for any application: raise them deliberately when your workload legitimately observes more.
+
+`MaxTrackedSeries` and `MaxTrackedValuesPerTag` both apply per instrument identity rather than once per session, so
+the whole session retains up to *(number of matched instrument identities) x `MaxTrackedSeries`* series
+descriptions plus the per-tag value sets. Size memory from that product, and note that `ObservationIncomplete` is
+reported as soon as any single instrument reaches its bound.
 
 The session stores only fixed-size digests of series and tag values. It never retains the tag values themselves.
 The full bounded-memory contract is documented at
@@ -281,11 +286,14 @@ printing values into CI logs.
 
 A **completed verification that observed at least one selected instrument** requests one activation event;
 installing, restoring, loading the assembly, or constructing a session reports nothing, and later completions
-request a low-frequency heartbeat. The only aggregate fields this product can attach are package version, target
-framework, coarse OS family, a coarse observed-instrument bucket, the configured-rule count, and a coarse outcome
-(pass, fail, invalid configuration); the internal allowlist is enforced by tests. Meter names, instrument names,
-tag keys, tag values, metric values, URLs, application or repository names, exception messages, and file paths are
-never sent, and telemetry failure can never change a verification. Opt out with `KEELMATRIX_NO_TELEMETRY=1`.
+request a low-frequency heartbeat. The aggregate fields this product is permitted to supply are package version,
+target framework, coarse OS family, a coarse observed-instrument bucket, the configured-rule count, and a coarse
+outcome (pass, fail, invalid configuration); the internal allowlist is enforced by tests. That allowlist is a
+ceiling on the product's own contribution, not a description of the transmitted payload: the shared
+`KeelMatrix.Telemetry` client currently emits its own fixed schema and no product-specific fields. Meter names,
+instrument names, tag keys, tag values, metric values, URLs, application or repository names, exception messages,
+and file paths are never sent, and telemetry failure can never change a verification. Opt out with
+`KEELMATRIX_NO_TELEMETRY=1`.
 
 The canonical privacy and telemetry reference, including the exact field allowlist, is
 <https://github.com/KeelMatrix/MetricBudget/blob/main/docs/privacy-and-telemetry.md>.
@@ -295,6 +303,13 @@ The canonical privacy and telemetry reference, including the exact field allowli
 - `net8.0` (uses the framework metrics implementation),
 - `netstandard2.0` (uses `System.Diagnostics.DiagnosticSource` 8.0.1, so .NET Framework 4.6.2+, .NET Core, and
   later .NET versions can consume the same API).
+
+The `netstandard2.0` asset also resolves the downlevel dependency closure of `KeelMatrix.Telemetry` 0.1.0:
+`System.Text.Json`, `System.IO.Pipelines`, `System.Text.Encodings.Web`, `System.Memory`, `System.Buffers`,
+`System.Numerics.Vectors`, `System.Runtime.CompilerServices.Unsafe`, `System.Threading.Tasks.Extensions`, and
+`Microsoft.Bcl.AsyncInterfaces`. A .NET Framework consumer that already references an older `System.Text.Json` can
+therefore hit version-unification prompts and possibly need binding redirects for that larger closure; NuGet
+resolves it automatically for a project that has no conflicting pin.
 
 Core verification is offline and needs no file system access, no sockets, and no backend. The library is plain
 managed code and is expected to behave identically on Windows, Linux, and macOS; this release verifies the two

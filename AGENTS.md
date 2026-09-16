@@ -70,7 +70,9 @@ deliberately outside it because it restores the built package from `artifacts/pa
   type of a value is part of identity.
 - **Telemetry.** Only the allowlisted aggregate fields may ever be attached, activation means a completed
   verification that observed at least one selected instrument, and telemetry failure must never change a result.
-  Tests and local development run with telemetry opted out.
+  Tests and local development run with telemetry opted out: `tests.runsettings` covers the test host and the
+  committed `keelmatrix.telemetry.json` at the repository root covers every other local run path, including the
+  sample and the package-consumer smoke test. That file is deliberately tracked; the root `.env` files are not.
 - **Packaging.** The package ships only the library assembly, XML docs, README, icon, license, symbols, and
   SourceLink. No probe, test, sample, generated report, or local-only file may be packed.
 
