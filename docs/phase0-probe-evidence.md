@@ -1,6 +1,7 @@
 # Phase 0 probe evidence
 
-This page records what the feasibility probe measured before the shipping library was designed. The probe projects
+This page is repository development evidence, not package documentation. It records what the feasibility probe
+measured before the shipping library was designed. The probe projects
 (`src/MetricBudget.Probe.*`, `tests/MetricBudget.Probe.*`) remain in the repository as non-shipping development
 evidence: they are not packable, no product type derives from them, and nothing in `src/KeelMatrix.MetricBudget`
 depends on them.
@@ -83,7 +84,7 @@ aborting the run. An observation records measured platform behavior, so a `FAIL`
   series, with per-series memory in the low hundreds of bytes and a stable `sha256` descriptor replacing
   oversized tag values. That claim is evidence-gated: raising the series count tenfold must not raise the measured
   per-series time or the per-series allocation past the gate, and the verdict fails when it does.
-- The series safety cap produces an explicit bounded-state result, never a silent undercount: at a cap of
+- The per-instrument-identity series safety cap produces an explicit bounded-state result, never a silent undercount: at a cap of
   250,000 with one million generated combinations, the tracker reported 750,000 untracked observations, kept
   the tracked set at the cap, and never matched an untracked key to an existing series.
 - `netstandard2.0` assets of `System.Diagnostics.DiagnosticSource` expose the same public metrics surface as the

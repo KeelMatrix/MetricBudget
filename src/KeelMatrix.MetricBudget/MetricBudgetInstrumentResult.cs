@@ -69,8 +69,8 @@ public sealed class MetricBudgetInstrumentResult
     public int ObservedSeriesCount { get; }
 
     /// <summary>
-    /// Configured maximum observed series for this identity, or <see langword="null"/> when the rule declares no
-    /// series budget.
+    /// Configured maximum observed series for this instrument identity, or <see langword="null"/> when the rule declares no
+    /// per-instrument-identity series budget.
     /// </summary>
     public int? ConfiguredMaxObservedSeries { get; }
 

@@ -7,10 +7,10 @@ namespace KeelMatrix.MetricBudget;
 /// </summary>
 public enum MetricBudgetViolationKind
 {
-    /// <summary>The instrument produced more distinct observed series than its configured budget.</summary>
+    /// <summary>One instrument identity produced more distinct observed series than its configured budget.</summary>
     ObservedSeriesBudgetExceeded = 0,
 
-    /// <summary>One tag key produced more distinct values than its configured budget.</summary>
+    /// <summary>One tag key on one instrument identity produced more distinct values than its configured budget.</summary>
     TagDistinctValuesBudgetExceeded = 1,
 
     /// <summary>At least one configured rule selected no published instrument.</summary>
@@ -19,7 +19,7 @@ public enum MetricBudgetViolationKind
     /// <summary>A selected instrument was published but delivered no measurements.</summary>
     InstrumentProducedNoMeasurements = 3,
 
-    /// <summary>A safety bound was reached, so the observed counts are lower bounds.</summary>
+    /// <summary>A safety bound for an instrument identity was reached, so the observed counts are lower bounds.</summary>
     SafetyLimitReached = 4,
 
     /// <summary>One instrument identity matched more than one rule, so no budget can be applied.</summary>

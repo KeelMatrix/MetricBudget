@@ -1,8 +1,8 @@
 # KeelMatrix.MetricBudget
 
 Verify observed metric cardinality in .NET tests and CI. Run your normal workload, observe the metric series it
-actually emits and how many distinct values each tag carried, and fail when an instrument exceeds an explicit
-observed-series or per-tag distinct-value budget - without a collector, exporter, or observability backend.
+actually emits and how many distinct values each tag carried, and fail when an instrument identity exceeds an explicit
+observed-series or per-instrument-identity distinct-value budget - without a collector, exporter, or observability backend.
 
 The package is `KeelMatrix.MetricBudget`.
 
@@ -67,9 +67,9 @@ The `MetricBudget.Probe.*` projects are development evidence from the feasibilit
 they are not part of the product API, and nothing in the shipping library depends on them. They also keep their own
 `MetricBudget.Probe.sln`, which is the solution their evidence commands use.
 
-`KeelMatrix.MetricBudget.sln` contains the library, its tests, the sample, and the probe projects. The
-package-consumer project is intentionally outside that solution: it restores the package from a local feed, so it
-is run explicitly after packing rather than as part of a normal build.
+`KeelMatrix.MetricBudget.sln` contains the library, its tests, and the probe projects. The sample and package-consumer
+projects are intentionally outside that solution: each restores the package from a local feed, so each is run
+explicitly after packing rather than as part of a normal solution build.
 
 ## Documentation
 
@@ -81,8 +81,7 @@ is run explicitly after packing rather than as part of a normal build.
   recurring problems.
 - [docs/privacy-and-telemetry.md](docs/privacy-and-telemetry.md) - what reaches logs, reports, and telemetry.
 - [PRIVACY.md](PRIVACY.md) and [SECURITY.md](SECURITY.md) - privacy summary and vulnerability reporting.
-- [docs/phase0-probe-evidence.md](docs/phase0-probe-evidence.md) - what the feasibility probe measured about
-  `MeterListener`, instrument coverage, parallel isolation, and the `netstandard2.0` decision.
+- [CONTRIBUTING.md](CONTRIBUTING.md) - contributor setup and repository validation.
 
 ## Build and test
 
@@ -90,7 +89,6 @@ is run explicitly after packing rather than as part of a normal build.
 dotnet restore KeelMatrix.MetricBudget.sln
 dotnet build KeelMatrix.MetricBudget.sln -c Release
 dotnet test tests/KeelMatrix.MetricBudget.Tests/KeelMatrix.MetricBudget.Tests.csproj -c Release
-dotnet run --project samples/KeelMatrix.MetricBudget.Sample -c Release
 ```
 
 The test project targets `net8.0` and `net472`. The `net472` run executes the library's `netstandard2.0` asset
@@ -102,10 +100,11 @@ Package validation:
 ```text
 dotnet pack src/KeelMatrix.MetricBudget/KeelMatrix.MetricBudget.csproj -c Release -o artifacts/packages
 dotnet run --project tests/KeelMatrix.MetricBudget.PackageConsumer -c Release
+dotnet run --project samples/KeelMatrix.MetricBudget.Sample -c Release
 ```
 
-The package-consumer project restores `KeelMatrix.MetricBudget` from `artifacts/packages` and references no
-project in this repository.
+Both package-backed projects restore `KeelMatrix.MetricBudget` from `artifacts/packages` and reference no project in
+this repository. See [docs/DEV.md](docs/DEV.md) for the complete reproducible validation sequence.
 
 ## License
 

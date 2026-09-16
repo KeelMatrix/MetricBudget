@@ -139,7 +139,7 @@ public sealed class MetricBudgetReport
             + "; observed series: " + ObservedSeriesCount.ToString(CultureInfo.InvariantCulture)
             + "; measurements: " + TotalMeasurementsObserved.ToString(CultureInfo.InvariantCulture));
         builder.AppendLine(
-            "  safety bounds: series " + Safety.MaxTrackedSeries.ToString(CultureInfo.InvariantCulture)
+            "  safety bounds per instrument identity: series " + Safety.MaxTrackedSeries.ToString(CultureInfo.InvariantCulture)
             + ", values per tag " + Safety.MaxTrackedValuesPerTag.ToString(CultureInfo.InvariantCulture)
             + ", tag value length " + Safety.MaxTagValueLength.ToString(CultureInfo.InvariantCulture)
             + "; accounting complete: " + Safety.IsComplete.ToString(CultureInfo.InvariantCulture)
@@ -168,7 +168,7 @@ public sealed class MetricBudgetReport
                     builder.AppendLine(
                         "      series tracking incomplete: "
                         + instrument.UntrackedSeriesObservations.ToString(CultureInfo.InvariantCulture)
-                        + " measurement(s) could not be tracked because the instrument's series safety bound was reached");
+                        + " measurement(s) could not be tracked because the series safety bound for the instrument identity was reached");
                 }
 
                 // Tag keys are ordered by observed fan-out so the largest contributor to series growth is first.

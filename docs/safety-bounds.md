@@ -5,8 +5,8 @@ has to be bounded and honest. Every session applies three explicit bounds.
 
 | Option | Default | What it bounds |
 | --- | --- | --- |
-| `MaxTrackedSeries` | 100,000 | Distinct observed series retained for one instrument identity. |
-| `MaxTrackedValuesPerTag` | 5,000 | Distinct values retained per tag key and instrument identity. |
+| `MaxTrackedSeries` (per instrument identity) | 100,000 | Distinct observed series retained for one instrument identity. |
+| `MaxTrackedValuesPerTag` (per instrument identity) | 5,000 | Distinct values retained per tag key and instrument identity. |
 | `MaxTagValueLength` | 256 | Length of a tag value's invariant text before it is replaced by a stable digest in the identity. |
 
 The defaults exist so an accidentally explosive workload cannot make the verifier unbounded. They are not budgets,
@@ -16,8 +16,8 @@ report.
 The series bound is **per instrument identity**, not one shared pool for the session. A session that matches several
 instrument identities can therefore retain up to *(number of matched instrument identities) x `MaxTrackedSeries`*
 series descriptions, plus the per-tag value sets described below. Size CI memory from that product rather than from
-a single `MaxTrackedSeries` value, and expect `ObservationIncomplete` as soon as **any** instrument's bound is
-reached - the outcome is not deferred until every instrument is full.
+a single per-instrument-identity `MaxTrackedSeries` value, and expect `ObservationIncomplete` as soon as **any**
+instrument identity's bound is reached - the outcome is not deferred until every instrument is full.
 
 ## What happens when a bound is reached
 
@@ -48,6 +48,7 @@ A definite budget breach that is already proven is reported as `Violation`; reac
 
 ## Choosing tighter bounds
 
-You can lower the bounds to fail faster on a workload you know well, for example `MaxTrackedSeries = 10_000`. Keep
-them above the cardinality you legitimately expect: a bound that is too low turns a valid verification into
+You can lower the per-instrument-identity bounds to fail faster on a workload you know well, for example the
+per-instrument-identity `MaxTrackedSeries = 10_000`. Keep the bounds above the cardinality you legitimately expect: a
+bound that is too low turns a valid verification into
 `ObservationIncomplete`, which is a louder failure, not a false pass.

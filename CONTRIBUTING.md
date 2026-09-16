@@ -19,6 +19,9 @@ feature requests, documentation improvements, and pull requests.
 4. Format your code with `dotnet format` and ensure there are no warnings in a Release build.
 5. Update the relevant documentation, including the package README when user-visible behavior changes.
 
+Repository-only feasibility and test-internals evidence is linked from [docs/DEV.md](docs/DEV.md); it is not part of
+the consumer documentation set.
+
 ## Behavior that must not regress
 
 - **Observed cardinality language.** Documentation and diagnostics describe what the exercised workload produced.

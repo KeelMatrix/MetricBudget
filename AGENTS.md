@@ -47,8 +47,9 @@ dotnet list KeelMatrix.MetricBudget.sln package --vulnerable --include-transitiv
 analyzer, nullability, and documentation regressions. The `net472` test target is not optional: it is the only
 honest way to exercise the `netstandard2.0` asset.
 
-`KeelMatrix.MetricBudget.sln` holds the library, tests, sample, and probe projects. The package-consumer project is
-deliberately outside it because it restores the built package from `artifacts/packages`; pack before running it.
+`KeelMatrix.MetricBudget.sln` holds the library, tests, and probe projects. The sample and package-consumer projects
+are deliberately outside it because they restore the built package from `artifacts/packages`; pack before running
+either package-backed consumer. A plain solution build therefore never depends on the local package feed.
 `MetricBudget.Probe.sln` remains the solution the Phase 0 evidence commands use.
 
 ## Invariants

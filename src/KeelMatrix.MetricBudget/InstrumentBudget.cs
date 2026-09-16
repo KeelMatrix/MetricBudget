@@ -10,7 +10,8 @@ namespace KeelMatrix.MetricBudget;
 /// <remarks>
 /// <para>
 /// The budget constrains what the exercised workload actually produced: the number of distinct observed series for
-/// the instrument, and the number of distinct values each configured tag key may produce. It never claims to bound
+/// the instrument identity, and the number of distinct values each configured tag key may produce for that instrument
+/// identity. It never claims to bound
 /// the cardinality production can produce.
 /// </para>
 /// <para>
@@ -24,12 +25,12 @@ public sealed class InstrumentBudget
     private readonly List<TagBudget> orderedTags = new();
 
     /// <summary>
-    /// Maximum number of distinct observed series the instrument may produce within the session.
+    /// Maximum number of distinct observed series one instrument identity may produce within the session.
     /// </summary>
     /// <remarks>
     /// One observed series is one combination of instrument identity and tag set, so repeated measurements of the
     /// same combination stay one series. The value must be greater than zero, and <see langword="null"/> means no
-    /// series budget is configured for this rule.
+    /// per-instrument-identity series budget is configured for this rule.
     /// </remarks>
     public int? MaxObservedSeries { get; set; }
 
@@ -64,7 +65,7 @@ public sealed class InstrumentBudget
     /// <summary>
     /// Returns whether this budget configures any limit at all.
     /// </summary>
-    /// <returns><see langword="true"/> when a series budget or at least one tag budget is set.</returns>
+    /// <returns><see langword="true"/> when a series budget for an instrument identity or at least one tag budget is set.</returns>
     public bool HasLimit()
     {
         if (MaxObservedSeries.HasValue)

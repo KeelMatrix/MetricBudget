@@ -119,7 +119,7 @@ internal static class ReportBuilder
                     {
                         violations.Add(new MetricBudgetViolation(
                             MetricBudgetViolationKind.SafetyLimitReached,
-                            "tag value safety bound reached for tag " + DescribeTagKey(tag.Key) + " on "
+                            "tag value safety bound for the instrument identity reached for tag " + DescribeTagKey(tag.Key) + " on "
                             + account.Identity.Describe()
                             + ": " + tag.ObservedDistinctValueCount.ToString(CultureInfo.InvariantCulture)
                             + " distinct values were retained and "
@@ -205,12 +205,12 @@ internal static class ReportBuilder
 
             violations.Add(new MetricBudgetViolation(
                 MetricBudgetViolationKind.SafetyLimitReached,
-                "series safety bound reached while observing " + account.Identity.Describe()
+                "series safety bound for the instrument identity reached while observing " + account.Identity.Describe()
                 + ": " + account.ObservedSeriesCount.ToString(CultureInfo.InvariantCulture)
                 + " distinct observed series were retained and "
                 + account.UntrackedSeriesObservations.ToString(CultureInfo.InvariantCulture)
-                + " measurement(s) could not be tracked. Observed series counts are lower bounds; raise "
-                + "MaxTrackedSeries or narrow the workload.",
+                + " measurement(s) could not be tracked. Observed per-instrument-identity series counts are lower bounds; raise "
+                + "per-instrument-identity MaxTrackedSeries or narrow the workload.",
                 account.Identity.MeterName,
                 account.Identity.MeterVersion,
                 account.Identity.InstrumentName,

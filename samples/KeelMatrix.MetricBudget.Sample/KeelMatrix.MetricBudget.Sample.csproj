@@ -7,6 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../../src/KeelMatrix.MetricBudget/KeelMatrix.MetricBudget.csproj" />
+    <!-- The sample intentionally proves the package path rather than bypassing it with a project reference. -->
+    <PackageReference Include="KeelMatrix.MetricBudget" />
   </ItemGroup>
 </Project>

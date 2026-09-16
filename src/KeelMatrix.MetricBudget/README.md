@@ -1,8 +1,8 @@
 # KeelMatrix.MetricBudget
 
 Catch high-cardinality .NET metrics in tests and CI. Run your normal workload, observe the metric series and tag
-values it actually emits, and fail when an instrument exceeds an explicit observed-series or per-tag
-distinct-value budget - with no collector, exporter, or observability backend.
+values it actually emits, and fail when an instrument identity exceeds an explicit observed-series or
+per-instrument-identity distinct-value budget - with no collector, exporter, or observability backend.
 
 ```csharp
 using KeelMatrix.MetricBudget;
@@ -84,8 +84,8 @@ This package verifies the workload you ran. It has no way to know which tag valu
 
 So a passing report means "the exercised workload stayed within these budgets", not "this metric is safe in
 production". Use it as a regression guard for the paths you do exercise, and keep reviewing what data each tag can
-carry. `MaxObservedSeries` is deliberately named for what is measured; there is no default budget value that is
-universally safe, and the package never invents one for you.
+carry. The per-instrument-identity `MaxObservedSeries` name is deliberate because it describes what is measured;
+there is no default budget value that is universally safe, and the package never invents one for you.
 
 ## Budgets
 
@@ -169,7 +169,8 @@ report
 ```
 
 Prefer `AssertWithinBudget` in normal tests. The narrower helpers are useful when one test owns a single concern,
-such as asserting only a tag budget while another test owns the series budget.
+such as asserting only a per-instrument-identity tag budget while another test owns the per-instrument-identity
+series budget.
 
 ## Example: an in-process custom meter
 
@@ -257,8 +258,8 @@ Cardinality is exactly the failure mode this package observes, so its own accoun
 
 | Bound | Default | Behavior when reached |
 | --- | --- | --- |
-| `MaxTrackedSeries` | 100,000 | Applies per instrument identity. Further distinct series of an instrument at its bound are counted as untracked observations, the report says series tracking is incomplete, and the outcome becomes `ObservationIncomplete`. |
-| `MaxTrackedValuesPerTag` | 5,000 | Further distinct values for that tag key are counted as untracked, the report names the key, and the outcome becomes `ObservationIncomplete`. |
+| `MaxTrackedSeries` (per instrument identity) | 100,000 | Applies per instrument identity. Further distinct series of an instrument at its bound are counted as untracked observations, the report says series tracking is incomplete, and the outcome becomes `ObservationIncomplete`. |
+| `MaxTrackedValuesPerTag` (per instrument identity) | 5,000 | Applies per instrument identity and tag key. Further distinct values for that tag key are counted as untracked, the report names the key, and the outcome becomes `ObservationIncomplete`. |
 | `MaxTagValueLength` | 256 | A longer tag value is replaced by a stable digest in the identity, so one pathological value cannot inflate the session. |
 
 A bounded run is never reported as a pass, and untracked observations are never matched to an existing series, so
@@ -311,9 +312,9 @@ The `netstandard2.0` asset also resolves the downlevel dependency closure of `Ke
 therefore hit version-unification prompts and possibly need binding redirects for that larger closure; NuGet
 resolves it automatically for a project that has no conflicting pin.
 
-Core verification is offline and needs no file system access, no sockets, and no backend. The library is plain
-managed code and is expected to behave identically on Windows, Linux, and macOS; this release verifies the two
-target frameworks on Windows.
+Core verification is offline and needs no file system access, no sockets, and no backend. The package targets
+`net8.0` and `netstandard2.0`. Repository verification to date is Windows-only; this release does not claim
+verified cross-platform behavior on Linux or macOS.
 
 ## Troubleshooting
 
@@ -332,7 +333,8 @@ histograms, make sure the recorded operation was actually executed.
 both rules. Make the rules disjoint.
 
 **`ObservationIncomplete`** - a safety bound was reached. The report names the bound, the instrument, and how many
-observations could not be tracked. Raise `MaxTrackedSeries` or `MaxTrackedValuesPerTag` if the workload is
+observations could not be tracked. Raise the per-instrument-identity `MaxTrackedSeries` or
+`MaxTrackedValuesPerTag` when the workload is
 representative, or narrow the workload if the cardinality is the finding you were looking for.
 
 **A test fails in parallel CI but passes alone** - another test in the same process publishes instruments with the

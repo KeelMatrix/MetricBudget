@@ -41,8 +41,8 @@ with a non-positive safety bound throws `MetricBudgetConfigurationException` bef
 ## `ObservationIncomplete`
 
 A safety bound was reached. The report names the bound, the instrument, and how many observations could not be
-tracked, and every affected count is a lower bound. See [safety-bounds.md](safety-bounds.md). Raise
-`MaxTrackedSeries` or `MaxTrackedValuesPerTag` when the workload is representative; narrow the workload when the
+tracked, and every affected count is a lower bound. See [safety-bounds.md](safety-bounds.md). Raise the
+per-instrument-identity `MaxTrackedSeries` or `MaxTrackedValuesPerTag` when the workload is representative; narrow the workload when the
 cardinality is the finding you were looking for.
 
 ## A tag budget never triggers

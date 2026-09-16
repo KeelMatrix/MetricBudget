@@ -3,11 +3,11 @@
 namespace KeelMatrix.MetricBudget;
 
 /// <summary>
-/// Declares how many distinct values one tag key may produce for an instrument within a session.
+/// Declares how many distinct values one tag key may produce for one instrument identity within a session.
 /// </summary>
 /// <remarks>
 /// <para>
-/// The budget applies to the distinct values observed for that tag key on that instrument during the exercised
+/// The budget applies to the distinct values observed for that tag key on that instrument identity during the exercised
 /// workload. It is not a statement about the values production can produce, and no value here is a safe default
 /// for any other codebase.
 /// </para>
@@ -34,7 +34,7 @@ public sealed class TagBudget
     public string Key { get; }
 
     /// <summary>
-    /// Maximum number of distinct values this tag key may produce for the instrument.
+    /// Maximum number of distinct values this tag key may produce for the instrument identity.
     /// </summary>
     /// <remarks>
     /// The value must be greater than zero. <see langword="null"/> means the tag is declared without a limit, which

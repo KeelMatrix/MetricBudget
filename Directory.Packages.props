@@ -9,7 +9,7 @@
     <!-- Shared KeelMatrix telemetry for the anonymous activation/heartbeat signal. -->
     <PackageVersion Include="KeelMatrix.Telemetry" Version="[0.1.0]" />
 
-    <!-- Consumed only by the isolated package-consumer smoke test, which restores the built package. -->
+    <!-- Consumed only by the isolated package-consumer smoke test and package-backed sample. -->
     <PackageVersion Include="KeelMatrix.MetricBudget" Version="[0.1.0]" />
 
     <!-- Build-only dependencies: API baselines, SourceLink, and the test toolchain. -->

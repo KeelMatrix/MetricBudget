@@ -50,18 +50,20 @@ public sealed class MetricBudgetSafetyReport
     public int MaxTagValueLength { get; }
 
     /// <summary>
-    /// Whether the series safety bound was reached, which makes every observed series count a lower bound.
+    /// Whether the series safety bound for an instrument identity was reached, which makes every observed series
+    /// count a lower bound.
     /// </summary>
     public bool SeriesTrackingIncomplete { get; }
 
     /// <summary>
-    /// Measurements whose series could not be tracked because the series bound was already reached.
+    /// Measurements whose series could not be tracked because the series bound for an instrument identity was already
+    /// reached.
     /// </summary>
     public long UntrackedSeriesObservations { get; }
 
     /// <summary>
-    /// Whether the per-tag value safety bound was reached for at least one tag key, which makes those observed
-    /// distinct-value counts lower bounds.
+    /// Whether the per-tag value safety bound for an instrument identity was reached for at least one tag key, which
+    /// makes those observed distinct-value counts lower bounds.
     /// </summary>
     public bool TagValueTrackingIncomplete { get; }
 
