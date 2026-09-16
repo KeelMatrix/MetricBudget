@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <AssemblyName>MetricBudget.Probe.NetStandard</AssemblyName>
+    <RootNamespace>MetricBudget.Probe.NetStandard</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The candidate identity rule and the bounded tracker are compiled into both target frameworks. -->
+    <Compile Include="../MetricBudget.Probe.Core/ProbeTagCanonicalizer.cs" Link="Shared/ProbeTagCanonicalizer.cs" />
+    <Compile Include="../MetricBudget.Probe.Core/ProbeSeriesTracker.cs" Link="Shared/ProbeSeriesTracker.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Diagnostics.DiagnosticSource" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>MetricBudget.Probe.Runner</AssemblyName>
+    <RootNamespace>MetricBudget.Probe.Runner</RootNamespace>
+    <!-- The tag-retention probe compares callback buffer addresses with the caller's array. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/MetricBudget.Probe.Core/MetricBudget.Probe.Core.csproj" />
+    <ProjectReference Include="../../src/MetricBudget.Probe.NetStandard/MetricBudget.Probe.NetStandard.csproj" />
+  </ItemGroup>
+</Project>
