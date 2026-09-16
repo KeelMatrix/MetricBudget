@@ -10,6 +10,7 @@ public sealed class ProbeObservationSummary
     internal ProbeObservationSummary(
         string sessionName,
         long observedMeasurements,
+        long copiedTagSets,
         int trackedSeriesCount,
         long untrackedSeriesObservations,
         int trackedTagKeys,
@@ -24,6 +25,7 @@ public sealed class ProbeObservationSummary
     {
         SessionName = sessionName;
         ObservedMeasurements = observedMeasurements;
+        CopiedTagSets = copiedTagSets;
         TrackedSeriesCount = trackedSeriesCount;
         UntrackedSeriesObservations = untrackedSeriesObservations;
         TrackedTagKeys = trackedTagKeys;
@@ -40,6 +42,9 @@ public sealed class ProbeObservationSummary
     public string SessionName { get; }
 
     public long ObservedMeasurements { get; }
+
+    /// <summary>Tag sets copied out of the measurement callback into session-owned memory.</summary>
+    public long CopiedTagSets { get; }
 
     /// <summary>Distinct observed series that are tracked in full.</summary>
     public int TrackedSeriesCount { get; }
@@ -70,14 +75,23 @@ public sealed class ProbeObservationSummary
 
     public bool IsIncomplete => SeriesCapExhausted || TagValueCapExhausted || TagKeyCapExhausted;
 
+    /// <summary>
+    /// True when the summary is internally consistent: every copied tag set was accounted for, distinct tracked
+    /// series never outnumber observed measurements, and no series was reported that was never recorded.
+    /// </summary>
+    public bool AccountingIsConsistent =>
+        CopiedTagSets == ObservedMeasurements && TrackedSeriesCount <= ObservedMeasurements;
+
     public override string ToString()
     {
         return "session=" + SessionName
             + "; observed=" + ObservedMeasurements
+            + "; copiedTagSets=" + CopiedTagSets
             + "; trackedSeries=" + TrackedSeriesCount + "/" + SeriesCap
             + "; untrackedSeriesObservations=" + UntrackedSeriesObservations
             + "; trackedTagKeys=" + TrackedTagKeys + "/" + TagKeyCap
             + "; trackedTagValues=" + TrackedTagValues
+            + "; accountingConsistent=" + AccountingIsConsistent
             + "; incomplete=" + IsIncomplete
             + (IsIncomplete
                 ? "; boundedState=explicit(seriesCap=" + SeriesCapExhausted
@@ -109,6 +123,7 @@ public sealed class MeterObservationSession : IDisposable
 
     private int _started;
     private int _disposed;
+    private int _disabledInstrumentCount;
     private long _copiedTagSets;
     private string? _lastMeasurementType;
 
@@ -198,7 +213,7 @@ public sealed class MeterObservationSession : IDisposable
         lock (_gate)
         {
             _enabledInstruments.Remove(instrument);
-            DisabledInstrumentCount++;
+            _disabledInstrumentCount++;
         }
     }
 
@@ -217,27 +232,40 @@ public sealed class MeterObservationSession : IDisposable
     }
 
     /// <summary>Instruments this session explicitly disabled again, including during disposal.</summary>
-    public int DisabledInstrumentCount { get; private set; }
+    public int DisabledInstrumentCount
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _disabledInstrumentCount;
+            }
+        }
+    }
 
     /// <summary>Records observable instruments for the whole process for this session.</summary>
     public void RecordObservableInstruments() => _listener.RecordObservableInstruments();
 
     public ProbeObservationSummary Summarize()
     {
+        // One locked snapshot per tracker, so observed counts and tracked series always belong to the same moment.
+        ProbeTrackerSnapshot snapshot = _tracker.Snapshot();
+
         return new ProbeObservationSummary(
             SessionName,
-            _tracker.ObservedMeasurements,
-            _tracker.TrackedSeriesCount,
-            _tracker.UntrackedSeriesObservations,
-            _tracker.TrackedTagKeys,
-            _tracker.TrackedTagValues,
-            _tracker.SeriesCap,
-            _tracker.TagValueCapPerKey,
-            _tracker.TagKeyCap,
-            _tracker.SeriesCapExhausted,
-            _tracker.TagValueCapExhausted,
-            _tracker.TagKeyCapExhausted,
-            _tracker.SampleExhaustedSeriesKey);
+            snapshot.ObservedMeasurements,
+            CopiedTagSets,
+            snapshot.TrackedSeriesCount,
+            snapshot.UntrackedSeriesObservations,
+            snapshot.TrackedTagKeys,
+            snapshot.TrackedTagValues,
+            snapshot.SeriesCap,
+            snapshot.TagValueCapPerKey,
+            snapshot.TagKeyCap,
+            snapshot.SeriesCapExhausted,
+            snapshot.TagValueCapExhausted,
+            snapshot.TagKeyCapExhausted,
+            snapshot.SampleExhaustedSeriesKey);
     }
 
     public void Dispose()
@@ -265,7 +293,7 @@ public sealed class MeterObservationSession : IDisposable
                     _listener.DisableMeasurementEvents(instrument);
                     lock (_gate)
                     {
-                        DisabledInstrumentCount++;
+                        _disabledInstrumentCount++;
                     }
                 }
                 catch (ObjectDisposedException)

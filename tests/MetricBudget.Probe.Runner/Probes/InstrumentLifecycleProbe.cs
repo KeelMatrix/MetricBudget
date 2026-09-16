@@ -333,7 +333,9 @@ internal static class InstrumentLifecycleProbe
 
         bool explicitDisableWorks = explicitDelivered == 1 && !explicitCounter.Enabled;
 
-        result.Add(
+        // This is a measured fact about the platform that contradicts the assumption under test, so a FAIL here is
+        // the probe working as intended and must not fail the run.
+        result.AddObservation(
             "MeterListener.Dispose stops measurement delivery",
             deliveredAfterDispose ? ProbeVerdict.Fail : ProbeVerdict.Pass,
             "measured on .NET 8.0.31: after Dispose the listener still received measurements from instruments it had "

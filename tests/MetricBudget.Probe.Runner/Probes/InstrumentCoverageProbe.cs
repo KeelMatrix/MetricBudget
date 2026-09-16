@@ -1,5 +1,6 @@
 using System.Diagnostics.Metrics;
 using System.Globalization;
+using System.Numerics;
 using System.Reflection;
 
 namespace MetricBudget.Probe.Runner.Probes;
@@ -21,7 +22,21 @@ internal static class InstrumentCoverageProbe
 
     private static readonly Type[] NonNumericTypes =
     {
-        typeof(char), typeof(bool), typeof(TimeSpan), typeof(DateTime), typeof(Int128), typeof(SampleState),
+        typeof(char),
+        typeof(bool),
+        typeof(TimeSpan),
+        typeof(DateTime),
+        typeof(DateOnly),
+        typeof(Int128),
+        typeof(Half),
+        typeof(Guid),
+        typeof(BigInteger),
+        typeof(sbyte),
+        typeof(ushort),
+        typeof(uint),
+        typeof(ulong),
+        typeof(nint),
+        typeof(SampleState),
         typeof(int?),
     };
 
@@ -42,7 +57,7 @@ internal static class InstrumentCoverageProbe
         {
             foreach (Type measurementType in NumericTypes)
             {
-                string row = RunCase(kind, measurementType, out bool delivered);
+                string row = RunCase(kind, measurementType, out bool delivered, out _);
                 ProbeReport.Line("  " + row);
                 if (delivered)
                 {
@@ -52,13 +67,26 @@ internal static class InstrumentCoverageProbe
         }
 
         ProbeReport.Section("1.2 unsupported measurement types");
+
+        int unsupportedRows = 0;
+        int unsupportedRejected = 0;
         foreach (string kind in Kinds)
         {
             foreach (Type measurementType in NonNumericTypes)
             {
-                ProbeReport.Line("  " + RunCase(kind, measurementType, out _));
+                ProbeReport.Line("  " + RunCase(kind, measurementType, out _, out bool creationFailed));
+                unsupportedRows++;
+                if (creationFailed)
+                {
+                    unsupportedRejected++;
+                }
             }
         }
+
+        ProbeReport.KeyValue(
+            "unsupportedSampleTypes",
+            string.Join(", ", NonNumericTypes.Select(TypeToken)));
+        ProbeReport.KeyValue("unsupportedRowsRejected", unsupportedRejected + "/" + unsupportedRows);
 
         ProbeReport.Section("1.3 instrument measurement surface");
         DescribeInstrumentSurface();
@@ -73,12 +101,25 @@ internal static class InstrumentCoverageProbe
                     + " numeric measurement types produced a delivered callback with the exact measurement type");
         }
 
+        result.Add(
+            "unsupported measurement types fail loudly",
+            unsupportedRejected == unsupportedRows ? ProbeVerdict.Pass : ProbeVerdict.Fail,
+            unsupportedRejected.ToString(CultureInfo.InvariantCulture) + "/"
+                + unsupportedRows.ToString(CultureInfo.InvariantCulture)
+                + " sampled (kind, type) rows were rejected at creation time with a loud exception. The supported "
+                + "class is complete: " + NumericTypes.Length.ToString(CultureInfo.InvariantCulture)
+                + " numeric types x " + Kinds.Length.ToString(CultureInfo.InvariantCulture)
+                + " kinds, because the BCL validates the measurement type against one fixed set. The unsupported "
+                + "class is a sample of " + NonNumericTypes.Length.ToString(CultureInfo.InvariantCulture)
+                + " types, not an exhaustive enumeration");
+
         return result;
     }
 
-    private static string RunCase(string kind, Type measurementType, out bool delivered)
+    private static string RunCase(string kind, Type measurementType, out bool delivered, out bool creationFailed)
     {
         delivered = false;
+        creationFailed = false;
         string typeToken = TypeToken(measurementType);
         string meterName = "probe.coverage." + kind.ToLowerInvariant() + "." + typeToken;
         const string instrumentName = "probe.instrument";
@@ -102,6 +143,7 @@ internal static class InstrumentCoverageProbe
         catch (Exception ex)
         {
             creation = "creation-failed";
+            creationFailed = true;
             exception = Describe(ex);
         }
 
@@ -388,6 +430,51 @@ internal static class InstrumentCoverageProbe
         if (type == typeof(int?))
         {
             return "int-nullable";
+        }
+
+        if (type == typeof(sbyte))
+        {
+            return "sbyte";
+        }
+
+        if (type == typeof(ushort))
+        {
+            return "ushort";
+        }
+
+        if (type == typeof(uint))
+        {
+            return "uint";
+        }
+
+        if (type == typeof(ulong))
+        {
+            return "ulong";
+        }
+
+        if (type == typeof(nint))
+        {
+            return "nint";
+        }
+
+        if (type == typeof(Half))
+        {
+            return "Half";
+        }
+
+        if (type == typeof(Guid))
+        {
+            return "Guid";
+        }
+
+        if (type == typeof(DateOnly))
+        {
+            return "DateOnly";
+        }
+
+        if (type == typeof(BigInteger))
+        {
+            return "BigInteger";
         }
 
         return type.Name;

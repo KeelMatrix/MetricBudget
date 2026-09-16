@@ -149,8 +149,12 @@ internal static class CardinalityScaleProbe
         ProbeReport.Section("5.4 canonicalization cost without accounting");
 
         int[] counts = { 100_000, 1_000_000 };
-        foreach (int count in counts)
+        double[] msPerSeries = new double[counts.Length];
+        long[] bytesPerSeries = new long[counts.Length];
+
+        for (int run = 0; run < counts.Length; run++)
         {
+            int count = counts[run];
             string sink = string.Empty;
             ProbeMeasurement measurement = ProbeReport.Measure(() =>
             {
@@ -161,13 +165,42 @@ internal static class CardinalityScaleProbe
                 }
             });
 
-            ProbeReport.Line("  count=" + count.ToString(CultureInfo.InvariantCulture) + "; " + measurement.Describe());
+            msPerSeries[run] = measurement.ElapsedMs / count;
+            bytesPerSeries[run] = measurement.ThreadAllocatedBytes / count;
+
+            ProbeReport.Line(
+                "  count=" + count.ToString(CultureInfo.InvariantCulture)
+                + "; msPerSeries=" + msPerSeries[run].ToString("0.00000", CultureInfo.InvariantCulture)
+                + "; allocatedBytesPerSeries=" + bytesPerSeries[run].ToString(CultureInfo.InvariantCulture)
+                + "; " + measurement.Describe());
         }
+
+        // Ten times the series count must not cost materially more per series. A ratio near 1 is linear; the
+        // thresholds leave room for JIT warm-up making the 100k run slower per series and for GC noise in the 1M
+        // run, while still failing a superlinear slope.
+        double growth = msPerSeries[counts.Length - 1] / msPerSeries[0];
+        long maxBytesPerSeries = bytesPerSeries.Max();
+        bool bounded = growth <= 4.0 && maxBytesPerSeries <= 4096;
+        ProbeVerdict verdict = bounded
+            ? (growth <= 2.0 ? ProbeVerdict.Pass : ProbeVerdict.Narrow)
+            : ProbeVerdict.Fail;
+
+        ProbeReport.KeyValue("msPerSeriesAt100k", msPerSeries[0].ToString("0.00000", CultureInfo.InvariantCulture));
+        ProbeReport.KeyValue("msPerSeriesAt1M", msPerSeries[counts.Length - 1].ToString("0.00000", CultureInfo.InvariantCulture));
+        ProbeReport.KeyValue("perSeriesCostGrowthRatio", growth.ToString("0.000", CultureInfo.InvariantCulture));
+        ProbeReport.KeyValue("maxAllocatedBytesPerSeries", maxBytesPerSeries);
 
         result.Add(
             "canonicalization is linear and bounded per series",
-            ProbeVerdict.Pass,
-            "per-series cost is dominated by one ordinal sort of the delivered tag entries and one key string");
+            verdict,
+            "raising the series count tenfold changed the measured per-series cost by "
+                + growth.ToString("0.00", CultureInfo.InvariantCulture) + "x ("
+                + msPerSeries[0].ToString("0.00000", CultureInfo.InvariantCulture) + " ms per series at 100k versus "
+                + msPerSeries[counts.Length - 1].ToString("0.00000", CultureInfo.InvariantCulture)
+                + " ms per series at 1M), and the largest measured allocation was "
+                + maxBytesPerSeries.ToString(CultureInfo.InvariantCulture)
+                + " bytes per series, which is one ordinal sort of the delivered tag entries plus one key string "
+                + "with no retained state");
     }
 
     private static void Populate(ProbeSeriesTracker tracker, int count)

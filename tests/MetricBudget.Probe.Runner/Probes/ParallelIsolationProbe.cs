@@ -74,9 +74,12 @@ internal static class ParallelIsolationProbe
                 + "; trackedSeries=" + summary.TrackedSeriesCount
                 + "; publishedInstruments=" + published.Count
                 + "; foreignPublishedInstruments=" + foreignPublished
-                + "; incomplete=" + summary.IsIncomplete);
+                + "; incomplete=" + summary.IsIncomplete
+                + "; accountingConsistent=" + ProbeReport.Format(summary.AccountingIsConsistent));
 
-            allIsolated &= summary.ObservedMeasurements == expectedSeries && summary.TrackedSeriesCount == expectedSeries;
+            allIsolated &= summary.ObservedMeasurements == expectedSeries
+                && summary.TrackedSeriesCount == expectedSeries
+                && summary.AccountingIsConsistent;
         }
 
         ProbeReport.KeyValue("expectedSeriesPerSession", expectedSeries);
@@ -106,6 +109,7 @@ internal static class ParallelIsolationProbe
 
         const int workers = 4;
         const int seriesPerRound = 5;
+        const int expectedPerSession = workers * seriesPerRound;
 
         MeterObservationSession[] sessions = new MeterObservationSession[workers];
         Meter[] meters = new Meter[workers];
@@ -125,6 +129,10 @@ internal static class ParallelIsolationProbe
             sessions[i].Start();
         }
 
+        // Delivered work is counted independently of the sessions: every Add is one measurement, and the tag set
+        // (route, worker) is distinct for every one of them, so the workload publishes exactly
+        // workers x seriesPerRound distinct series.
+        int deliveredMeasurements = 0;
         Parallel.For(0, workers, worker =>
         {
             for (int series = 0; series < seriesPerRound; series++)
@@ -133,23 +141,53 @@ internal static class ParallelIsolationProbe
                     1,
                     new KeyValuePair<string, object?>("route", "/u" + series.ToString(CultureInfo.InvariantCulture)),
                     new KeyValuePair<string, object?>("worker", worker));
+                Interlocked.Increment(ref deliveredMeasurements);
             }
         });
 
         int ownSeries = seriesPerRound;
-        int totalSeries = workers * seriesPerRound;
+        int totalSeries = expectedPerSession;
         int minObserved = int.MaxValue;
+        bool allObservedExpected = true;
+        bool allTrackedExpected = true;
+        bool allConsistent = true;
+        long[] observedPerSession = new long[workers];
+        int[] trackedPerSession = new int[workers];
+
         for (int i = 0; i < workers; i++)
         {
             ProbeObservationSummary summary = sessions[i].Summarize();
+            observedPerSession[i] = summary.ObservedMeasurements;
+            trackedPerSession[i] = summary.TrackedSeriesCount;
             minObserved = Math.Min(minObserved, (int)summary.ObservedMeasurements);
+
+            bool observedExpected = summary.ObservedMeasurements == expectedPerSession
+                && summary.ObservedMeasurements == deliveredMeasurements;
+            bool trackedExpected = summary.TrackedSeriesCount == expectedPerSession;
+            bool consistent = summary.AccountingIsConsistent;
+
+            allObservedExpected &= observedExpected;
+            allTrackedExpected &= trackedExpected;
+            allConsistent &= consistent;
+
             ProbeReport.KeyValue(
                 "session" + i.ToString(CultureInfo.InvariantCulture),
                 "observed=" + summary.ObservedMeasurements
+                + "; copiedTagSets=" + summary.CopiedTagSets
                 + "; trackedSeries=" + summary.TrackedSeriesCount
+                + "; untrackedSeriesObservations=" + summary.UntrackedSeriesObservations
+                + "; expectedObserved=" + expectedPerSession
+                + "; expectedTrackedSeries=" + expectedPerSession
+                + "; accountingConsistent=" + ProbeReport.Format(consistent)
                 + "; publishedInstruments=" + sessions[i].PublishedInstruments.Count);
         }
 
+        ProbeReport.KeyValue("workers", workers);
+        ProbeReport.KeyValue("seriesPerRound", seriesPerRound);
+        ProbeReport.KeyValue("deliveredMeasurements", deliveredMeasurements);
+        ProbeReport.KeyValue("deliveredDistinctSeries", totalSeries);
+        ProbeReport.KeyValue("expectedObservedPerSession", expectedPerSession);
+        ProbeReport.KeyValue("expectedTrackedSeriesPerSession", expectedPerSession);
         ProbeReport.KeyValue("ownMeasurementsPerSession", ownSeries);
         ProbeReport.KeyValue("measurementsPerSessionIfIsolated", ownSeries);
         ProbeReport.KeyValue("measurementsPerSessionIfFullyShared", totalSeries);
@@ -161,6 +199,18 @@ internal static class ParallelIsolationProbe
             meters[i].Dispose();
         }
 
+        result.Add(
+            "unselected sessions observe and track every delivered series",
+            allObservedExpected && allTrackedExpected && allConsistent ? ProbeVerdict.Pass : ProbeVerdict.Fail,
+            "each of the " + workers.ToString(CultureInfo.InvariantCulture)
+                + " unselected sessions must observe exactly " + expectedPerSession.ToString(CultureInfo.InvariantCulture)
+                + " measurements and track exactly " + expectedPerSession.ToString(CultureInfo.InvariantCulture)
+                + " distinct series (" + workers.ToString(CultureInfo.InvariantCulture) + " workers x "
+                + seriesPerRound.ToString(CultureInfo.InvariantCulture) + " series per worker); measured observed="
+                + string.Join("/", observedPerSession.Select(value => value.ToString(CultureInfo.InvariantCulture)))
+                + " and trackedSeries="
+                + string.Join("/", trackedPerSession.Select(value => value.ToString(CultureInfo.InvariantCulture)))
+                + ", minimumObservedAcrossSessions=" + minObserved.ToString(CultureInfo.InvariantCulture));
         result.Add(
             "unselected sessions observe each other",
             minObserved > ownSeries ? ProbeVerdict.Pass : ProbeVerdict.Fail,

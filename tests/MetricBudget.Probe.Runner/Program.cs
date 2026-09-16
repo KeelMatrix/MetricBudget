@@ -13,6 +13,23 @@ internal static class Program
 
     private static int Main(string[] args)
     {
+        try
+        {
+            return Run(args);
+        }
+        catch (Exception ex)
+        {
+            // No failure may escape as an unhandled exception, because that would discard the evidence this run
+            // already produced and report nothing to the operator.
+            ProbeReport.Line("probeRunComplete = false");
+            ProbeReport.Line("probeRunAborted = true");
+            ProbeReport.KeyValue("abortReason", ProbeReport.DescribeException(ex));
+            return 2;
+        }
+    }
+
+    private static int Run(string[] args)
+    {
         List<string> selected = new List<string>();
         foreach (string argument in args)
         {
@@ -30,7 +47,15 @@ internal static class Program
 
             if (argument.StartsWith("--probe=", StringComparison.Ordinal))
             {
-                selected.Add(argument.Substring("--probe=".Length));
+                string name = argument.Substring("--probe=".Length);
+                if (Array.IndexOf(AllProbes, name) < 0)
+                {
+                    ProbeReport.Line("Unknown probe: " + name);
+                    PrintUsage();
+                    return 1;
+                }
+
+                selected.Add(name);
                 continue;
             }
 
@@ -52,8 +77,7 @@ internal static class Program
 
         foreach (string probe in selected)
         {
-            ProbeSectionResult result = RunProbe(probe);
-            results.Add(result);
+            results.Add(RunProbeIsolated(probe));
         }
 
         total.Stop();
@@ -73,8 +97,102 @@ internal static class Program
             }
         }
 
-        ProbeReport.Line("probeRunComplete = true");
-        return 0;
+        int passes = 0;
+        int narrows = 0;
+        int fails = 0;
+        int gates = 0;
+        int gateFails = 0;
+        int observationFails = 0;
+        List<ProbeFinding> gateFailures = new List<ProbeFinding>();
+        foreach (ProbeSectionResult result in results)
+        {
+            foreach (ProbeFinding finding in result.Findings)
+            {
+                switch (finding.Verdict)
+                {
+                    case ProbeVerdict.Pass:
+                        passes++;
+                        break;
+                    case ProbeVerdict.Narrow:
+                        narrows++;
+                        break;
+                    default:
+                        fails++;
+                        break;
+                }
+
+                if (finding.IsRunGate)
+                {
+                    gates++;
+                    if (finding.Verdict == ProbeVerdict.Fail)
+                    {
+                        gateFails++;
+                        gateFailures.Add(finding);
+                    }
+                }
+                else if (finding.Verdict == ProbeVerdict.Fail)
+                {
+                    observationFails++;
+                }
+            }
+        }
+
+        ProbeReport.Section("runner verdict");
+        ProbeReport.KeyValue("findingsTotal", passes + narrows + fails);
+        ProbeReport.KeyValue("findingsPass", passes);
+        ProbeReport.KeyValue("findingsNarrow", narrows);
+        ProbeReport.KeyValue("findingsFail", fails);
+        ProbeReport.KeyValue("runGates", gates);
+        ProbeReport.KeyValue("gateFailures", gateFailures.Count);
+        ProbeReport.KeyValue("observationFindings", passes + narrows + fails - gates);
+        ProbeReport.KeyValue("observationFails", observationFails);
+        ProbeReport.Line(
+            "  observation findings record measured platform behavior; a FAIL there is an expected negative result "
+            + "and never changes the exit code");
+
+        foreach (ProbeFinding finding in gateFailures)
+        {
+            ProbeReport.Line("GATE[FAIL] " + finding.Item + " - " + finding.Rationale);
+        }
+
+        AssertGateCounting(gates, gateFails);
+
+        bool passed = gateFailures.Count == 0;
+        ProbeReport.KeyValue("probeVerdict", passed ? "PASS" : "FAIL");
+        ProbeReport.KeyValue("exitCode", passed ? 0 : 1);
+        ProbeReport.Line("probeRunComplete = " + ProbeReport.Format(passed));
+        return passed ? 0 : 1;
+    }
+
+    private static void AssertGateCounting(int gates, int gateFails)
+    {
+        if (gates <= 0 || gateFails > gates)
+        {
+            throw new InvalidOperationException(
+                "runner gate accounting is inconsistent: gates=" + gates.ToString(CultureInfo.InvariantCulture)
+                    + ", gateFails=" + gateFails.ToString(CultureInfo.InvariantCulture));
+        }
+    }
+
+    /// <summary>
+    /// Runs one probe so that a defect in that probe is reported as a named non-zero finding instead of aborting
+    /// the run and destroying the evidence later probes would have produced.
+    /// </summary>
+    private static ProbeSectionResult RunProbeIsolated(string probe)
+    {
+        try
+        {
+            return RunProbe(probe);
+        }
+        catch (Exception ex)
+        {
+            ProbeSectionResult result = new ProbeSectionResult(probe);
+            result.Add(
+                "probe '" + probe + "' completed without an unhandled exception",
+                ProbeVerdict.Fail,
+                "the probe threw instead of reporting a verdict: " + ProbeReport.DescribeException(ex));
+            return result;
+        }
     }
 
     private static ProbeSectionResult RunProbe(string probe)

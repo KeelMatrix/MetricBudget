@@ -50,12 +50,79 @@ internal static class FrameworkParityProbe
     public static ProbeSectionResult Run()
     {
         ProbeSectionResult result = new ProbeSectionResult("netstandard2.0 decision");
+        EvidenceInputs(result);
         PackageAssetCatalogue(result);
         SurfaceDiff(result);
         RuntimeInterop(result);
         DependencyClosure(result);
         return result;
     }
+
+    /// <summary>
+    /// Prints the resolved repository root and the files the parity evidence is read from, and gates on them, so
+    /// an output layout that hides the evidence cannot be reported as a pass.
+    /// </summary>
+    private static void EvidenceInputs(ProbeSectionResult result)
+    {
+        ProbeReport.Section("6.0 probe input resolution");
+
+        string? root = RepositoryRoot();
+        string? propsPath = root is null ? null : Path.Combine(root, "Directory.Packages.props");
+        string? assetsPath = root is null
+            ? null
+            : Path.Combine(root, "src", "MetricBudget.Probe.NetStandard", "obj", "project.assets.json");
+
+        bool propsExists = propsPath is not null && File.Exists(propsPath);
+        bool assetsExists = assetsPath is not null && File.Exists(assetsPath);
+
+        ProbeReport.KeyValue("currentDirectory", Directory.GetCurrentDirectory());
+        ProbeReport.KeyValue("repositoryRoot", root ?? "<unresolved>");
+        ProbeReport.KeyValue("solutionFile", root is null ? "<unresolved>" : Path.Combine(root, "MetricBudget.Probe.sln"));
+        ProbeReport.KeyValue("directoryPackagesPropsPath", propsPath ?? "<unresolved>");
+        ProbeReport.KeyValue("directoryPackagesPropsExists", propsExists);
+        ProbeReport.KeyValue("netStandardAssetsPath", assetsPath ?? "<unresolved>");
+        ProbeReport.KeyValue("netStandardAssetsFileExists", assetsExists);
+        ProbeReport.KeyValue("documentedGateCommand", DocumentedGateCommand);
+
+        if (root is null)
+        {
+            result.Add(
+                "probe inputs resolve from the repository root",
+                ProbeVerdict.Fail,
+                "no directory containing MetricBudget.Probe.sln was found above the current directory or the "
+                    + "assembly directory, so the pinned package version, the netstandard2.0 assets file, and the "
+                    + "dependency closure cannot be read");
+            return;
+        }
+
+        if (!propsExists)
+        {
+            result.Add(
+                "probe inputs resolve from the repository root",
+                ProbeVerdict.Fail,
+                "Directory.Packages.props is missing at " + propsPath + ", so the pinned package version is unknown");
+            return;
+        }
+
+        if (!assetsExists)
+        {
+            result.Add(
+                "probe inputs resolve from the repository root",
+                ProbeVerdict.Narrow,
+                "the netstandard2.0 assets file is missing at " + assetsPath
+                    + " (an out-of-tree output layout); run the documented command from the repository root: "
+                    + DocumentedGateCommand);
+            return;
+        }
+
+        result.Add(
+            "probe inputs resolve from the repository root",
+            ProbeVerdict.Pass,
+            "repository root " + root + "; Directory.Packages.props and the netstandard2.0 assets file both exist");
+    }
+
+    private const string DocumentedGateCommand =
+        "dotnet run --project tests/MetricBudget.Probe.Runner/MetricBudget.Probe.Runner.csproj -c Release";
 
     private static void PackageAssetCatalogue(ProbeSectionResult result)
     {
@@ -165,7 +232,17 @@ internal static class FrameworkParityProbe
     {
         ProbeReport.Section("6.2 API parity: net8.0 framework surface versus netstandard2.0 package asset");
 
-        string version = PinnedPackageVersion() ?? "8.0.1";
+        string? version = PinnedPackageVersion();
+        if (version is null)
+        {
+            ProbeReport.Line("  the pinned System.Diagnostics.DiagnosticSource version could not be read");
+            result.Add(
+                "API parity on the public surface",
+                ProbeVerdict.Narrow,
+                "the pinned package version is unresolved, so the netstandard2.0 asset to compare was not selected");
+            return;
+        }
+
         string asset = Path.Combine(
             NuGetPackagesRoot(),
             "system.diagnostics.diagnosticsource",
@@ -299,15 +376,27 @@ internal static class FrameworkParityProbe
         result.Add(
             "netstandard2.0-compiled listener code runs against the net8.0 runtime",
             passed ? ProbeVerdict.Pass : ProbeVerdict.Fail,
-            detail + " (the netstandard2.0 assembly binds to the framework System.Diagnostics.DiagnosticSource 8.0.0.0 "
-                + "because the assembly identity matches; a netstandard2.0 host was not available for this probe)");
+            detail + " (this net8.0 process binds the netstandard2.0-compiled session to the framework "
+                + "System.Diagnostics.DiagnosticSource because the assembly identity matches, so it is interop evidence "
+                + "and not downlevel-host evidence; the separate net472 host project runs the same netstandard2.0-compiled "
+                + "session against the package's own netstandard2.0 asset)");
     }
 
     private static void DependencyClosure(ProbeSectionResult result)
     {
         ProbeReport.Section("6.4 dependency closure for a netstandard2.0 consumer");
 
-        string version = PinnedPackageVersion() ?? "8.0.1";
+        string? version = PinnedPackageVersion();
+        if (version is null)
+        {
+            ProbeReport.Line("  the pinned System.Diagnostics.DiagnosticSource version could not be read");
+            result.Add(
+                "netstandard2.0 dependency burden",
+                ProbeVerdict.Narrow,
+                "the pinned package version is unresolved, so the declared netstandard2.0 dependencies were not read");
+            return;
+        }
+
         string nuspec = Path.Combine(
             NuGetPackagesRoot(),
             "system.diagnostics.diagnosticsource",
@@ -339,14 +428,13 @@ internal static class FrameworkParityProbe
         ProbeReport.KeyValue("netstandard2.0DirectDependencies", direct.Count == 0 ? "<none>" : string.Join(", ", direct));
 
         List<string> closure = new List<string>();
-        string assetsPath = Path.Combine(
-            RepositoryRoot(),
-            "src",
-            "MetricBudget.Probe.NetStandard",
-            "obj",
-            "project.assets.json");
+        string? root = RepositoryRoot();
+        string assetsPath = root is null
+            ? "<repository root unresolved>"
+            : Path.Combine(root, "src", "MetricBudget.Probe.NetStandard", "obj", "project.assets.json");
+        bool assetsExists = File.Exists(assetsPath);
 
-        if (File.Exists(assetsPath))
+        if (assetsExists)
         {
             using JsonDocument document = JsonDocument.Parse(File.ReadAllText(assetsPath));
             if (document.RootElement.TryGetProperty("targets", out JsonElement targets))
@@ -373,9 +461,35 @@ internal static class FrameworkParityProbe
         }
 
         ProbeReport.KeyValue("assetsPath", assetsPath);
-        ProbeReport.KeyValue("assetsFileExists", File.Exists(assetsPath));
+        ProbeReport.KeyValue("assetsFileExists", assetsExists);
         ProbeReport.KeyValue("netstandard2.0TransitiveClosure", closure.Count == 0 ? "<none>" : string.Join(", ", closure.OrderBy(entry => entry, StringComparer.Ordinal)));
         ProbeReport.KeyValue("netstandard2.0TransitivePackageCount", closure.Count);
+
+        if (!assetsExists)
+        {
+            // A missing assets file means the closure was never measured; reporting a pass here would be a false
+            // pass on an out-of-tree output layout.
+            result.Add(
+                "netstandard2.0 dependency burden",
+                ProbeVerdict.Narrow,
+                "the resolved package closure could not be read because " + assetsPath
+                    + " does not exist; the netstandard2.0 target declares "
+                    + direct.Count.ToString(CultureInfo.InvariantCulture)
+                    + " direct package dependencies in the nuspec, but the transitive closure is unverified until "
+                    + "the documented in-place Release build is run");
+            return;
+        }
+
+        if (closure.Count == 0)
+        {
+            result.Add(
+                "netstandard2.0 dependency burden",
+                ProbeVerdict.Fail,
+                "the assets file at " + assetsPath
+                    + " exists but contains no netstandard2.0 package target, so the dependency closure could not "
+                    + "be measured");
+            return;
+        }
 
         result.Add(
             "netstandard2.0 dependency burden",
@@ -388,7 +502,13 @@ internal static class FrameworkParityProbe
 
     private static string? PinnedPackageVersion()
     {
-        string props = Path.Combine(RepositoryRoot(), "Directory.Packages.props");
+        string? root = RepositoryRoot();
+        if (root is null)
+        {
+            return null;
+        }
+
+        string props = Path.Combine(root, "Directory.Packages.props");
         if (!File.Exists(props))
         {
             return null;
@@ -402,9 +522,29 @@ internal static class FrameworkParityProbe
         return match.Success ? match.Groups[1].Value : null;
     }
 
-    private static string RepositoryRoot()
+    /// <summary>
+    /// Locates the repository root by walking up from the current directory and then from the assembly directory
+    /// until a directory containing the solution file is found. Returns <see langword="null"/> when the evidence
+    /// files cannot be located, so callers can report that instead of silently degrading.
+    /// </summary>
+    private static string? RepositoryRoot()
     {
-        return Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
+        string[] candidates = { Directory.GetCurrentDirectory(), AppContext.BaseDirectory };
+        foreach (string candidate in candidates)
+        {
+            DirectoryInfo? directory = new DirectoryInfo(candidate);
+            while (directory is not null)
+            {
+                if (File.Exists(Path.Combine(directory.FullName, "MetricBudget.Probe.sln")))
+                {
+                    return directory.FullName;
+                }
+
+                directory = directory.Parent;
+            }
+        }
+
+        return null;
     }
 
     private static string NuGetPackagesRoot()

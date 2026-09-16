@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net472</TargetFramework>
+    <AssemblyName>MetricBudget.Probe.Net472Host</AssemblyName>
+    <RootNamespace>MetricBudget.Probe.Net472Host</RootNamespace>
+    <!-- The downlevel host binds the referenced package assemblies from its own output directory. -->
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+    <GenerateBindingRedirectsOutputType>true</GenerateBindingRedirectsOutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      Bounded downlevel host: the only project that runs the netstandard2.0-compiled session against the
+      netstandard2.0 asset of System.Diagnostics.DiagnosticSource on a runtime that is not .NET 8.
+    -->
+    <ProjectReference Include="../../src/MetricBudget.Probe.NetStandard/MetricBudget.Probe.NetStandard.csproj" />
+
+    <!--
+      A net472 consumer would normally receive the package's net462 asset, which would not answer the question
+      this host exists to answer. The package's compile and runtime assets are therefore suppressed and the
+      netstandard2.0 asset (assembly version 8.0.0.0, unlike the net462 asset's 8.0.0.1) is the only
+      DiagnosticSource assembly this host compiles against and runs. The host prints the loaded assembly's
+      TargetFrameworkAttribute, so the run proves which asset executed.
+    -->
+    <PackageReference Include="System.Diagnostics.DiagnosticSource" GeneratePathProperty="true" PrivateAssets="all" ExcludeAssets="compile;runtime" />
+    <Reference Include="System.Diagnostics.DiagnosticSource">
+      <HintPath>$(PkgSystem_Diagnostics_DiagnosticSource)\lib\netstandard2.0\System.Diagnostics.DiagnosticSource.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+  </ItemGroup>
+</Project>

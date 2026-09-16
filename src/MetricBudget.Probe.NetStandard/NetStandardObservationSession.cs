@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
+using System.Threading;
 
 namespace MetricBudget.Probe.NetStandard
 {
@@ -31,7 +32,7 @@ namespace MetricBudget.Probe.NetStandard
         private readonly bool _enabled;
 
         private long _copiedTagSets;
-        private bool _disposed;
+        private int _disposed;
 
         public NetStandardObservationSession(
             bool enabled = true,
@@ -52,7 +53,7 @@ namespace MetricBudget.Probe.NetStandard
 
         public long UntrackedSeriesObservations => _tracker.UntrackedSeriesObservations;
 
-        public long CopiedTagSets => _copiedTagSets;
+        public long CopiedTagSets => Interlocked.Read(ref _copiedTagSets);
 
         public IReadOnlyList<string> PublishedInstruments
         {
@@ -72,9 +73,10 @@ namespace MetricBudget.Probe.NetStandard
                 Dictionary<string, long> counts = new Dictionary<string, long>(StringComparer.Ordinal);
                 for (int i = 0; i < _callbackCounts.Length; i++)
                 {
-                    if (_callbackCounts[i] > 0)
+                    long value = Interlocked.Read(ref _callbackCounts[i]);
+                    if (value > 0)
                     {
-                        counts[MeasurementTypeNames[i]] = _callbackCounts[i];
+                        counts[MeasurementTypeNames[i]] = value;
                     }
                 }
 
@@ -110,21 +112,25 @@ namespace MetricBudget.Probe.NetStandard
 
         public string Describe()
         {
-            return "observed=" + _tracker.ObservedMeasurements
-                + "; trackedSeries=" + _tracker.TrackedSeriesCount + "/" + _tracker.SeriesCap
-                + "; untrackedSeriesObservations=" + _tracker.UntrackedSeriesObservations
-                + "; copiedTagSets=" + _copiedTagSets
-                + "; seriesCapExhausted=" + _tracker.SeriesCapExhausted;
+            // One locked snapshot, so the reported numbers belong to the same moment.
+            ProbeTrackerSnapshot snapshot = _tracker.Snapshot();
+
+            return "observed=" + snapshot.ObservedMeasurements
+                + "; copiedTagSets=" + CopiedTagSets
+                + "; trackedSeries=" + snapshot.TrackedSeriesCount + "/" + snapshot.SeriesCap
+                + "; untrackedSeriesObservations=" + snapshot.UntrackedSeriesObservations
+                + "; seriesCapExhausted=" + snapshot.SeriesCapExhausted
+                + "; accountingConsistent=" + (CopiedTagSets == snapshot.ObservedMeasurements
+                    && snapshot.TrackedSeriesCount <= snapshot.ObservedMeasurements);
         }
 
         public void Dispose()
         {
-            if (_disposed)
+            if (Interlocked.Exchange(ref _disposed, 1) == 1)
             {
                 return;
             }
 
-            _disposed = true;
             _listener.Dispose();
         }
 
@@ -151,7 +157,7 @@ namespace MetricBudget.Probe.NetStandard
             int index = MeasurementTypeIndex(typeof(T));
             if (index >= 0)
             {
-                _callbackCounts[index]++;
+                Interlocked.Increment(ref _callbackCounts[index]);
             }
 
             KeyValuePair<string, object?>[] copied = new KeyValuePair<string, object?>[tags.Length];
@@ -160,7 +166,7 @@ namespace MetricBudget.Probe.NetStandard
                 copied[i] = tags[i];
             }
 
-            _copiedTagSets++;
+            Interlocked.Increment(ref _copiedTagSets);
             _tracker.Record(copied);
         }
 

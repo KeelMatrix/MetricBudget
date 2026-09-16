@@ -30,17 +30,55 @@ internal static class TagIdentityProbe
     {
         ProbeReport.Section("3.1 deterministic identity rule");
         ProbeReport.Line("  seriesKey        = entries joined by U+001F, entries sorted with StringComparer.Ordinal");
-        ProbeReport.Line("  entry            = {keyLength}:{key} U+001E {descriptorLength}:{descriptor}");
+        ProbeReport.Line("  entry            = keyField U+001E valueField");
+        ProbeReport.Line("  keyField         = {keyLength}:{key} for a delivered key, or the bare marker "
+            + ProbeTagCanonicalizer.NullKeyMarker + " for a null key");
+        ProbeReport.Line("  valueField       = {descriptorLength}:{descriptor}");
         ProbeReport.Line("  descriptor       = {CLR type full name}:{value formatted with CultureInfo.InvariantCulture}");
-        ProbeReport.Line("  null value       = descriptor \"null\"");
-        ProbeReport.Line("  null tag key     = reserved token " + ProbeTagCanonicalizer.NullKeyToken);
+        ProbeReport.Line("  null value       = descriptor text \"" + ProbeTagCanonicalizer.NullKeyMarker
+            + "\", so its valueField is \"4:" + ProbeTagCanonicalizer.NullKeyMarker + "\"");
         ProbeReport.Line("  duplicate keys   = retained, so a tag set is a sorted multiset, not a set");
         ProbeReport.Line("  oversized values = {type}#chars={count}#sha256={hex} when the descriptor exceeds the bound");
-        ProbeReport.Line("  colliding content is impossible because every field is length-prefixed");
+        ProbeReport.Line("  collision rule   = every length-prefixed field starts with an ASCII digit, so the bare marker "
+            + ProbeTagCanonicalizer.NullKeyMarker + " can never equal a delivered key field");
+
+        string nullKeyCanonicalKey = ProbeTagCanonicalizer.CreateSeriesKey(
+            new[] { new KeyValuePair<string, object?>(null!, "v") });
+        string literalNullKeyCanonicalKey = ProbeTagCanonicalizer.CreateSeriesKey(
+            new[] { new KeyValuePair<string, object?>("null", "v") });
+        string emptyKeyCanonicalKey = ProbeTagCanonicalizer.CreateSeriesKey(
+            new[] { new KeyValuePair<string, object?>(string.Empty, "v") });
+        string nullValueCanonicalKey = ProbeTagCanonicalizer.CreateSeriesKey(
+            new[] { new KeyValuePair<string, object?>("k", null) });
+        string literalNullValueCanonicalKey = ProbeTagCanonicalizer.CreateSeriesKey(
+            new[] { new KeyValuePair<string, object?>("k", "null") });
+
+        string nullKeyPrefix = ProbeTagCanonicalizer.NullKeyMarker + "\u001E";
+        string valueFieldSuffix = nullKeyCanonicalKey.Substring(nullKeyPrefix.Length);
+
+        ProbeReport.KeyValue("nullKeyMarker", ProbeTagCanonicalizer.NullKeyMarker);
+        ProbeReport.KeyValue("nullKeyCanonicalKey", nullKeyCanonicalKey);
+        ProbeReport.KeyValue("literalNullKeyCanonicalKey", literalNullKeyCanonicalKey);
+        ProbeReport.KeyValue("emptyKeyCanonicalKey", emptyKeyCanonicalKey);
+        ProbeReport.KeyValue("nullValueCanonicalKey", nullValueCanonicalKey);
+        ProbeReport.KeyValue("literalNullValueCanonicalKey", literalNullValueCanonicalKey);
+
+        bool ruleHolds = nullKeyCanonicalKey.StartsWith(nullKeyPrefix, StringComparison.Ordinal)
+            && string.Equals(literalNullKeyCanonicalKey, "4:null\u001E" + valueFieldSuffix, StringComparison.Ordinal)
+            && string.Equals(emptyKeyCanonicalKey, "0:\u001E" + valueFieldSuffix, StringComparison.Ordinal)
+            && string.Equals(nullValueCanonicalKey, "1:k\u001E4:null", StringComparison.Ordinal)
+            && string.Equals(literalNullValueCanonicalKey, "1:k\u001E18:System.String:null", StringComparison.Ordinal)
+            && !string.Equals(nullKeyCanonicalKey, literalNullKeyCanonicalKey, StringComparison.Ordinal)
+            && !string.Equals(nullKeyCanonicalKey, emptyKeyCanonicalKey, StringComparison.Ordinal)
+            && !string.Equals(nullValueCanonicalKey, literalNullValueCanonicalKey, StringComparison.Ordinal);
+
         result.Add(
             "deterministic identity rule",
-            ProbeVerdict.Pass,
-            "order-independent, culture-independent, type-qualified, length-prefixed rule is fixed and demonstrated below");
+            ruleHolds ? ProbeVerdict.Pass : ProbeVerdict.Fail,
+            "the printed rule is the measured rule: a null key produced keyField " + ProbeTagCanonicalizer.NullKeyMarker
+                + " (key=" + nullKeyCanonicalKey + "), the literal key \"null\" produced 4:null (key="
+                + literalNullKeyCanonicalKey + "), the empty key produced 0: (key=" + emptyKeyCanonicalKey
+                + "), and a null value produced valueField 4:null (key=" + nullValueCanonicalKey + ")");
     }
 
     private static void OrderIndependence(ProbeSectionResult result)
@@ -211,6 +249,7 @@ internal static class TagIdentityProbe
         };
 
         List<string> summaries = new List<string>();
+        int deliveredCases = 0;
         foreach ((string label, Action record) in cases)
         {
             deliveries.Clear();
@@ -227,6 +266,7 @@ internal static class TagIdentityProbe
             string detail = outcome;
             if (deliveries.Count > 0)
             {
+                deliveredCases++;
                 KeyValuePair<string, object?>[] delivered = deliveries[0];
                 string canonicalKey = ProbeTagCanonicalizer.CreateSeriesKey(delivered);
                 string keyText = string.Join(
@@ -260,11 +300,14 @@ internal static class TagIdentityProbe
         }
 
         ProbeReport.KeyValue("tagListNullKey", tagListNullKey);
+        ProbeReport.KeyValue("deliveredEdgeCases", deliveredCases + "/" + cases.Count);
 
         result.Add(
             "null, empty, duplicate, and large tag delivery",
-            deliveries.Count > 0 ? ProbeVerdict.Pass : ProbeVerdict.Narrow,
-            "all edge cases are observed and canonicalized deterministically: " + string.Join(" | ", summaries));
+            deliveredCases == cases.Count ? ProbeVerdict.Pass : ProbeVerdict.Narrow,
+            deliveredCases.ToString(CultureInfo.InvariantCulture) + "/"
+                + cases.Count.ToString(CultureInfo.InvariantCulture)
+                + " edge cases were delivered and canonicalized deterministically: " + string.Join(" | ", summaries));
     }
 
     private static unsafe void CallbackBufferRetention(ProbeSectionResult result)

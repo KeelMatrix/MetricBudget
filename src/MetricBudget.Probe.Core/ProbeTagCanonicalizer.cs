@@ -10,14 +10,20 @@ namespace MetricBudget.Probe;
 /// <remarks>
 /// Identity rule:
 /// <list type="number">
-/// <item>Every delivered tag becomes one entry. The key is the delivered key, or a reserved
-/// <c>null-key</c> token when the key is <see langword="null"/>.</item>
+/// <item>Every delivered tag becomes one entry, and an entry is a key field, a field separator, and a value
+/// field.</item>
+/// <item>Key field: <c>{length}:{key}</c> for a delivered key, or the bare marker <c>null</c> when the key is
+/// <see langword="null"/>. The marker is unambiguous because every length-prefixed field starts with an ASCII
+/// digit, so no delivered key can produce it.</item>
+/// <item>Value field: always <c>{length}:{descriptor}</c>.</item>
 /// <item>The value descriptor is <c>{CLR type full name}:{invariant culture text}</c>. The CLR type is part of
 /// identity, so <c>int 1</c> and <c>string "1"</c> are different series.</item>
+/// <item>A <see langword="null"/> value has the descriptor text <c>null</c>, so its value field is
+/// <c>4:null</c> and it cannot collide with the string value <c>"null"</c>.</item>
 /// <item>Descriptors longer than the configured bound are replaced by a stable
 /// <c>{type}#chars={length}#sha256={hex}</c> form so that one pathological value cannot inflate the tracked key.</item>
-/// <item>Entries are sorted with ordinal string comparison and joined with a separator that cannot collide with
-/// content, because every field is length-prefixed.</item>
+/// <item>Entries are sorted with ordinal string comparison and joined with U+001F. Fields are self-delimiting by
+/// their length prefix, so a value that contains a separator character is still recorded verbatim.</item>
 /// <item>Duplicate keys are retained, so a tag set is a sorted multiset, not a set.</item>
 /// </list>
 /// The resulting key is order-independent, culture-independent, and stable across processes.
@@ -26,7 +32,8 @@ internal static class ProbeTagCanonicalizer
 {
     public const int DefaultMaxDescriptorLength = 512;
 
-    public const string NullKeyToken = "@null-key";
+    /// <summary>Bare key-field marker for a delivered <see langword="null"/> tag key.</summary>
+    public const string NullKeyMarker = "null";
 
     private const char EntrySeparator = '\u001F';
     private const char FieldSeparator = '\u001E';
@@ -63,7 +70,12 @@ internal static class ProbeTagCanonicalizer
         return builder.ToString();
     }
 
-    public static string DescribeKey(string? key) => key ?? NullKeyToken;
+    /// <summary>
+    /// Identity key field for one delivered tag key. This is also the grouping key used for per-tag
+    /// distinct-value accounting, so a <see langword="null"/> key and the literal key <c>"null"</c> are counted
+    /// separately.
+    /// </summary>
+    public static string EncodeKeyField(string? key) => key is null ? NullKeyMarker : EncodeField(key);
 
     public static string DescribeValue(object? value, int maxDescriptorLength = DefaultMaxDescriptorLength)
     {
@@ -103,8 +115,7 @@ internal static class ProbeTagCanonicalizer
 
     private static string EncodeEntry(string? key, string descriptor)
     {
-        string encodedKey = key is null ? "null" : EncodeField(key);
-        return encodedKey + FieldSeparator + EncodeField(descriptor);
+        return EncodeKeyField(key) + FieldSeparator + EncodeField(descriptor);
     }
 
     private static string EncodeField(string field)

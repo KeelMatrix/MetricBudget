@@ -13,11 +13,12 @@ internal enum ProbeVerdict
 
 internal sealed class ProbeFinding
 {
-    public ProbeFinding(string item, ProbeVerdict verdict, string rationale)
+    public ProbeFinding(string item, ProbeVerdict verdict, string rationale, bool isRunGate)
     {
         Item = item;
         Verdict = verdict;
         Rationale = rationale;
+        IsRunGate = isRunGate;
     }
 
     public string Item { get; }
@@ -25,6 +26,13 @@ internal sealed class ProbeFinding
     public ProbeVerdict Verdict { get; }
 
     public string Rationale { get; }
+
+    /// <summary>
+    /// True when a <see cref="ProbeVerdict.Fail"/> on this finding means the probe could not establish its own
+    /// result, so the runner must exit non-zero. False for a finding that records an expected negative result
+    /// about the platform, which is evidence rather than a probe failure.
+    /// </summary>
+    public bool IsRunGate { get; }
 }
 
 internal sealed class ProbeSectionResult
@@ -40,7 +48,17 @@ internal sealed class ProbeSectionResult
 
     public void Add(string item, ProbeVerdict verdict, string rationale)
     {
-        Findings.Add(new ProbeFinding(item, verdict, rationale));
+        Findings.Add(new ProbeFinding(item, verdict, rationale, isRunGate: true));
+        ProbeReport.Line("VERDICT[" + ProbeReport.FormatVerdict(verdict) + "] " + item + " - " + rationale);
+    }
+
+    /// <summary>
+    /// Records a result that documents measured platform behavior. A <see cref="ProbeVerdict.Fail"/> here is the
+    /// probe working as intended, so it never changes the runner's exit code.
+    /// </summary>
+    public void AddObservation(string item, ProbeVerdict verdict, string rationale)
+    {
+        Findings.Add(new ProbeFinding(item, verdict, rationale, isRunGate: false));
         ProbeReport.Line("VERDICT[" + ProbeReport.FormatVerdict(verdict) + "] " + item + " - " + rationale);
     }
 }
@@ -181,5 +199,31 @@ internal static class ProbeReport
         {
             return process.PeakWorkingSet64;
         }
+    }
+
+    /// <summary>
+    /// Compact exception description: the exception chain, the root message, and the root frame.
+    /// </summary>
+    public static string DescribeException(Exception exception)
+    {
+        List<string> chain = new List<string>();
+        Exception? current = exception;
+        while (current is not null)
+        {
+            chain.Add(current.GetType().FullName ?? current.GetType().Name);
+            current = current.InnerException;
+        }
+
+        Exception root = exception;
+        while (root.InnerException is not null)
+        {
+            root = root.InnerException;
+        }
+
+        string message = root.Message.Replace('\r', ' ').Replace('\n', ' ');
+        string[] frames = (root.StackTrace ?? string.Empty).Split('\n');
+        string frame = frames.Length > 0 ? frames[0].Trim() : string.Empty;
+
+        return string.Join(" -> ", chain) + ": " + message + (frame.Length > 0 ? " @ " + frame : string.Empty);
     }
 }
