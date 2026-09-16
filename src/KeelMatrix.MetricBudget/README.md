@@ -266,38 +266,29 @@ the session cannot silently undercount. The defaults are safety bounds for the v
 recommended cardinality for any application: raise them deliberately when your workload legitimately observes more.
 
 The session stores only fixed-size digests of series and tag values. It never retains the tag values themselves.
+The full bounded-memory contract is documented at
+<https://github.com/KeelMatrix/MetricBudget/blob/main/docs/safety-bounds.md>.
 
 ## Privacy
 
-Tag values often carry customer identifiers, URLs, resource names, or tokens, so a report is designed to be safe
-to print:
-
-- reports and assertion messages contain meter names, instrument names, tag **keys**, counts, limits, and safety
-  state;
-- tag **values** are never printed, logged, or sent anywhere;
-- metric values are never read or reported;
-- the report is generated locally and requires no network access.
-
-If you need to know which value produced a breach, reproducing the workload with a debugger or a local instrument
-capture is safer than printing values into CI output, where they persist in logs and artifacts.
+Reports and assertion messages contain meter names, instrument names, tag **keys**, counts, limits, and safety
+state. Tag **values** are never printed, logged, or sent anywhere, and metric values are never read. The report is
+generated locally and needs no network access. Only fixed-size digests of series and tag values are retained in
+memory. If you need to know which value produced a breach, reproduce it locally with a debugger rather than
+printing values into CI logs.
 
 ## Telemetry
 
-KeelMatrix packages use `KeelMatrix.Telemetry` for a minimal anonymous signal. For this package:
+A **completed verification that observed at least one selected instrument** requests one activation event;
+installing, restoring, loading the assembly, or constructing a session reports nothing, and later completions
+request a low-frequency heartbeat. The only aggregate fields this product can attach are package version, target
+framework, coarse OS family, a coarse observed-instrument bucket, the configured-rule count, and a coarse outcome
+(pass, fail, invalid configuration); the internal allowlist is enforced by tests. Meter names, instrument names,
+tag keys, tag values, metric values, URLs, application or repository names, exception messages, and file paths are
+never sent, and telemetry failure can never change a verification. Opt out with `KEELMATRIX_NO_TELEMETRY=1`.
 
-- a **completed verification that observed at least one selected instrument** requests one activation event;
-  installation, restore, assembly load, and session construction report nothing;
-- later completed verifications request a low-frequency heartbeat, following the shared package cadence;
-- the allowed aggregate fields are package version, target framework, coarse OS family, a coarse
-  observed-instrument bucket, the configured-rule count, and a coarse outcome (pass, fail, invalid
-  configuration). The internal allowlist is enforced by tests;
-- meter names, instrument names, tag keys, tag values, metric values, URLs, application or repository names,
-  exception messages, and file paths are never sent;
-- telemetry is best effort and can never change, delay, or fail a verification;
-- opt out with `KEELMATRIX_NO_TELEMETRY=1` (the shared opt-out set also honors `DOTNET_CLI_TELEMETRY_OPTOUT` and
-  `DO_NOT_TRACK`, plus repo-local opt-out files).
-
-KeelMatrix development and KeelMatrix CI run with telemetry opted out.
+The canonical privacy and telemetry reference, including the exact field allowlist, is
+<https://github.com/KeelMatrix/MetricBudget/blob/main/docs/privacy-and-telemetry.md>.
 
 ## Supported targets and platforms
 
@@ -333,17 +324,16 @@ representative, or narrow the workload if the cardinality is the finding you wer
 same identity. Metric identity is meter name, meter version, instrument name, and kind, so generic names collide.
 Use unique, specific names, and keep sessions scoped to the workload they verify.
 
-**A tag budget never triggers** - tag budgets are matched against exact tag keys. Compare your budget key with the
-keys listed in the report; a configured key that the workload never delivered is reported as configured and never
-delivered.
+More failure modes, including a tag budget that never triggers and unexplained series counts, are documented at
+<https://github.com/KeelMatrix/MetricBudget/blob/main/docs/troubleshooting.md>.
 
 ## Series identity
 
 Series identity is deterministic and order-independent: instrument identity (meter name, meter version, instrument
 name, kind) plus a canonical tag-set identity. Tag order never changes identity, duplicate keys are retained as a
 sorted multiset, the CLR type of a value is part of identity, and a value longer than `MaxTagValueLength` is
-replaced by a stable digest. The exact rule is documented in the repository, together with the code that
-implements it.
+replaced by a stable digest. The exact rule is documented at
+<https://github.com/KeelMatrix/MetricBudget/blob/main/docs/series-identity.md>.
 
 ## Repository
 

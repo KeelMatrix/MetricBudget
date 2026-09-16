@@ -1,13 +1,45 @@
 # KeelMatrix.MetricBudget
 
-Verify observed metric cardinality in .NET tests and CI. Run your normal workload, observe the metric series and
-tag values it actually emits, and fail when an instrument exceeds an explicit observed-series or per-tag
-distinct-value budget - without a collector, exporter, or observability backend.
+Verify observed metric cardinality in .NET tests and CI. Run your normal workload, observe the metric series it
+actually emits and how many distinct values each tag carried, and fail when an instrument exceeds an explicit
+observed-series or per-tag distinct-value budget - without a collector, exporter, or observability backend.
 
-The package is `KeelMatrix.MetricBudget`. The user documentation is the package README:
+The package is `KeelMatrix.MetricBudget`.
 
-- [Package README](src/KeelMatrix.MetricBudget/README.md) - installation, quick start, examples, budgets,
-  outcomes, safety bounds, privacy, telemetry, supported targets, and troubleshooting.
+## Install
+
+```bash
+dotnet add package KeelMatrix.MetricBudget
+```
+
+The package works from a test project or a CI step and needs no collector, exporter, or backend. It targets
+`net8.0` and `netstandard2.0`.
+
+## Quick Start
+
+```csharp
+using KeelMatrix.MetricBudget;
+using KeelMatrix.MetricBudget.Assertions;
+
+using MetricBudgetSession session = MetricBudgetSession.Start(
+    new MetricBudgetOptions()
+        .ForInstrument("My.Service", "http.client.request.duration", budget =>
+        {
+            budget.MaxObservedSeries = 50;
+            budget.Tag("server.address").MaxDistinctValues = 5;
+        }));
+
+await ExerciseApplication();
+
+MetricBudgetReport report = session.Complete();
+report.AssertWithinBudget();
+```
+
+A failing run names the instrument, the breached budget, the observed count, the configured limit, and the
+offending tag keys, and never prints tag values.
+
+The [package README](src/KeelMatrix.MetricBudget/README.md) is the complete user guide: budgets, outcomes, examples,
+lifecycle, safety bounds, privacy, telemetry, supported targets, and troubleshooting.
 
 ## What is verified
 
