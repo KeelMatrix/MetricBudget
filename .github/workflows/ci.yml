@@ -39,6 +39,18 @@ jobs:
         with:
           global-json-file: global.json
 
+      - name: Verify resolved .NET SDK
+        shell: pwsh
+        run: |
+          $expected = ([string](Get-Content -Raw global.json | ConvertFrom-Json).sdk.version).Trim()
+          $resolved = (& dotnet --version).Trim()
+          Write-Output "Resolved .NET SDK: $resolved"
+          Write-Output "global.json SDK pin: $expected"
+          if ($resolved -ne $expected) {
+              throw "Resolved .NET SDK '$resolved' does not match the global.json pin '$expected'."
+          }
+          Write-Output "SDK_VERSION_CHECK=PASS"
+
       - name: Assert CI telemetry opt-out
         shell: pwsh
         run: |

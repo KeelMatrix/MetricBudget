@@ -27,23 +27,124 @@ if (-not $packageDirectoryIsScoped)
     throw "Package output must be the repository's artifacts/packages directory: $packageDirectory"
 }
 
-function Invoke-Dotnet {
+function Format-DotnetCommand {
     param([Parameter(Mandatory = $true)][string[]] $Arguments)
 
-    Write-Output ("> dotnet " + ($Arguments -join " "))
-    $output = (& dotnet @Arguments 2>&1 | Out-String)
-    $exitCode = $LASTEXITCODE
-    if ($output.Length -gt 0)
-    {
-        Write-Output $output.TrimEnd()
+    $formattedArguments = $Arguments | ForEach-Object {
+        if ($_ -match '[\s"]')
+        {
+            '"' + $_.Replace('"', '\"') + '"'
+        }
+        else
+        {
+            $_
+        }
     }
 
-    if ($exitCode -ne 0)
+    return "dotnet " + ($formattedArguments -join " ")
+}
+
+function Get-BoundedTail {
+    param(
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string] $Text,
+        [Parameter(Mandatory = $true)][int] $MaximumLines
+    )
+
+    $lines = @($Text -split "`r?`n")
+    if ($lines.Count -le $MaximumLines)
     {
-        throw "dotnet command failed with exit code $exitCode."
+        return $Text.TrimEnd()
     }
 
-    return $output
+    return "[output truncated; showing the last $MaximumLines lines]`n" +
+        (($lines | Select-Object -Last $MaximumLines) -join "`n").TrimEnd()
+}
+
+function Invoke-Dotnet {
+    param(
+        [Parameter(Mandatory = $true)][string] $Step,
+        [Parameter(Mandatory = $true)][string[]] $Arguments,
+        [switch] $AllowFailure
+    )
+
+    $commandText = Format-DotnetCommand $Arguments
+    Write-Host "> $commandText"
+
+    $startInfo = [Diagnostics.ProcessStartInfo]::new()
+    $startInfo.FileName = "dotnet"
+    $startInfo.WorkingDirectory = $repositoryRoot
+    $startInfo.UseShellExecute = $false
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+    foreach ($argument in $Arguments)
+    {
+        [void]$startInfo.ArgumentList.Add($argument)
+    }
+
+    $process = [Diagnostics.Process]::new()
+    $process.StartInfo = $startInfo
+    try
+    {
+        [void]$process.Start()
+        $standardOutputTask = $process.StandardOutput.ReadToEndAsync()
+        $standardErrorTask = $process.StandardError.ReadToEndAsync()
+        $process.WaitForExit()
+        $standardOutput = $standardOutputTask.GetAwaiter().GetResult()
+        $standardError = $standardErrorTask.GetAwaiter().GetResult()
+        $exitCode = $process.ExitCode
+    }
+    finally
+    {
+        $process.Dispose()
+    }
+
+    if ($standardOutput.Length -gt 0)
+    {
+        Write-Host $standardOutput.TrimEnd()
+    }
+    if ($standardError.Length -gt 0)
+    {
+        Write-Host $standardError.TrimEnd()
+    }
+
+    $result = [pscustomobject]@{
+        Step = $Step
+        Command = $commandText
+        Arguments = $Arguments
+        ExitCode = $exitCode
+        StandardOutput = $standardOutput
+        StandardError = $standardError
+        CombinedOutput = $standardOutput + $standardError
+    }
+
+    if ($exitCode -ne 0 -and -not $AllowFailure)
+    {
+        $stdoutTail = Get-BoundedTail $standardOutput 80
+        $stderrTail = Get-BoundedTail $standardError 80
+        Write-Host "FAILURE: gate step '$Step' failed."
+        Write-Host "Command: $commandText"
+        Write-Host "Exit code: $exitCode"
+        Write-Host "Captured standard output (last 80 lines maximum):"
+        Write-Host $(if ($stdoutTail.Length -gt 0) { $stdoutTail } else { "[empty]" })
+        Write-Host "Captured standard error (last 80 lines maximum):"
+        Write-Host $(if ($stderrTail.Length -gt 0) { $stderrTail } else { "[empty]" })
+        throw "Gate step '$Step' failed: $commandText exited with code $exitCode."
+    }
+
+    if ($exitCode -ne 0 -and $AllowFailure)
+    {
+        $stdoutTail = Get-BoundedTail $standardOutput 80
+        $stderrTail = Get-BoundedTail $standardError 80
+        Write-Host "FAILURE: gate step '$Step' failed; the caller may classify this attempt."
+        Write-Host "Command: $commandText"
+        Write-Host "Exit code: $exitCode"
+        Write-Host "Captured standard output (last 80 lines maximum):"
+        Write-Host $(if ($stdoutTail.Length -gt 0) { $stdoutTail } else { "[empty]" })
+        Write-Host "Captured standard error (last 80 lines maximum):"
+        Write-Host $(if ($stderrTail.Length -gt 0) { $stderrTail } else { "[empty]" })
+    }
+
+    return $result
 }
 
 function Assert-Equal {
@@ -404,8 +505,8 @@ function Invoke-CleanConsumerProof {
         $solutionRestoreArguments = @(
             "restore", $solutionPath, "--configfile", (Join-Path $repositoryRoot "NuGet.config"),
             "--force-evaluate", "--no-cache", "--disable-build-servers") + $cleanBuildProperties
-        Invoke-Dotnet $solutionRestoreArguments
-        Invoke-Dotnet (@("build", $solutionPath, "-c", "Release", "--no-restore", "--disable-build-servers") + $cleanBuildProperties)
+        Invoke-Dotnet -Step "Clean solution restore" -Arguments $solutionRestoreArguments | Out-Null
+        Invoke-Dotnet -Step "Clean solution Release build" -Arguments (@("build", $solutionPath, "-c", "Release", "--no-restore", "--disable-build-servers") + $cleanBuildProperties) | Out-Null
 
         foreach ($project in @($packageConsumerProject, $sampleProject))
         {
@@ -413,9 +514,10 @@ function Invoke-CleanConsumerProof {
             $restoreArguments = @(
                 "restore", $project, "--configfile", (Join-Path $projectDirectory "NuGet.config"),
                 "--force-evaluate", "--no-cache", "--disable-build-servers") + $cleanBuildProperties
-            Invoke-Dotnet $restoreArguments
-            Invoke-Dotnet (@("build", $project, "-c", "Release", "--no-restore", "--disable-build-servers") + $cleanBuildProperties)
-            Invoke-Dotnet (@("run", "--project", $project, "-c", "Release", "--no-build", "--no-restore", "--disable-build-servers") + $cleanBuildProperties)
+            $projectName = Split-Path -Leaf $projectDirectory
+            Invoke-Dotnet -Step "Clean $projectName restore" -Arguments $restoreArguments | Out-Null
+            Invoke-Dotnet -Step "Clean $projectName Release build" -Arguments (@("build", $project, "-c", "Release", "--no-restore", "--disable-build-servers") + $cleanBuildProperties) | Out-Null
+            Invoke-Dotnet -Step "Clean $projectName smoke run" -Arguments (@("run", "--project", $project, "-c", "Release", "--no-build", "--no-restore", "--disable-build-servers") + $cleanBuildProperties) | Out-Null
         }
 
         $cacheContents = @(Get-ChildItem -LiteralPath $packages -Force -ErrorAction SilentlyContinue)
@@ -456,14 +558,60 @@ function Invoke-CleanConsumerProof {
     }
 }
 
+function Test-VulnerabilityResult {
+    param([Parameter(Mandatory = $true)][AllowEmptyString()][string] $Output)
+
+    return $Output -match "(?im)has the following vulnerable packages|known vulnerability|severity\s*[:|]\s*(critical|high|moderate|low)"
+}
+
+function Test-AdvisoryNetworkFailure {
+    param([Parameter(Mandatory = $true)][AllowEmptyString()][string] $Output)
+
+    return $Output -match "(?im)NU1301|NU1801|NU1900|unable to load the service index|vulnerability data|advisory service|timed? ?out|timeout|temporary failure|name resolution|connection (?:refused|reset|closed)|service unavailable|\b(?:502|503|504)\b|network"
+}
+
 function Invoke-VulnerabilityAudit {
-    $output = Invoke-Dotnet @("list", $solutionPath, "package", "--vulnerable", "--include-transitive", "--no-restore")
-    if ($output -match "(?im)has the following vulnerable packages|known vulnerability|severity\s*[:|]\s*(critical|high|moderate|low)")
+    $auditArguments = @("list", $solutionPath, "package", "--vulnerable", "--include-transitive", "--no-restore")
+    $firstAttempt = Invoke-Dotnet -Step "Vulnerability audit (attempt 1)" -Arguments $auditArguments -AllowFailure
+    Write-Host "VULNERABILITY_AUDIT_ATTEMPT=1 EXIT_CODE=$($firstAttempt.ExitCode)"
+
+    if (Test-VulnerabilityResult $firstAttempt.CombinedOutput)
     {
-        throw "The dependency audit reported a vulnerability."
+        Write-Host "VULNERABILITY_AUDIT=FAIL attempt=1 retry=not-attempted vulnerability-result=true"
+        throw "The dependency audit reported a vulnerability on attempt 1; no retry was attempted."
     }
 
-    Write-Output "VULNERABILITY_AUDIT=PASS"
+    $firstAttemptIsNetworkFailure = Test-AdvisoryNetworkFailure $firstAttempt.CombinedOutput
+    if (($firstAttempt.ExitCode -eq 0) -and -not $firstAttemptIsNetworkFailure)
+    {
+        Write-Host "VULNERABILITY_AUDIT=PASS attempt=1"
+        return
+    }
+
+    if (-not $firstAttemptIsNetworkFailure)
+    {
+        Write-Host "VULNERABILITY_AUDIT=FAIL attempt=1 retry=not-attempted network-failure=false"
+        throw "Vulnerability audit failed on attempt 1 without a recognized advisory-service or network failure."
+    }
+
+    Write-Host "VULNERABILITY_AUDIT_RETRY=1 reason=recognized-advisory-service-or-network-failure"
+    $secondAttempt = Invoke-Dotnet -Step "Vulnerability audit (attempt 2)" -Arguments $auditArguments -AllowFailure
+    Write-Host "VULNERABILITY_AUDIT_ATTEMPT=2 EXIT_CODE=$($secondAttempt.ExitCode)"
+
+    if (Test-VulnerabilityResult $secondAttempt.CombinedOutput)
+    {
+        Write-Host "VULNERABILITY_AUDIT=FAIL attempt=2 retry=exhausted vulnerability-result=true"
+        throw "The dependency audit reported a vulnerability on attempt 2."
+    }
+
+    $secondAttemptIsNetworkFailure = Test-AdvisoryNetworkFailure $secondAttempt.CombinedOutput
+    if ($secondAttempt.ExitCode -ne 0 -or $secondAttemptIsNetworkFailure)
+    {
+        Write-Host "VULNERABILITY_AUDIT=FAIL attempt=2 retry=exhausted network-or-advisory-failure=true"
+        throw "The dependency audit failed after the one permitted retry."
+    }
+
+    Write-Host "VULNERABILITY_AUDIT=PASS attempt=2 after-one-retry"
 }
 
 if (-not $InspectOnly)
@@ -482,8 +630,8 @@ if (-not $InspectOnly)
         "restore", $projectPath, "--configfile", (Join-Path $repositoryRoot "NuGet.config"),
         "--force-evaluate", "--no-cache", "--disable-build-servers"
     )
-    Invoke-Dotnet $restoreArguments | Out-Null
-    Invoke-Dotnet @("pack", $projectPath, "-c", "Release", "-o", $packageDirectory, "--no-restore") | Out-Null
+    Invoke-Dotnet -Step "Package project restore" -Arguments $restoreArguments | Out-Null
+    Invoke-Dotnet -Step "Release package build" -Arguments @("pack", $projectPath, "-c", "Release", "-o", $packageDirectory, "--no-restore") | Out-Null
 }
 else
 {
