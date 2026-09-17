@@ -313,8 +313,9 @@ therefore hit version-unification prompts and possibly need binding redirects fo
 resolves it automatically for a project that has no conflicting pin.
 
 Core verification is offline and needs no file system access, no sockets, and no backend. The package targets
-`net8.0` and `netstandard2.0`. Repository verification to date is Windows-only; this release does not claim
-verified cross-platform behavior on Linux or macOS.
+`net8.0` and `netstandard2.0`. Repository verification covers both package targets on Windows: `net8.0` tests and a
+Windows `net472` test host exercising the `netstandard2.0` asset. The `net8.0` execution path is also covered on
+Linux through CI. macOS is not verified by this repository.
 
 ## Troubleshooting
 
