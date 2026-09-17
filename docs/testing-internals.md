@@ -1,6 +1,6 @@
 # Testing internals
 
-# This page is repository development evidence, not package documentation.
+This page is repository development evidence, not package documentation.
 
 The library's behavior tests assert internal accounting invariants in addition to the public report surface. The
 tests therefore run against the same Release library build that is packaged, rather than relying on a Debug-only

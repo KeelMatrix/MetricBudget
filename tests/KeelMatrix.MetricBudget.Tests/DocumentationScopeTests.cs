@@ -1,5 +1,6 @@
 // Copyright (c) KeelMatrix
 
+using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using System.Globalization;
 using System.IO;
@@ -13,8 +14,6 @@ namespace KeelMatrix.MetricBudget.Tests;
 /// </summary>
 public sealed class DocumentationScopeTests
 {
-    private const string RuntimeDiagnosticSurface = "MetricBudgetReport.ToDiagnosticString()";
-    private const string RuntimeDiagnosticSnapshot = "surface-runtime-diagnostic.snapshot";
     private const string SnapshotDirectory = "tests/KeelMatrix.MetricBudget.Tests/ApprovedShippedText";
     private const string ApprovalEnvironmentVariable =
         "KEELMATRIX_METRICBUDGET_APPROVE_DOCUMENTATION_SNAPSHOTS";
@@ -24,20 +23,38 @@ public sealed class DocumentationScopeTests
         + "dotnet test tests/KeelMatrix.MetricBudget.Tests/KeelMatrix.MetricBudget.Tests.csproj "
         + "-c Release --no-build --filter FullyQualifiedName~DocumentationScopeTests";
 
-    // This is the one declaration of the documentation surfaces. Exact paths are existence-locked. Wildcards are
-    // expanded so a new matching document is included without changing this test.
-    private static readonly SurfaceDeclaration[] DocumentationSurfaceDeclarations =
+    private const string PackageConsumerPathspec = "tests/KeelMatrix.MetricBudget.PackageConsumer/**";
+
+    private const string RuntimeDiagnosticPassedSurface = "MetricBudgetReport.ToDiagnosticString(): Passed";
+    private const string RuntimeDiagnosticViolationSurface = "MetricBudgetReport.ToDiagnosticString(): Violation";
+    private const string RuntimeDiagnosticInvalidConfigurationSurface =
+        "MetricBudgetReport.ToDiagnosticString(): InvalidConfiguration";
+    private const string RuntimeDiagnosticNoMatchingInstrumentSurface =
+        "MetricBudgetReport.ToDiagnosticString(): NoMatchingInstrument";
+    private const string RuntimeDiagnosticNoMeasurementsObservedSurface =
+        "MetricBudgetReport.ToDiagnosticString(): NoMeasurementsObserved";
+    private const string RuntimeDiagnosticObservationIncompleteSurface =
+        "MetricBudgetReport.ToDiagnosticString(): ObservationIncomplete";
+
+    private static readonly RuntimeDiagnosticScenario[] RuntimeDiagnosticScenarios =
     {
-        new SurfaceDeclaration("README.md", SurfaceKind.Markdown),
-        new SurfaceDeclaration("PRIVACY.md", SurfaceKind.Markdown),
-        new SurfaceDeclaration("src/KeelMatrix.MetricBudget/README.md", SurfaceKind.Markdown),
-        new SurfaceDeclaration("docs/*.md", SurfaceKind.Markdown),
-        new SurfaceDeclaration("samples/**", SurfaceKind.RecursiveText),
-        new SurfaceDeclaration("tests/KeelMatrix.MetricBudget.PackageConsumer/**", SurfaceKind.RecursiveText),
-        new SurfaceDeclaration("src/KeelMatrix.MetricBudget/bin/Release/net8.0/KeelMatrix.MetricBudget.xml", SurfaceKind.Xml),
-        new SurfaceDeclaration("src/KeelMatrix.MetricBudget/bin/Release/netstandard2.0/KeelMatrix.MetricBudget.xml", SurfaceKind.Xml),
-        new SurfaceDeclaration(RuntimeDiagnosticSurface, SurfaceKind.RuntimeDiagnostic),
+        new RuntimeDiagnosticScenario(RuntimeDiagnosticPassedSurface, "surface-runtime-diagnostic-passed.snapshot"),
+        new RuntimeDiagnosticScenario(RuntimeDiagnosticViolationSurface, "surface-runtime-diagnostic-violation.snapshot"),
+        new RuntimeDiagnosticScenario(
+            RuntimeDiagnosticInvalidConfigurationSurface,
+            "surface-runtime-diagnostic-invalid-configuration.snapshot"),
+        new RuntimeDiagnosticScenario(
+            RuntimeDiagnosticNoMatchingInstrumentSurface,
+            "surface-runtime-diagnostic-no-matching-instrument.snapshot"),
+        new RuntimeDiagnosticScenario(
+            RuntimeDiagnosticNoMeasurementsObservedSurface,
+            "surface-runtime-diagnostic-no-measurements-observed.snapshot"),
+        new RuntimeDiagnosticScenario(
+            RuntimeDiagnosticObservationIncompleteSurface,
+            "surface-runtime-diagnostic-observation-incomplete.snapshot"),
     };
+
+    private static readonly char[] NulSeparator = { '\0' };
 
     private const string OptionsSeriesMember = "P:KeelMatrix.MetricBudget.MetricBudgetOptions.MaxTrackedSeries";
 
@@ -101,7 +118,7 @@ public sealed class DocumentationScopeTests
     [Fact]
     public void DiagnosticSeriesBoundNamesTheInstrumentScope()
     {
-        string diagnostic = CreateCanonicalDiagnostic();
+        string diagnostic = CreateCanonicalDiagnostic(RuntimeDiagnosticObservationIncompleteSurface);
 
         Assert.Contains(
             "because the series safety bound for the instrument identity was reached",
@@ -283,50 +300,57 @@ public sealed class DocumentationScopeTests
         string repositoryRoot = RepositoryRoot();
         List<Surface> surfaces = new List<Surface>();
 
-        foreach (SurfaceDeclaration declaration in DocumentationSurfaceDeclarations)
+        HashSet<string> markdownPaths = new HashSet<string>(StringComparer.Ordinal);
+        foreach (string relativePath in TrackedFiles("*.md"))
         {
-            if (declaration.Kind == SurfaceKind.RuntimeDiagnostic)
+            markdownPaths.Add(relativePath);
+            surfaces.Add(new Surface(
+                relativePath,
+                Path.Combine(repositoryRoot, relativePath.Replace('/', Path.DirectorySeparatorChar)),
+                SurfaceKind.Markdown,
+                SnapshotRelativePath(relativePath)));
+        }
+
+        foreach (string relativePath in TrackedFiles("samples/**", PackageConsumerPathspec))
+        {
+            if (markdownPaths.Contains(relativePath))
             {
-                surfaces.Add(new Surface(RuntimeDiagnosticSurface, null, declaration.Kind, RuntimeDiagnosticSnapshot));
                 continue;
             }
 
-            string normalized = declaration.Pattern.Replace('/', Path.DirectorySeparatorChar);
-            if (normalized.IndexOf('*') < 0)
+            string absolutePath = Path.Combine(repositoryRoot, relativePath.Replace('/', Path.DirectorySeparatorChar));
+            if (IsUtf8TextSurfaceFile(absolutePath))
             {
-                string exactPath = Path.Combine(repositoryRoot, normalized);
-                Assert.True(File.Exists(exactPath), "Declared documentation surface is missing: " + declaration.Pattern);
                 surfaces.Add(new Surface(
-                    declaration.Pattern,
-                    exactPath,
-                    declaration.Kind,
-                    SnapshotRelativePath(declaration.Pattern)));
-                continue;
+                    relativePath,
+                    absolutePath,
+                    SurfaceKind.TrackedText,
+                    SnapshotRelativePath(relativePath)));
             }
+        }
 
-            int wildcardIndex = normalized.IndexOf('*');
-            string baseDirectory = normalized.Substring(0, wildcardIndex).TrimEnd(Path.DirectorySeparatorChar);
-            string directoryPath = Path.Combine(repositoryRoot, baseDirectory);
-            Assert.True(
-                Directory.Exists(directoryPath),
-                "Declared documentation directory is missing: " + declaration.Pattern);
+        foreach (string relativePath in new[]
+        {
+            "src/KeelMatrix.MetricBudget/bin/Release/net8.0/KeelMatrix.MetricBudget.xml",
+            "src/KeelMatrix.MetricBudget/bin/Release/netstandard2.0/KeelMatrix.MetricBudget.xml",
+        })
+        {
+            string absolutePath = Path.Combine(repositoryRoot, relativePath.Replace('/', Path.DirectorySeparatorChar));
+            Assert.True(File.Exists(absolutePath), "Declared generated XML surface is missing: " + relativePath);
+            surfaces.Add(new Surface(
+                relativePath,
+                absolutePath,
+                SurfaceKind.Xml,
+                SnapshotRelativePath(relativePath)));
+        }
 
-            bool recursive = declaration.Pattern.EndsWith("/**", StringComparison.Ordinal);
-            SearchOption searchOption = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
-            string searchPattern = recursive
-                ? "*"
-                : normalized.Substring(normalized.LastIndexOf(Path.DirectorySeparatorChar) + 1);
-            string[] matches = Directory.GetFiles(directoryPath, searchPattern, searchOption)
-                .Where(path => IsTextSurfaceFile(repositoryRoot, path))
-                .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
-                .ToArray();
-
-            Assert.True(matches.Length > 0, "Declared documentation glob matched no files: " + declaration.Pattern);
-            foreach (string match in matches)
-            {
-                string relative = RelativePath(repositoryRoot, match);
-                surfaces.Add(new Surface(relative, match, declaration.Kind, SnapshotRelativePath(relative)));
-            }
+        foreach (RuntimeDiagnosticScenario scenario in RuntimeDiagnosticScenarios)
+        {
+            surfaces.Add(new Surface(
+                scenario.Identifier,
+                null,
+                SurfaceKind.RuntimeDiagnostic,
+                scenario.SnapshotRelativePath));
         }
 
         return surfaces;
@@ -335,7 +359,7 @@ public sealed class DocumentationScopeTests
     private static string SurfaceText(Surface surface)
     {
         return surface.Kind == SurfaceKind.RuntimeDiagnostic
-            ? CreateCanonicalDiagnostic()
+            ? CreateCanonicalDiagnostic(surface.Identifier)
             : File.ReadAllText(surface.Path!);
     }
 
@@ -353,19 +377,101 @@ public sealed class DocumentationScopeTests
         return "surface-" + hash.ToString("X8", CultureInfo.InvariantCulture) + ".snapshot";
     }
 
-    private static string CreateCanonicalDiagnostic()
+    private static string CreateCanonicalDiagnostic(string surfaceIdentifier)
     {
-        const string meterName = "tests.metricbudget.documentation-scope";
-        const string instrumentName = "requests";
+        return surfaceIdentifier switch
+        {
+            RuntimeDiagnosticPassedSurface => CreatePassedDiagnostic(),
+            RuntimeDiagnosticViolationSurface => CreateViolationDiagnostic(),
+            RuntimeDiagnosticInvalidConfigurationSurface => CreateInvalidConfigurationDiagnostic(),
+            RuntimeDiagnosticNoMatchingInstrumentSurface => CreateNoMatchingInstrumentDiagnostic(),
+            RuntimeDiagnosticNoMeasurementsObservedSurface => CreateNoMeasurementsObservedDiagnostic(),
+            RuntimeDiagnosticObservationIncompleteSurface => CreateObservationIncompleteDiagnostic(),
+            _ => throw new InvalidOperationException("Unknown runtime diagnostic surface: " + surfaceIdentifier),
+        };
+    }
 
+    private static string CreatePassedDiagnostic()
+    {
+        const string meterName = "tests.metricbudget.documentation-scope.passed";
         using Meter meter = new Meter(meterName, "1.0.0");
-        Counter<long> counter = meter.CreateCounter<long>(instrumentName);
+        Counter<long> counter = meter.CreateCounter<long>("requests");
+
+        MetricBudgetOptions options = new MetricBudgetOptions();
+        options.ForInstrument(meterName, "requests", budget => budget.MaxObservedSeries = 4);
+
+        using MetricBudgetSession session = MetricBudgetSession.Start(options);
+        counter.Add(1);
+        return session.Complete().ToDiagnosticString();
+    }
+
+    private static string CreateViolationDiagnostic()
+    {
+        const string meterName = "tests.metricbudget.documentation-scope.violation";
+        using Meter meter = new Meter(meterName, "1.0.0");
+        Counter<long> counter = meter.CreateCounter<long>("requests");
+
+        MetricBudgetOptions options = new MetricBudgetOptions();
+        options.ForInstrument(meterName, "requests", budget => budget.MaxObservedSeries = 1);
+
+        using MetricBudgetSession session = MetricBudgetSession.Start(options);
+        counter.Add(1, new KeyValuePair<string, object?>("route", "/a"));
+        counter.Add(1, new KeyValuePair<string, object?>("route", "/b"));
+        return session.Complete().ToDiagnosticString();
+    }
+
+    private static string CreateInvalidConfigurationDiagnostic()
+    {
+        const string meterName = "tests.metricbudget.documentation-scope.invalid-configuration";
+        using Meter meter = new Meter(meterName, "1.0.0");
+        Counter<long> counter = meter.CreateCounter<long>("requests");
+
+        MetricBudgetOptions options = new MetricBudgetOptions()
+            .ForMeter(meterName, budget => budget.MaxObservedSeries = 1)
+            .ForInstrument(meterName, "requests", budget => budget.MaxObservedSeries = 2);
+
+        using MetricBudgetSession session = MetricBudgetSession.Start(options);
+        counter.Add(1);
+        return session.Complete().ToDiagnosticString();
+    }
+
+    private static string CreateNoMatchingInstrumentDiagnostic()
+    {
+        const string meterName = "tests.metricbudget.documentation-scope.no-matching-instrument";
+        using Meter meter = new Meter(meterName, "1.0.0");
+        _ = meter.CreateCounter<long>("requests");
+
+        MetricBudgetOptions options = new MetricBudgetOptions()
+            .ForInstrument(meterName, "unknown.instrument", budget => budget.MaxObservedSeries = 1);
+
+        using MetricBudgetSession session = MetricBudgetSession.Start(options);
+        return session.Complete().ToDiagnosticString();
+    }
+
+    private static string CreateNoMeasurementsObservedDiagnostic()
+    {
+        const string meterName = "tests.metricbudget.documentation-scope.no-measurements-observed";
+        using Meter meter = new Meter(meterName, "1.0.0");
+        _ = meter.CreateCounter<long>("requests");
+
+        MetricBudgetOptions options = new MetricBudgetOptions()
+            .ForInstrument(meterName, "requests", budget => budget.MaxObservedSeries = 1);
+
+        using MetricBudgetSession session = MetricBudgetSession.Start(options);
+        return session.Complete().ToDiagnosticString();
+    }
+
+    private static string CreateObservationIncompleteDiagnostic()
+    {
+        const string meterName = "tests.metricbudget.documentation-scope.observation-incomplete";
+        using Meter meter = new Meter(meterName, "1.0.0");
+        Counter<long> counter = meter.CreateCounter<long>("requests");
 
         MetricBudgetOptions options = new MetricBudgetOptions
         {
             MaxTrackedSeries = 1,
         };
-        options.ForInstrument(meterName, instrumentName, budget => budget.MaxObservedSeries = 100);
+        options.ForInstrument(meterName, "requests", budget => budget.MaxObservedSeries = 100);
 
         using MetricBudgetSession session = MetricBudgetSession.Start(options);
         counter.Add(1, new KeyValuePair<string, object?>("tenant", 1));
@@ -374,12 +480,54 @@ public sealed class DocumentationScopeTests
         return session.Complete().ToDiagnosticString();
     }
 
-    private static bool IsTextSurfaceFile(string repositoryRoot, string path)
+    private static string[] TrackedFiles(params string[] pathspecs)
     {
-        string relativePath = RelativePath(repositoryRoot, path);
-        string[] segments = relativePath.Split(new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar });
-        return !segments.Any(segment => string.Equals(segment, "bin", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(segment, "obj", StringComparison.OrdinalIgnoreCase));
+        ProcessStartInfo startInfo = new ProcessStartInfo
+        {
+            FileName = "git",
+            WorkingDirectory = RepositoryRoot(),
+            Arguments = "ls-files -z -- " + string.Join(" ", pathspecs),
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        };
+
+        using Process process = Process.Start(startInfo)
+            ?? throw new InvalidOperationException("Could not start git to enumerate tracked documentation surfaces.");
+        string output = process.StandardOutput.ReadToEnd();
+        string error = process.StandardError.ReadToEnd();
+        process.WaitForExit();
+
+        Assert.True(
+            process.ExitCode == 0,
+            "git ls-files failed while enumerating tracked documentation surfaces: " + error);
+
+        return output
+            .Split(NulSeparator, StringSplitOptions.RemoveEmptyEntries)
+            .Select(path => path.Replace('\\', '/'))
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(path => path, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static bool IsUtf8TextSurfaceFile(string path)
+    {
+        byte[] bytes = File.ReadAllBytes(path);
+        if (bytes.Any(value => value == 0))
+        {
+            return false;
+        }
+
+        try
+        {
+            _ = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true).GetString(bytes);
+            return true;
+        }
+        catch (DecoderFallbackException)
+        {
+            return false;
+        }
     }
 
     private static string RelativePath(string root, string path)
@@ -417,22 +565,22 @@ public sealed class DocumentationScopeTests
     private enum SurfaceKind
     {
         Markdown,
-        RecursiveText,
+        TrackedText,
         Xml,
         RuntimeDiagnostic,
     }
 
-    private sealed class SurfaceDeclaration
+    private sealed class RuntimeDiagnosticScenario
     {
-        internal SurfaceDeclaration(string pattern, SurfaceKind kind)
+        internal RuntimeDiagnosticScenario(string identifier, string snapshotRelativePath)
         {
-            Pattern = pattern;
-            Kind = kind;
+            Identifier = identifier;
+            SnapshotRelativePath = snapshotRelativePath;
         }
 
-        internal string Pattern { get; }
+        internal string Identifier { get; }
 
-        internal SurfaceKind Kind { get; }
+        internal string SnapshotRelativePath { get; }
     }
 
     private sealed class Surface

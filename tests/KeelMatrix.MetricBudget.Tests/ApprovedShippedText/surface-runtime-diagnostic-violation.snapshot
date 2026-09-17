@@ -1,0 +1,8 @@
+MetricBudget observed-cardinality report: FAIL (observed budget violation)
+  rules: 1; instruments observed: 1; observed series: 2; measurements: 2
+  safety bounds per instrument identity: series 100000, values per tag 5000, tag value length 256; accounting complete: True; accounting consistent: True
+  rule 1: instrument "requests" in meter "tests.metricbudget.documentation-scope.violation" -> Observed
+    tests.metricbudget.documentation-scope.violation@1.0.0/requests (counter): 2 measurements, 2 observed series, configured max 1
+      tag "route": 2 observed distinct values, configured max none (no budget configured)
+  problems:
+    - observed series budget exceeded by meter "tests.metricbudget.documentation-scope.violation" version 1.0.0, counter "requests": 2 observed series against a configured maximum of 1. Reduce tag fan-out on the exercised path, or raise MaxObservedSeries when the workload is representative of production.

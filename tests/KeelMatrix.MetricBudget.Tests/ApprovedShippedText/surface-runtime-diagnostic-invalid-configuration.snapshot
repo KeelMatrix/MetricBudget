@@ -1,0 +1,11 @@
+MetricBudget observed-cardinality report: INVALID CONFIGURATION (no verification result)
+  rules: 2; instruments observed: 0; observed series: 0; measurements: 0
+  safety bounds per instrument identity: series 100000, values per tag 5000, tag value length 256; accounting complete: True; accounting consistent: True
+  rule 1: meter "tests.metricbudget.documentation-scope.invalid-configuration" -> NotObserved
+    no published instrument matched this rule
+  rule 2: instrument "requests" in meter "tests.metricbudget.documentation-scope.invalid-configuration" -> NotObserved
+    no published instrument matched this rule
+  problems:
+    - rule 1 (meter "tests.metricbudget.documentation-scope.invalid-configuration") matched no published instrument, so nothing was verified for it. Check that the workload publishes an instrument with that exact name, that the meter is still alive, and that the session is started before the workload runs. Names are matched exactly and are case-sensitive.
+    - rule 2 (instrument "requests" in meter "tests.metricbudget.documentation-scope.invalid-configuration") matched no published instrument, so nothing was verified for it. Check that the workload publishes an instrument with that exact name, that the meter is still alive, and that the session is started before the workload runs. Names are matched exactly and are case-sensitive.
+    - instrument meter "tests.metricbudget.documentation-scope.invalid-configuration" version 1.0.0, counter "requests" matched rules 1, 2, so no budget can be applied to it and it was not observed. Make the rules disjoint.

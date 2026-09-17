@@ -34,10 +34,25 @@ It does not select sentences, parse Markdown regions, or skip code fences, comme
 other portions of a surface. Normalization converts line endings to `LF` and removes trailing whitespace from each
 line; all remaining text is compared exactly.
 
-Snapshots are under `tests/KeelMatrix.MetricBudget.Tests/ApprovedShippedText/`, with one snapshot for each expanded
-surface. The guard includes the root and packed READMEs, `PRIVACY.md`, every top-level `docs/*.md`, recursive sample
-and package-consumer text, both generated XML documentation files, and the canonical failing runtime diagnostic.
-A missing snapshot, an orphan snapshot, a missing declared file, or a newly discovered glob match fails the guard.
+The declared repository-text set is reproducible from the repository root with:
+
+```powershell
+git ls-files -- '*.md' 'samples/**' 'tests/KeelMatrix.MetricBudget.PackageConsumer/**'
+```
+
+The guard interprets every path returned for `*.md` as Markdown. For the `samples/**` and package-consumer
+pathspecs, it snapshots every returned UTF-8 text file (a file containing a NUL byte is not text). It then adds the
+generated XML documentation for both target frameworks and one runtime snapshot for every outcome branch of
+`MetricBudgetReport.ToDiagnosticString()`: `Passed`, `Violation`, `InvalidConfiguration`, `NoMatchingInstrument`,
+`NoMeasurementsObserved`, and `ObservationIncomplete`. This is a rule over tracked paths, not a hand-maintained
+surface list.
+
+Untracked build output under `bin/` or `obj/` is out of scope by that rule: Git does not return it, and the guard never
+scans untracked directories. Such output cannot appear in a Git diff, the source package, or a release. A tracked text
+file remains in scope even if its path happens to contain `bin/` or `obj/`.
+
+Snapshots are under `tests/KeelMatrix.MetricBudget.Tests/ApprovedShippedText/`, with one snapshot for each declared
+surface. A missing snapshot, an orphan snapshot, a missing tracked file, or a newly tracked text file fails the guard.
 
 Any change to shipped text requires a deliberate approval commit. First review the complete change and confirm that
 the scope semantics are still **per instrument identity**, then build Release if generated XML may change and run:
