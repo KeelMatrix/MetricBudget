@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <AssemblyName>KeelMatrix.MetricBudget.Sample</AssemblyName>
+    <RootNamespace>KeelMatrix.MetricBudget.Sample</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The sample intentionally proves the package path rather than bypassing it with a project reference. -->
+    <PackageReference Include="KeelMatrix.MetricBudget" />
+  </ItemGroup>
+</Project>

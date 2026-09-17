@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<configuration>
+  <packageSources>
+    <clear />
+    <!-- The package under test comes from the repository-local pack output. -->
+    <add key="local-packages" value="../../artifacts/packages" />
+    <!-- Dependencies restore from the intended public feed. -->
+    <add key="nuget.org" value="https://api.nuget.org/v3/index.json" protocolVersion="3" />
+  </packageSources>
+  <packageSourceMapping>
+    <clear />
+    <packageSource key="local-packages">
+      <package pattern="KeelMatrix.MetricBudget" />
+    </packageSource>
+    <packageSource key="nuget.org">
+      <package pattern="*" />
+    </packageSource>
+  </packageSourceMapping>
+</configuration>

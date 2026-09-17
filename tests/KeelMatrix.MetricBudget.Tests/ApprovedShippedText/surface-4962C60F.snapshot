@@ -1,0 +1,1412 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>KeelMatrix.MetricBudget</name>
+    </assembly>
+    <members>
+        <member name="T:KeelMatrix.MetricBudget.Assertions.MetricBudgetAssertionException">
+            <summary>
+            Thrown when a metric-budget assertion fails.
+            </summary>
+            <remarks>
+            The exception type belongs to this package rather than to a test framework, so the assertion helpers work in
+            xUnit, NUnit, MSTest, a console harness, or a build script without adding a test-framework dependency. Test
+            frameworks report any exception as a failure.
+            </remarks>
+        </member>
+        <member name="M:KeelMatrix.MetricBudget.Assertions.MetricBudgetAssertionException.#ctor">
+            <summary>
+            Initializes a new instance of the <see cref="T:KeelMatrix.MetricBudget.Assertions.MetricBudgetAssertionException"/> class.
+            </summary>
+        </member>
+        <member name="M:KeelMatrix.MetricBudget.Assertions.MetricBudgetAssertionException.#ctor(System.String)">
+            <summary>
+            Initializes a new instance of the <see cref="T:KeelMatrix.MetricBudget.Assertions.MetricBudgetAssertionException"/> class.
+            </summary>
+            <param name="message">Actionable failure message, including the diagnostic report.</param>
+        </member>
+        <member name="M:KeelMatrix.MetricBudget.Assertions.MetricBudgetAssertionException.#ctor(System.String,System.Exception)">
+            <summary>
+            Initializes a new instance of the <see cref="T:KeelMatrix.MetricBudget.Assertions.MetricBudgetAssertionException"/> class.
+            </summary>
+            <param name="message">Actionable failure message, including the diagnostic report.</param>
+            <param name="innerException">Underlying failure.</param>
+        </member>
+        <member name="T:KeelMatrix.MetricBudget.Assertions.MetricBudgetReportAssertions">
+            <summary>
+            Assertion helpers for <see cref="T:KeelMatrix.MetricBudget.MetricBudgetReport"/>.
+            </summary>
+            <remarks>
+            <para>
+            The helpers take no dependency on a test framework. They throw
+            <see cref="T:KeelMatrix.MetricBudget.Assertions.MetricBudgetAssertionException"/>, whose message is the privacy-safe diagnostic report, so a failure
+            in any framework names the instrument, the breached budget, the observed count, and the configured limit
+            without printing tag values.
+            </para>
+            <para>
+            This namespace is separate from the core API so the core surface stays about observation and budgeting rather
+            than assertion style.
+            </para>
+            </remarks>
+        </member>
+        <member name="M:KeelMatrix.MetricBudget.Assertions.MetricBudgetReportAssertions.AssertWithinBudget(KeelMatrix.MetricBudget.MetricBudgetReport)">
+            <summary>
+            Asserts that the exercised workload stayed within every configured budget.
+            </summary>
+            <param name="report">Report to assert against.</param>
+            <returns>The same report, for chaining.</returns>
+            <exception cref="T:System.ArgumentNullException"><paramref name="report"/> is null.</exception>
+            <exception cref="T:KeelMatrix.MetricBudget.Assertions.MetricBudgetAssertionException">
+            The outcome is not <see cref="F:KeelMatrix.MetricBudget.MetricBudgetOutcome.Passed"/>, including when nothing was observed, the
+            configuration was rejected, or a safety bound was reached.
+            </exception>
+        </member>
+        <member name="M:KeelMatrix.MetricBudget.Assertions.MetricBudgetReportAssertions.AssertOutcome(KeelMatrix.MetricBudget.MetricBudgetReport,KeelMatrix.MetricBudget.MetricBudgetOutcome)">
+            <summary>
+            Asserts that a verification ended with a specific outcome.
+            </summary>
+            <param name="report">Report to assert against.</param>
+            <param name="expectedOutcome">Expected outcome.</param>
+            <returns>The same report, for chaining.</returns>
+            <exception cref="T:System.ArgumentNullException"><paramref name="report"/> is null.</exception>
+            <exception cref="T:KeelMatrix.MetricBudget.Assertions.MetricBudgetAssertionException">The outcome differs.</exception>
+        </member>
+        <member name="M:KeelMatrix.MetricBudget.Assertions.MetricBudgetReportAssertions.AssertInstrumentObserved(KeelMatrix.MetricBudget.MetricBudgetReport,System.String,System.String)">
+            <summary>
+            Asserts that one instrument identity was observed with at least one measurement.
+            </summary>
+            <param name="report">Report to assert against.</param>
+            <param name="meterName">Exact meter name.</param>
+            <param name="instrumentName">Exact instrument name.</param>
+            <returns>The same report, for chaining.</returns>
+            <exception cref="T:System.ArgumentNullException">A parameter is null.</exception>
+            <exception cref="T:KeelMatrix.MetricBudget.Assertions.MetricBudgetAssertionException">The instrument was not observed with measurements.</exception>
+        </member>
+        <member name="M:KeelMatrix.MetricBudget.Assertions.MetricBudgetReportAssertions.AssertObservedSeriesAtMost(KeelMatrix.MetricBudget.MetricBudgetReport,System.String,System.String,System.Int32)">
+            <summary>
+            Asserts that one instrument identity stayed within a specific observed-series limit.
+            </summary>
+            <param name="report">Report to assert against.</param>
+            <param name="meterName">Exact meter name.</param>
+            <param name="instrumentName">Exact instrument name.</param>
+            <param name="maxObservedSeries">Maximum distinct observed series allowed.</param>
+            <returns>The same report, for chaining.</returns>
+            <exception cref="T:System.ArgumentNullException">A parameter is null.</exception>
+            <exception cref="T:System.ArgumentOutOfRangeException"><paramref name="maxObservedSeries"/> is negative.</exception>
+            <exception cref="T:KeelMatrix.MetricBudget.Assertions.MetricBudgetAssertionException">The observed count exceeds the limit or tracking was incomplete.</exception>
+        </member>
+        <member name="M:KeelMatrix.MetricBudget.Assertions.MetricBudgetReportAssertions.AssertTagDistinctValuesAtMost(KeelMatrix.MetricBudget.MetricBudgetReport,System.String,System.String,System.String,System.Int32)">
+            <summary>
+            Asserts that one tag key stayed within a specific distinct-value limit for one instrument identity.
+            </summary>
+            <param name="report">Report to assert against.</param>
+            <param name="meterName">Exact meter name.</param>
+            <param name="instrumentName">Exact instrument name.</param>
+            <param name="tagKey">Exact tag key.</param>
+            <param name="maxDistinctValues">Maximum distinct values allowed for the tag key.</param>
+            <returns>The same report, for chaining.</returns>
+            <exception cref="T:System.ArgumentNullException">A parameter is null.</exception>
+            <exception cref="T:System.ArgumentOutOfRangeException"><paramref name="maxDistinctValues"/> is negative.</exception>
+            <exception cref="T:KeelMatrix.MetricBudget.Assertions.MetricBudgetAssertionException">The observed count exceeds the limit, the tag was not observed, or tracking was incomplete.</exception>
+        </member>
+        <member name="T:KeelMatrix.MetricBudget.InstrumentBudget">
+            <summary>
+            Declares the observed-cardinality budget for one instrument selection.
+            </summary>
+            <remarks>
+            <para>
+            The budget constrains what the exercised workload actually produced: the number of distinct observed series for
+            the instrument identity, and the number of distinct values each configured tag key may produce for that instrument
+            identity. It never claims to bound
+            the cardinality production can produce.
+            </para>
+            <para>
+            A rule must configure <see cref="P:KeelMatrix.MetricBudget.InstrumentBudget.MaxObservedSeries"/> or at least one tag budget. A budget with no limit is
+            invalid configuration rather than an implicit default, because no default limit is safe for every codebase.
+            </para>
+            </remarks>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.InstrumentBudget.MaxObservedSeries">
+            <summary>
+            Maximum number of distinct observed series one instrument identity may produce within the session.
+            </summary>
+            <remarks>
+            One observed series is one combination of instrument identity and tag set, so repeated measurements of the
+            same combination stay one series. The value must be greater than zero, and <see langword="null"/> means no
+            per-instrument-identity series budget is configured for this rule.
+            </remarks>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.InstrumentBudget.Tags">
+            <summary>
+            Tag budgets declared for this rule, in declaration order.
+            </summary>
+        </member>
+        <member name="M:KeelMatrix.MetricBudget.InstrumentBudget.Tag(System.String)">
+            <summary>
+            Declares or returns the budget for one tag key.
+            </summary>
+            <param name="tagKey">Exact delivered tag key.</param>
+            <returns>The budget for <paramref name="tagKey"/>; repeated calls return the same instance.</returns>
+            <exception cref="T:System.ArgumentException"><paramref name="tagKey"/> is null or empty.</exception>
+        </member>
+        <member name="M:KeelMatrix.MetricBudget.InstrumentBudget.HasLimit">
+            <summary>
+            Returns whether this budget configures any limit at all.
+            </summary>
+            <returns><see langword="true"/> when a series budget for an instrument identity or at least one tag budget is set.</returns>
+        </member>
+        <member name="M:KeelMatrix.MetricBudget.InstrumentBudget.ToString">
+            <summary>
+            Describes the configured budget.
+            </summary>
+            <returns>A short description.</returns>
+        </member>
+        <member name="T:KeelMatrix.MetricBudget.InstrumentSelector">
+            <summary>
+            Selects the meters and instruments a budget rule applies to.
+            </summary>
+            <remarks>
+            <para>
+            Matching is exact and ordinal: metric names are case-sensitive in <c>System.Diagnostics.Metrics</c>, and this
+            selector does not normalize, wildcard, or partially match them.
+            </para>
+            <para>
+            A selector names a meter, an instrument, or both. A rule that names only an instrument applies to every meter
+            that publishes that instrument name, and each meter version keeps its own accounting. A rule that names only a
+            meter applies to every instrument that meter publishes.
+            </para>
+            <para>
+            Instrument publication is process-global, so a selector can also match instruments created by unrelated code
+            in the same process. Prefer naming the meter and the instrument together when a process runs several libraries.
+            </para>
+            </remarks>
+        </member>
+        <member name="M:KeelMatrix.MetricBudget.InstrumentSelector.Instrument(System.String)">
+            <summary>
+            Creates a selector that matches one instrument name in any meter.
+            </summary>
+            <param name="instrumentName">Exact instrument name.</param>
+            <returns>The selector.</returns>
+            <exception cref="T:System.ArgumentException"><paramref name="instrumentName"/> is null, empty, or white space.</exception>
+        </member>
+        <member name="M:KeelMatrix.MetricBudget.InstrumentSelector.InstrumentInMeter(System.String,System.String)">
+            <summary>
+            Creates a selector that matches one instrument name in one meter, in every version of that meter.
+            </summary>
+            <param name="meterName">Exact meter name.</param>
+            <param name="instrumentName">Exact instrument name.</param>
+            <returns>The selector.</returns>
+            <exception cref="T:System.ArgumentException">A name is null, empty, or white space.</exception>
+        </member>
+        <member name="M:KeelMatrix.MetricBudget.InstrumentSelector.Meter(System.String)">
+            <summary>
+            Creates a selector that matches every instrument published by one meter, in every version of that meter.
+            </summary>
+            <param name="meterName">Exact meter name.</param>
+            <returns>The selector.</returns>
+            <exception cref="T:System.ArgumentException"><paramref name="meterName"/> is null, empty, or white space.</exception>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.InstrumentSelector.MeterName">
+            <summary>
+            Meter name this selector requires, or <see langword="null"/> when any meter is accepted.
+            </summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.InstrumentSelector.InstrumentName">
+            <summary>
+            Instrument name this selector requires, or <see langword="null"/> when any instrument is accepted.
+            </summary>
+        </member>
+        <member name="M:KeelMatrix.MetricBudget.InstrumentSelector.Matches(System.String,System.String)">
+            <summary>
+            Reports whether this selector matches one published instrument identity.
+            </summary>
+            <param name="meterName">Published meter name.</param>
+            <param name="instrumentName">Published instrument name.</param>
+            <returns><see langword="true"/> when the identity is selected.</returns>
+            <exception cref="T:System.ArgumentNullException">A supplied name is null.</exception>
+        </member>
+        <member name="M:KeelMatrix.MetricBudget.InstrumentSelector.ToString">
+            <summary>
+            Developer-facing description of what this selector matches.
+            </summary>
+            <returns>A short description.</returns>
+        </member>
+        <member name="T:KeelMatrix.MetricBudget.Internal.AccountingInvariants">
+            <summary>
+            Checks that a snapshot describes a possible accounting state.
+            </summary>
+            <remarks>
+            The session writes every counter under one lock, so these invariants hold by construction. They are verified
+            again when a report is built so that an impossible state fails loudly instead of surfacing as a passing
+            verification.
+            </remarks>
+        </member>
+        <member name="M:KeelMatrix.MetricBudget.Internal.AccountingInvariants.Validate(KeelMatrix.MetricBudget.Internal.SessionSnapshot,System.Collections.Generic.List{System.String})">
+            <summary>
+            Verifies every invariant and appends one record per violation.
+            </summary>
+            <param name="snapshot">Snapshot to verify.</param>
+            <param name="problems">Receives a description of every violated invariant.</param>
+            <returns><see langword="true"/> when the snapshot is consistent.</returns>
+        </member>
+        <member name="T:KeelMatrix.MetricBudget.Internal.FrozenOptions">
+            <summary>
+            Immutable configuration a session keeps for its whole lifetime.
+            </summary>
+            <remarks>
+            Copying the configuration at start time keeps a running session independent of later changes to the options
+            object, and lets measurement callbacks read limits without locking.
+            </remarks>
+        </member>
+        <member name="T:KeelMatrix.MetricBudget.Internal.FrozenRule">
+            <summary>
+            Immutable instrument-selection rule and budget.
+            </summary>
+        </member>
+        <member name="T:KeelMatrix.MetricBudget.Internal.TagBudgetLimit">
+            <summary>
+            One declared tag budget in declaration order.
+            </summary>
+        </member>
+        <member name="T:KeelMatrix.MetricBudget.Internal.InstrumentAccount">
+            <summary>
+            Observed-series and per-tag accounting for one instrument identity.
+            </summary>
+            <remarks>
+            Every member of this type is written under the owning <see cref="T:KeelMatrix.MetricBudget.Internal.MetricBudgetState"/> writer lock, so a summary
+            built from it is a single consistent snapshot. Distinct series and distinct tag values are held as fixed-size
+            digests, so no raw tag value is retained.
+            </remarks>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.Internal.InstrumentAccount.RuleIndex">
+            <summary>Index of the single rule that selected this instrument.</summary>
+        </member>
+        <member name="T:KeelMatrix.MetricBudget.Internal.InstrumentAccount.TagValueAccount">
+            <summary>
+            Distinct values observed for one encoded tag key.
+            </summary>
+        </member>
+        <member name="T:KeelMatrix.MetricBudget.Internal.InstrumentIdentity">
+            <summary>
+            Observed instrument identity: meter name, meter version, instrument name, and instrument kind.
+            </summary>
+            <remarks>
+            <para>
+            The BCL metrics identity model does not include the <c>Meter.Scope</c> object, and measurement delivery is
+            process-wide per instrument, so two <c>Meter</c> instances that share a name and version share one observed
+            identity. That is the same instrumentation-scope identity model used by the OpenTelemetry .NET SDK.
+            </para>
+            <para>
+            The meter version is part of identity, so the same instrument name in two versions of a meter is accounted
+            separately.
+            </para>
+            </remarks>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.Internal.InstrumentIdentity.KindName">
+            <summary>Stable lowercase token for the instrument kind, used inside series identity text.</summary>
+        </member>
+        <member name="M:KeelMatrix.MetricBudget.Internal.InstrumentIdentity.Describe">
+            <summary>
+            Human-readable identity used in diagnostics. Contains no tag keys or values.
+            </summary>
+        </member>
+        <member name="T:KeelMatrix.MetricBudget.Internal.MetricBudgetState">
+            <summary>
+            Single writer path for everything a session counts.
+            </summary>
+            <remarks>
+            <para>
+            Every counter, flag, and map is written under one writer lock, so measurements arriving concurrently from a
+            parallel test suite are accounted exactly and a summary is a single consistent snapshot. Canonicalization runs
+            before the lock because it is pure, which keeps delivery latency from serializing the whole workload.
+            </para>
+            <para>
+            Instrument identity lookup uses a concurrent map that measurement callbacks only read. Entries are added under
+            the writer lock before the instrument is enabled for delivery, so a callback can never observe a half-built
+            account.
+            </para>
+            </remarks>
+        </member>
+        <member name="M:KeelMatrix.MetricBudget.Internal.MetricBudgetState.OnInstrumentPublished(System.Diagnostics.Metrics.Instrument,System.Diagnostics.Metrics.MeterListener)">
+            <summary>
+            Handles instrument publication. Selection is decided here, and an instrument is enabled for delivery only
+            when exactly one rule selects it.
+            </summary>
+        </member>
+        <member name="M:KeelMatrix.MetricBudget.Internal.MetricBudgetState.OnMeasurement``1(System.Diagnostics.Metrics.Instrument,``0,System.ReadOnlySpan{System.Collections.Generic.KeyValuePair{System.String,System.Object}},System.Object)">
+            <summary>
+            Records one delivered measurement for a selected instrument.
+            </summary>
+            <typeparam name="T">Measurement type, supplied by the listener callback registration.</typeparam>
+            <param name="instrument">Instrument that delivered the measurement.</param>
+            <param name="measurement">Measurement value, which this verifier does not interpret.</param>
+            <param name="tags">Tag span, valid only for the duration of the callback.</param>
+            <param name="state">Listener state, unused.</param>
+        </member>
+        <member name="M:KeelMatrix.MetricBudget.Internal.MetricBudgetState.BeginStop">
+            <summary>
+            Stops accounting and returns the instruments whose delivery must be disabled explicitly.
+            </summary>
+            <remarks>
+            <c>MeterListener.Dispose</c> does not stop measurement delivery for instruments that a listener already
+            enabled, so the session disables every one of them before it disposes the listener.
+            </remarks>
+        </member>
+        <member name="T:KeelMatrix.MetricBudget.Internal.ReportBuilder">
+            <summary>
+            Turns a completed session snapshot into the immutable public report.
+            </summary>
+            <remarks>
+            The builder is the single place that decides the outcome ladder, so "nothing was verified" can never be
+            reported as a pass:
+            <list type="number">
+            <item>invalid configuration, when an instrument identity matched more than one rule;</item>
+            <item>violation, when a tracked budget was exceeded;</item>
+            <item>observation incomplete, when a safety bound was reached or accounting was inconsistent;</item>
+            <item>no matching instrument, when a rule selected nothing;</item>
+            <item>no measurements observed, when a selected instrument delivered nothing;</item>
+            <item>pass.</item>
+            </list>
+            </remarks>
+        </member>
+        <member name="M:KeelMatrix.MetricBudget.Internal.ReportBuilder.OriginalBudget(KeelMatrix.MetricBudget.Internal.FrozenRule)">
+            <summary>
+            Rebuilds a public rule description from the frozen configuration. The budget object is a copy so a report
+            never exposes a mutable configuration object that a later session change could alter.
+            </summary>
+        </member>
+        <member name="T:KeelMatrix.MetricBudget.Internal.SessionSnapshot">
+            <summary>
+            Consistent point-in-time view of one completed session.
+            </summary>
+            <remarks>
+            Every member is copied while the session writer lock is held, so a snapshot never mixes values from different
+            moments and cannot report an impossible state such as more distinct observed series than measurements.
+            </remarks>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.Internal.SessionSnapshot.MeasurementsDelivered">
+            <summary>Measurement callbacks delivered to the session.</summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.Internal.SessionSnapshot.UnmatchedMeasurements">
+            <summary>Delivery callbacks that could not be attributed to a selected instrument.</summary>
+        </member>
+        <member name="T:KeelMatrix.MetricBudget.Internal.InstrumentAccountSnapshot">
+            <summary>
+            Consistent point-in-time view of one instrument identity.
+            </summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.Internal.InstrumentAccountSnapshot.ObservedSeriesCount">
+            <summary>
+            Distinct observed series that are tracked in full. A lower bound when
+            <see cref="P:KeelMatrix.MetricBudget.Internal.InstrumentAccountSnapshot.SeriesTrackingIncomplete"/> is <see langword="true"/>.
+            </summary>
+        </member>
+        <member name="T:KeelMatrix.MetricBudget.Internal.TagValueSnapshot">
+            <summary>
+            Consistent point-in-time view of one encoded tag key within one instrument.
+            </summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.Internal.TagValueSnapshot.ObservedDistinctValueCount">
+            <summary>
+            Distinct values tracked for this tag key. A lower bound when <see cref="P:KeelMatrix.MetricBudget.Internal.TagValueSnapshot.ValueTrackingIncomplete"/> is
+            <see langword="true"/>.
+            </summary>
+        </member>
+        <member name="T:KeelMatrix.MetricBudget.Internal.ConfigurationConflictSnapshot">
+            <summary>
+            One instrument identity that matched more than one configured rule.
+            </summary>
+        </member>
+        <member name="T:KeelMatrix.MetricBudget.Internal.Sha256Digest">
+            <summary>
+            Fixed-size SHA-256 identity of one tag value descriptor or one observed series key.
+            </summary>
+            <remarks>
+            Accounting keys are digests rather than the canonical text so that a session never retains raw tag values in
+            memory, and so that the observed-series set stays a fixed size per series.
+            </remarks>
+        </member>
+        <member name="T:KeelMatrix.MetricBudget.Internal.Sha256TextHash">
+            <summary>
+            UTF-8 SHA-256 helper for tag identity work.
+            </summary>
+            <remarks>
+            A hasher is cached per thread because one measurement computes one digest per delivered tag plus one digest for
+            the whole tag set. Long values are hashed in fixed-size chunks so a single pathological value cannot cause a
+            proportional transient allocation.
+            </remarks>
+        </member>
+        <member name="M:KeelMatrix.MetricBudget.Internal.Sha256TextHash.HexDigest(System.String)">
+            <summary>
+            Lowercase hexadecimal digest. Used only inside the documented oversized-value descriptor.
+            </summary>
+        </member>
+        <member name="T:KeelMatrix.MetricBudget.Internal.TagField">
+            <summary>
+            One delivered tag, reduced to the two identity fields the accountant needs.
+            </summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.Internal.TagField.KeyField">
+            <summary>Encoded delivered key. A null delivered key uses the bare marker <c>null</c>.</summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.Internal.TagField.ValueDigest">
+            <summary>Digest of the value descriptor, used for bounded per-tag distinct-value accounting.</summary>
+        </member>
+        <member name="T:KeelMatrix.MetricBudget.Internal.TagIdentity">
+            <summary>
+            Deterministic, order-independent identity for a delivered tag set.
+            </summary>
+            <remarks>
+            <para>The identity rule is normative and is documented for users in <c>docs/series-identity.md</c>:</para>
+            <list type="bullet">
+            <item>Every delivered tag becomes one entry: a key field, U+001E, and a value field.</item>
+            <item>A key field is <c>{length}:{key}</c>, or the bare marker <c>null</c> when the delivered key is
+            <see langword="null"/>. Length-prefixed fields always start with an ASCII digit, so no delivered key can
+            produce the bare marker.</item>
+            <item>A value field is <c>{descriptorLength}:{descriptor}</c>.</item>
+            <item>A descriptor is <c>{CLR type full name}:{invariant text}</c>, so <c>int 1</c> and <c>string "1"</c> are
+            different identities, and a <see langword="null"/> value is the descriptor <c>null</c>.</item>
+            <item>A value whose invariant text is longer than the configured bound becomes
+            <c>{type}#chars={count}#sha256={hex}</c>, so one pathological value cannot inflate an identity.</item>
+            <item>Entries are sorted with <see cref="P:System.StringComparer.Ordinal"/> and joined with U+001F, so tag order does
+            not change identity.</item>
+            <item>Duplicate keys are retained, so a tag set is a sorted multiset rather than a set.</item>
+            </list>
+            <para>
+            The accountant retains only fixed-size digests of these identities, never the canonical text itself.
+            </para>
+            </remarks>
+        </member>
+        <member name="F:KeelMatrix.MetricBudget.Internal.TagIdentity.NullKeyMarker">
+            <summary>Bare key-field marker for a delivered <see langword="null"/> tag key.</summary>
+        </member>
+        <member name="M:KeelMatrix.MetricBudget.Internal.TagIdentity.CreateTagSetKey(System.ReadOnlySpan{System.Collections.Generic.KeyValuePair{System.String,System.Object}},System.Int32,KeelMatrix.MetricBudget.Internal.TagField[]@)">
+            <summary>
+            Builds the canonical tag-set identity and the per-tag accounting fields for one delivered measurement.
+            </summary>
+            <param name="tags">Tag span delivered by <c>MeterListener</c>. Only valid during the callback.</param>
+            <param name="maxValueLength">Bound applied to a tag value's invariant text.</param>
+            <param name="fields">Per-tag accounting fields in delivered order.</param>
+            <returns>The canonical tag-set identity text used to derive the observed-series identity.</returns>
+        </member>
+        <member name="M:KeelMatrix.MetricBudget.Internal.TagIdentity.EncodeKeyField(System.String)">
+            <summary>
+            Key field for one delivered tag key. This is also the grouping key for per-tag distinct-value accounting,
+            so a <see langword="null"/> key and the literal key <c>"null"</c> are counted separately.
+            </summary>
+        </member>
+        <member name="M:KeelMatrix.MetricBudget.Internal.TagIdentity.DecodeKeyField(System.String)">
+            <summary>
+            Reverses <see cref="M:KeelMatrix.MetricBudget.Internal.TagIdentity.EncodeKeyField(System.String)"/> for diagnostics. Returns <see langword="null"/> when the delivered
+            key was <see langword="null"/>.
+            </summary>
+        </member>
+        <member name="M:KeelMatrix.MetricBudget.Internal.TagIdentity.CreateSeriesKey(KeelMatrix.MetricBudget.Internal.InstrumentIdentity,System.String)">
+            <summary>
+            Canonical observed-series identity for one instrument identity and one canonical tag set.
+            </summary>
+            <remarks>
+            Every field is length-prefixed or the bare <c>null</c> marker, so two different instrument identities can
+            never produce the same series identity.
+            </remarks>
+        </member>
+        <member name="T:KeelMatrix.MetricBudget.Internal.MetricBudgetTelemetryOutcome">
+            <summary>
+            Coarse outcome reported by the anonymous verification signal.
+            </summary>
+        </member>
+        <member name="T:KeelMatrix.MetricBudget.Internal.MetricBudgetTelemetryOsFamily">
+            <summary>
+            Coarse operating-system family reported by the anonymous verification signal.
+            </summary>
+        </member>
+        <member name="T:KeelMatrix.MetricBudget.Internal.MetricBudgetTelemetrySignal">
+            <summary>
+            The complete set of aggregate fields a completed verification may ever report.
+            </summary>
+            <remarks>
+            <para>
+            This type is the allowlist. It is deliberately closed: every field is a coarse value derived from a count, an
+            enum, a target framework, or the package version. It has no member that can carry a meter name, instrument
+            name, tag key, tag value, metric value, URL, application name, or file path, and it has no free-form
+            dictionary a caller could extend.
+            </para>
+            <para>
+            <c>KeelMatrix.Telemetry</c> 0.1.0 exposes activation and heartbeat events with its own fixed schema and no
+            product-specific fields, so the aggregate signal is currently used to decide activation and heartbeat
+            semantics and to prove the allowlist, not to extend the transmitted payload.
+            </para>
+            </remarks>
+        </member>
+        <member name="M:KeelMatrix.MetricBudget.Internal.MetricBudgetTelemetrySignal.Create(KeelMatrix.MetricBudget.MetricBudgetReport)">
+            <summary>
+            Creates the signal for a completed verification that observed at least one selected instrument.
+            </summary>
+        </member>
+        <member name="M:KeelMatrix.MetricBudget.Internal.MetricBudgetTelemetrySignal.IsAllowedFieldName(System.String)">
+            <summary>
+            Reports whether a field name may carry verification data.
+            </summary>
+            <param name="fieldName">Candidate field name.</param>
+            <returns><see langword="true"/> when the name is on the allowlist.</returns>
+        </member>
+        <member name="M:KeelMatrix.MetricBudget.Internal.MetricBudgetTelemetrySignal.ToFields">
+            <summary>
+            Projects the signal onto its fields. Every name is on the allowlist and every value is coarse.
+            </summary>
+        </member>
+        <member name="M:KeelMatrix.MetricBudget.Internal.MetricBudgetTelemetrySignal.Describe">
+            <summary>
+            Describes the signal as semicolon-separated <c>name=value</c> pairs.
+            </summary>
+        </member>
+        <member name="T:KeelMatrix.MetricBudget.Internal.IMetricBudgetTelemetrySink">
+            <summary>
+            Receives the coarse verification signal.
+            </summary>
+        </member>
+        <member name="T:KeelMatrix.MetricBudget.Internal.KeelMatrixTelemetrySink">
+            <summary>
+            Default sink: the shared KeelMatrix telemetry client.
+            </summary>
+            <remarks>
+            The first completed verification that observed at least one instrument requests an activation event; later
+            completions request a heartbeat, which the shared client emits at most once per project and ISO week. The
+            client is created lazily on first use, so installing, restoring, or loading the assembly never reports
+            anything.
+            </remarks>
+        </member>
+        <member name="T:KeelMatrix.MetricBudget.Internal.MetricBudgetTelemetry">
+            <summary>
+            Telemetry boundary for completed verifications.
+            </summary>
+            <remarks>
+            Telemetry is best effort and never a dependency of a verification: every failure is swallowed, and no caller
+            changes a report because of it.
+            </remarks>
+        </member>
+        <member name="M:KeelMatrix.MetricBudget.Internal.MetricBudgetTelemetry.SetSinkForTests(KeelMatrix.MetricBudget.Internal.IMetricBudgetTelemetrySink)">
+            <summary>
+            Replaces the sink so a test can inspect the signal without touching the shared client.
+            </summary>
+        </member>
+        <member name="T:KeelMatrix.MetricBudget.MetricBudgetConfigurationException">
+            <summary>
+            Thrown when a session is started with options that cannot describe a meaningful verification.
+            </summary>
+            <remarks>
+            Invalid configuration fails before any measurement is observed so the mistake is reported immediately and
+            actionably rather than silently producing a passing session that verified nothing. Ambiguity discovered while
+            instruments are published is reported by <see cref="P:KeelMatrix.MetricBudget.MetricBudgetReport.Outcome"/> instead, because the
+            conflicting instruments may not exist in every run.
+            </remarks>
+        </member>
+        <member name="M:KeelMatrix.MetricBudget.MetricBudgetConfigurationException.#ctor">
+            <summary>
+            Initializes a new instance of the <see cref="T:KeelMatrix.MetricBudget.MetricBudgetConfigurationException"/> class.
+            </summary>
+        </member>
+        <member name="M:KeelMatrix.MetricBudget.MetricBudgetConfigurationException.#ctor(System.String)">
+            <summary>
+            Initializes a new instance of the <see cref="T:KeelMatrix.MetricBudget.MetricBudgetConfigurationException"/> class.
+            </summary>
+            <param name="message">Description of the invalid configuration.</param>
+        </member>
+        <member name="M:KeelMatrix.MetricBudget.MetricBudgetConfigurationException.#ctor(System.String,System.Exception)">
+            <summary>
+            Initializes a new instance of the <see cref="T:KeelMatrix.MetricBudget.MetricBudgetConfigurationException"/> class.
+            </summary>
+            <param name="message">Description of the invalid configuration.</param>
+            <param name="innerException">Underlying failure.</param>
+        </member>
+        <member name="T:KeelMatrix.MetricBudget.MetricBudgetInstrumentResult">
+            <summary>
+            Observed-cardinality accounting for one instrument identity within a session.
+            </summary>
+            <remarks>
+            One result covers one combination of meter name, meter version, instrument name, and instrument kind. Counts
+            describe the exercised workload only.
+            </remarks>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetInstrumentResult.MeterName">
+            <summary>
+            Meter name of the observed instrument identity.
+            </summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetInstrumentResult.MeterVersion">
+            <summary>
+            Meter version of the observed instrument identity, or <see langword="null"/> when the meter declares none.
+            </summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetInstrumentResult.InstrumentName">
+            <summary>
+            Instrument name of the observed instrument identity.
+            </summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetInstrumentResult.InstrumentKind">
+            <summary>
+            Kind of the observed instrument.
+            </summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetInstrumentResult.MeasurementCount">
+            <summary>
+            Measurements delivered by this instrument identity during the session.
+            </summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetInstrumentResult.ObservedSeriesCount">
+            <summary>
+            Distinct observed series tracked for this instrument identity. A lower bound when
+            <see cref="P:KeelMatrix.MetricBudget.MetricBudgetInstrumentResult.SeriesTrackingIncomplete"/> is <see langword="true"/>.
+            </summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetInstrumentResult.ConfiguredMaxObservedSeries">
+            <summary>
+            Configured maximum observed series for this instrument identity, or <see langword="null"/> when the rule declares no
+            per-instrument-identity series budget.
+            </summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetInstrumentResult.UntrackedSeriesObservations">
+            <summary>
+            Measurements whose series could not be tracked because the series safety bound for this instrument identity
+            was already reached.
+            </summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetInstrumentResult.SeriesTrackingIncomplete">
+            <summary>
+            Whether the series safety bound for this instrument identity was reached, which means
+            <see cref="P:KeelMatrix.MetricBudget.MetricBudgetInstrumentResult.ObservedSeriesCount"/> is a lower bound.
+            </summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetInstrumentResult.Tags">
+            <summary>
+            Per-tag results for this instrument identity, ordered by tag key, including configured keys the workload
+            never delivered.
+            </summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetInstrumentResult.WasObserved">
+            <summary>
+            Whether this instrument delivered at least one measurement.
+            </summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetInstrumentResult.IsWithinBudget">
+            <summary>
+            Whether this instrument stayed within its configured budgets and was tracked completely.
+            </summary>
+        </member>
+        <member name="M:KeelMatrix.MetricBudget.MetricBudgetInstrumentResult.ToString">
+            <summary>
+            Describes the observed series count, the configured limit, and the largest tag fan-out.
+            </summary>
+            <returns>A short description.</returns>
+        </member>
+        <member name="T:KeelMatrix.MetricBudget.MetricBudgetOptions">
+            <summary>
+            Configures which instruments a session observes, which budgets apply, and how much accounting memory the
+            session may use.
+            </summary>
+            <remarks>
+            <para>
+            Options are read when <see cref="M:KeelMatrix.MetricBudget.MetricBudgetSession.Start(KeelMatrix.MetricBudget.MetricBudgetOptions)"/> runs and are copied at that moment, so a session
+            keeps the configuration it started with even if the options object is reused or changed later.
+            </para>
+            <para>
+            The configured tracking limits are safety bounds, not budgets. They exist so that an unexpectedly explosive
+            workload cannot make the verifier itself unbounded, and they are reported explicitly whenever they are reached.
+            They are deliberately not described as safe values for any particular application.
+            </para>
+            </remarks>
+        </member>
+        <member name="F:KeelMatrix.MetricBudget.MetricBudgetOptions.DefaultMaxTrackedSeries">
+            <summary>
+            Default number of distinct observed series retained per instrument identity before it reports that series
+            tracking is incomplete. This is a safety bound, not a budget or a safe cardinality for any application.
+            </summary>
+        </member>
+        <member name="F:KeelMatrix.MetricBudget.MetricBudgetOptions.DefaultMaxTrackedValuesPerTag">
+            <summary>
+            Default number of distinct values retained per tag key and instrument identity before it reports that tag
+            value tracking is incomplete. This is a safety bound, not a budget or a safe cardinality for any application.
+            </summary>
+        </member>
+        <member name="F:KeelMatrix.MetricBudget.MetricBudgetOptions.DefaultMaxTagValueLength">
+            <summary>
+            Default length above which a tag value's text is replaced by a stable digest. This is a safety bound, not a
+            statement about which tag values are acceptable.
+            </summary>
+        </member>
+        <member name="M:KeelMatrix.MetricBudget.MetricBudgetOptions.#ctor">
+            <summary>
+            Initializes a new set of options with no rules and the default safety bounds.
+            </summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetOptions.MaxTrackedSeries">
+            <summary>
+            Maximum number of distinct observed series the session retains for one instrument identity.
+            </summary>
+            <remarks>
+            The bound applies per instrument identity, exactly like <see cref="P:KeelMatrix.MetricBudget.MetricBudgetOptions.MaxTrackedValuesPerTag"/>. When one
+            instrument reaches it, further distinct series of that instrument are counted as untracked observations,
+            the report says tracking is incomplete, and the session never presents that state as a pass.
+            <para>
+            The session does not share one series bound across selected instruments. Its ceiling is the number of
+            matched instrument identities multiplied by this value, plus the per-tag value sets, so a workload spread
+            over several instruments retains more series than a single instrument does. Size memory from that product,
+            and expect <see cref="F:KeelMatrix.MetricBudget.MetricBudgetOutcome.ObservationIncomplete"/> as soon as any single instrument's bound
+            is reached.
+            </para>
+            <para>
+            The value must be greater than zero.
+            </para>
+            </remarks>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetOptions.MaxTrackedValuesPerTag">
+            <summary>
+            Maximum number of distinct values retained per tag key and instrument identity.
+            </summary>
+            <remarks>
+            The value must be greater than zero. When the bound is reached, further distinct values are counted as
+            untracked observations for that tag key, the report says tracking is incomplete, and the session never
+            presents that state as a pass.
+            </remarks>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetOptions.MaxTagValueLength">
+            <summary>
+            Maximum length of a tag value's invariant text before the value is represented by a stable digest.
+            </summary>
+            <remarks>
+            The bound keeps one pathological value from inflating an identity. The digested form still distinguishes
+            different values, and the digest is never a raw value. The value must be greater than zero.
+            </remarks>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetOptions.Rules">
+            <summary>
+            Instrument-selection rules and their budgets, in declaration order.
+            </summary>
+        </member>
+        <member name="M:KeelMatrix.MetricBudget.MetricBudgetOptions.ForInstrument(System.String,System.Action{KeelMatrix.MetricBudget.InstrumentBudget})">
+            <summary>
+            Adds a rule for one instrument name in any meter.
+            </summary>
+            <param name="instrumentName">Exact instrument name.</param>
+            <param name="configure">Configures the budget for the selected instruments.</param>
+            <returns>These options, for chaining.</returns>
+            <exception cref="T:System.ArgumentNullException"><paramref name="configure"/> is null.</exception>
+            <exception cref="T:System.ArgumentException"><paramref name="instrumentName"/> is null, empty, or white space.</exception>
+        </member>
+        <member name="M:KeelMatrix.MetricBudget.MetricBudgetOptions.ForInstrument(System.String,System.String,System.Action{KeelMatrix.MetricBudget.InstrumentBudget})">
+            <summary>
+            Adds a rule for one instrument name in one meter.
+            </summary>
+            <param name="meterName">Exact meter name.</param>
+            <param name="instrumentName">Exact instrument name.</param>
+            <param name="configure">Configures the budget for the selected instruments.</param>
+            <returns>These options, for chaining.</returns>
+            <exception cref="T:System.ArgumentNullException"><paramref name="configure"/> is null.</exception>
+            <exception cref="T:System.ArgumentException">A name is null, empty, or white space.</exception>
+        </member>
+        <member name="M:KeelMatrix.MetricBudget.MetricBudgetOptions.ForMeter(System.String,System.Action{KeelMatrix.MetricBudget.InstrumentBudget})">
+            <summary>
+            Adds a rule for every instrument published by one meter.
+            </summary>
+            <param name="meterName">Exact meter name.</param>
+            <param name="configure">Configures the budget for the selected instruments.</param>
+            <returns>These options, for chaining.</returns>
+            <exception cref="T:System.ArgumentNullException"><paramref name="configure"/> is null.</exception>
+            <exception cref="T:System.ArgumentException"><paramref name="meterName"/> is null, empty, or white space.</exception>
+        </member>
+        <member name="M:KeelMatrix.MetricBudget.MetricBudgetOptions.ForInstrument(KeelMatrix.MetricBudget.InstrumentSelector,System.Action{KeelMatrix.MetricBudget.InstrumentBudget})">
+            <summary>
+            Adds a rule for a selector that was built directly.
+            </summary>
+            <param name="selector">Selector that describes the instruments to observe.</param>
+            <param name="configure">Configures the budget for the selected instruments.</param>
+            <returns>These options, for chaining.</returns>
+            <exception cref="T:System.ArgumentNullException">A parameter is null.</exception>
+        </member>
+        <member name="M:KeelMatrix.MetricBudget.MetricBudgetOptions.Freeze">
+            <summary>
+            Validates these options and copies them into the immutable form a session uses.
+            </summary>
+            <returns>The frozen configuration.</returns>
+            <exception cref="T:KeelMatrix.MetricBudget.MetricBudgetConfigurationException">The options cannot describe a verification.</exception>
+        </member>
+        <member name="T:KeelMatrix.MetricBudget.MetricBudgetOutcome">
+            <summary>
+            The result of one completed budget verification.
+            </summary>
+            <remarks>
+            Only <see cref="F:KeelMatrix.MetricBudget.MetricBudgetOutcome.Passed"/> means the exercised workload stayed within every configured budget. The other values
+            name why the session could not reach that conclusion, so a session never passes merely because it observed
+            nothing.
+            </remarks>
+        </member>
+        <member name="F:KeelMatrix.MetricBudget.MetricBudgetOutcome.Passed">
+            <summary>
+            Every configured rule selected at least one instrument, every selected instrument delivered at least one
+            measurement, all accounting was complete, and no configured budget was exceeded.
+            </summary>
+        </member>
+        <member name="F:KeelMatrix.MetricBudget.MetricBudgetOutcome.Violation">
+            <summary>
+            At least one configured budget was exceeded by the observed workload.
+            </summary>
+        </member>
+        <member name="F:KeelMatrix.MetricBudget.MetricBudgetOutcome.InvalidConfiguration">
+            <summary>
+            The configuration could not be applied, for example because one instrument identity matched more than one
+            rule. Ambiguous instruments are not observed, and their measurements never silently pick a budget.
+            </summary>
+        </member>
+        <member name="F:KeelMatrix.MetricBudget.MetricBudgetOutcome.NoMatchingInstrument">
+            <summary>
+            At least one configured rule selected no published instrument. Common causes are a misspelled meter or
+            instrument name, a workload that does not exercise the instrument, or an instrument created after the
+            session completed.
+            </summary>
+        </member>
+        <member name="F:KeelMatrix.MetricBudget.MetricBudgetOutcome.NoMeasurementsObserved">
+            <summary>
+            Every configured rule selected an instrument, but at least one selected instrument delivered no
+            measurements during the session.
+            </summary>
+        </member>
+        <member name="F:KeelMatrix.MetricBudget.MetricBudgetOutcome.ObservationIncomplete">
+            <summary>
+            Accounting could not be completed within the configured safety bounds, or the session detected an impossible
+            accounting state. The report names the bound that was reached; the observed counts are lower bounds.
+            </summary>
+        </member>
+        <member name="T:KeelMatrix.MetricBudget.MetricBudgetReport">
+            <summary>
+            Immutable result of one completed budget verification.
+            </summary>
+            <remarks>
+            <para>
+            A report describes observed cardinality for the exercised workload only. It cannot prove the maximum
+            cardinality production will produce and it is not a cost estimate.
+            </para>
+            <para>
+            The report contains instrument identity, limits, counts, and tag keys. It never enumerates tag values, so
+            printing it in test output or CI logs does not disclose the data those tags carried.
+            </para>
+            </remarks>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetReport.Outcome">
+            <summary>
+            Result of this verification.
+            </summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetReport.IsWithinBudget">
+            <summary>
+            Whether the exercised workload stayed within every configured budget with complete accounting. Equivalent to
+            <see cref="P:KeelMatrix.MetricBudget.MetricBudgetReport.Outcome"/> being <see cref="F:KeelMatrix.MetricBudget.MetricBudgetOutcome.Passed"/>.
+            </summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetReport.AccountingIsConsistent">
+            <summary>
+            Whether the session's internal accounting satisfied every invariant, including that every delivered
+            measurement was accounted exactly once.
+            </summary>
+            <remarks>
+            A <see langword="false"/> value means the session observed an impossible accounting state. It is reported as
+            an explicit violation and can never present as a pass.
+            </remarks>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetReport.Rules">
+            <summary>
+            One result per configured rule, in configuration order.
+            </summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetReport.Violations">
+            <summary>
+            Structured problem records, ordered by rule and instrument identity. Empty when
+            <see cref="P:KeelMatrix.MetricBudget.MetricBudgetReport.IsWithinBudget"/> is <see langword="true"/>.
+            </summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetReport.Safety">
+            <summary>
+            Safety bounds that applied to this session and whether any of them was reached.
+            </summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetReport.ConfiguredRuleCount">
+            <summary>
+            Number of configured rules.
+            </summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetReport.TotalMeasurementsObserved">
+            <summary>
+            Number of measurements delivered by selected instruments.
+            </summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetReport.ObservedInstrumentCount">
+            <summary>
+            Number of selected instrument identities that delivered at least one measurement.
+            </summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetReport.ObservedSeriesCount">
+            <summary>
+            Sum of tracked distinct observed series across instruments. A lower bound when
+            <see cref="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.SeriesTrackingIncomplete"/> is <see langword="true"/>.
+            </summary>
+        </member>
+        <member name="M:KeelMatrix.MetricBudget.MetricBudgetReport.ToDiagnosticString">
+            <summary>
+            Returns an actionable, privacy-safe multi-line report.
+            </summary>
+            <remarks>
+            The text contains meter and instrument identity, configured limits, counts, tag keys, and safety-bound
+            state. It never contains tag values, metric values, or samples of measured data, which makes it safe to
+            print from a failing test.
+            </remarks>
+            <returns>The diagnostic report text.</returns>
+        </member>
+        <member name="M:KeelMatrix.MetricBudget.MetricBudgetReport.ToString">
+            <summary>
+            Returns a single-line summary containing the outcome and the configured rule count.
+            </summary>
+            <returns>A one-line summary.</returns>
+        </member>
+        <member name="T:KeelMatrix.MetricBudget.MetricBudgetRule">
+            <summary>
+            One instrument-selection rule and the budget that applies to it.
+            </summary>
+            <remarks>
+            A rule is created through <see cref="T:KeelMatrix.MetricBudget.MetricBudgetOptions"/> and is immutable afterwards. An instrument that
+            matches more than one rule is ambiguous and makes the session report invalid configuration instead of silently
+            choosing a budget.
+            </remarks>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetRule.Selector">
+            <summary>
+            Instruments this rule selects.
+            </summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetRule.Budget">
+            <summary>
+            Budget applied to every instrument this rule selects.
+            </summary>
+        </member>
+        <member name="M:KeelMatrix.MetricBudget.MetricBudgetRule.ToString">
+            <summary>
+            Describes the rule as <c>selector: budget</c>.
+            </summary>
+            <returns>A short description.</returns>
+        </member>
+        <member name="T:KeelMatrix.MetricBudget.InstrumentObservationState">
+            <summary>
+            Whether a configured rule was matched, measured, and accounted.
+            </summary>
+        </member>
+        <member name="F:KeelMatrix.MetricBudget.InstrumentObservationState.NotObserved">
+            <summary>No published instrument matched the rule.</summary>
+        </member>
+        <member name="F:KeelMatrix.MetricBudget.InstrumentObservationState.NoMeasurements">
+            <summary>At least one instrument matched the rule, but none of them delivered a measurement.</summary>
+        </member>
+        <member name="F:KeelMatrix.MetricBudget.InstrumentObservationState.Observed">
+            <summary>At least one matching instrument delivered measurements.</summary>
+        </member>
+        <member name="T:KeelMatrix.MetricBudget.MetricBudgetRuleResult">
+            <summary>
+            Result of one configured rule for a completed session.
+            </summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetRuleResult.Rule">
+            <summary>
+            The configured rule this result belongs to.
+            </summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetRuleResult.RuleIndex">
+            <summary>
+            Zero-based position of the rule in <see cref="P:KeelMatrix.MetricBudget.MetricBudgetOptions.Rules"/>.
+            </summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetRuleResult.State">
+            <summary>
+            Whether the rule selected instruments and whether they delivered measurements.
+            </summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetRuleResult.Instruments">
+            <summary>
+            Results for every instrument identity this rule selected, ordered by identity. Empty when the rule matched no
+            published instrument.
+            </summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetRuleResult.IsWithinBudget">
+            <summary>
+            Whether the rule selected an instrument, that instrument delivered measurements, and every budget was
+            respected with complete tracking.
+            </summary>
+        </member>
+        <member name="M:KeelMatrix.MetricBudget.MetricBudgetRuleResult.ToString">
+            <summary>
+            Describes the rule and what it observed.
+            </summary>
+            <returns>A short description.</returns>
+        </member>
+        <member name="T:KeelMatrix.MetricBudget.MetricBudgetSafetyReport">
+            <summary>
+            Safety bounds that applied to one session and whether any of them was reached.
+            </summary>
+            <remarks>
+            These bounds keep the verifier itself bounded under explosive cardinality. They are not budgets: reaching one
+            never turns a failing workload into a passing report, it only marks the observed counts as lower bounds and
+            moves the session outcome to <see cref="F:KeelMatrix.MetricBudget.MetricBudgetOutcome.ObservationIncomplete"/>.
+            </remarks>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.MaxTrackedSeries">
+            <summary>
+            Configured bound on distinct observed series retained for one instrument identity.
+            </summary>
+            <remarks>
+            The bound applies per instrument identity, so the series count a whole session can retain is this value
+            multiplied by the number of matched instrument identities, plus the per-tag value sets.
+            </remarks>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.MaxTrackedValuesPerTag">
+            <summary>
+            Configured bound on distinct values retained per tag key and instrument identity.
+            </summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.MaxTagValueLength">
+            <summary>
+            Configured bound on a tag value's invariant text before it is represented by a stable digest.
+            </summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.SeriesTrackingIncomplete">
+            <summary>
+            Whether the series safety bound for an instrument identity was reached, which makes every observed series
+            count a lower bound.
+            </summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.UntrackedSeriesObservations">
+            <summary>
+            Measurements whose series could not be tracked because the series bound for an instrument identity was already
+            reached.
+            </summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.TagValueTrackingIncomplete">
+            <summary>
+            Whether the per-tag value safety bound for an instrument identity was reached for at least one tag key, which
+            makes those observed distinct-value counts lower bounds.
+            </summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.UntrackedTagValueObservations">
+            <summary>
+            Measurements whose tag value could not be tracked because a per-tag bound was already reached.
+            </summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.IsComplete">
+            <summary>
+            Whether all accounting completed inside the configured safety bounds.
+            </summary>
+        </member>
+        <member name="T:KeelMatrix.MetricBudget.MetricBudgetSession">
+            <summary>
+            Observes the metrics a workload emits and accounts observed cardinality against a configured budget.
+            </summary>
+            <remarks>
+            <para>
+            Start the session before the workload runs, execute the workload, then call <see cref="M:KeelMatrix.MetricBudget.MetricBudgetSession.Complete"/> and assert
+            the report. The session is a <c>MeterListener</c>, so it observes the measurements the process actually emits;
+            it never inspects metric values, and it needs no collector, exporter, or backend.
+            </para>
+            <para>
+            <b>Containment.</b> <c>MeterListener.Dispose</c> does not stop measurement delivery for instruments that the
+            listener already enabled: measured on .NET 8.0.31, callbacks keep firing and <c>Instrument.Enabled</c> stays
+            true after disposal. This session therefore disables measurement events explicitly for every instrument it
+            enabled, both when <see cref="M:KeelMatrix.MetricBudget.MetricBudgetSession.Complete"/> runs and when it is disposed without completing. Disposal is not the
+            containment mechanism; the explicit disable is.
+            </para>
+            <para>
+            <b>Isolation.</b> Instrument publication is process-global, so a session sees instruments created by any code
+            in the process, including other tests running in parallel. Delivery is scoped: a session receives measurements
+            only from the instruments it enabled. A session is started, completed, and disposed within one workload, and a
+            completed session stops delivery for everything it enabled.
+            </para>
+            <para>
+            <b>Bounded memory.</b> A session keeps fixed-size digests under explicit safety bounds. When a bound is
+            reached, the report says tracking was incomplete and the outcome becomes
+            <see cref="F:KeelMatrix.MetricBudget.MetricBudgetOutcome.ObservationIncomplete"/> rather than a pass.
+            </para>
+            </remarks>
+        </member>
+        <member name="M:KeelMatrix.MetricBudget.MetricBudgetSession.Start(KeelMatrix.MetricBudget.MetricBudgetOptions)">
+            <summary>
+            Starts observing for the configured selection.
+            </summary>
+            <param name="options">Budget and safety configuration for this session.</param>
+            <returns>A started session.</returns>
+            <exception cref="T:System.ArgumentNullException"><paramref name="options"/> is null.</exception>
+            <exception cref="T:KeelMatrix.MetricBudget.MetricBudgetConfigurationException">
+            The options cannot describe a verification, for example because no rule is configured or a rule declares no
+            limit. Invalid configuration fails before any measurement is observed.
+            </exception>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetSession.IsCompleted">
+            <summary>
+            Whether this session has already stopped observing and produced a report.
+            </summary>
+        </member>
+        <member name="M:KeelMatrix.MetricBudget.MetricBudgetSession.RecordObservableInstruments">
+            <summary>
+            Runs the observable instrument callbacks for the instruments this session selected.
+            </summary>
+            <remarks>
+            Observable instruments deliver measurements only when their callbacks run, and the BCL never runs them at
+            listener start. Call this method when the application under test has no metrics SDK that already collects
+            observable instruments, otherwise an observable instrument reports
+            <see cref="F:KeelMatrix.MetricBudget.MetricBudgetOutcome.NoMeasurementsObserved"/>. Calling it again records another measurement per
+            observable instrument, exactly as the BCL does, and calling it after the session completed does nothing
+            because every selected instrument has been disabled.
+            </remarks>
+        </member>
+        <member name="M:KeelMatrix.MetricBudget.MetricBudgetSession.Complete">
+            <summary>
+            Stops observing, disables every instrument this session enabled, and returns the report.
+            </summary>
+            <remarks>
+            <para>
+            The returned report describes the workload executed before this call. Measurements that the workload
+            delivers afterwards are not part of the verification, so finish the workload first.
+            </para>
+            <para>
+            The method is idempotent: later calls return the same report.
+            </para>
+            </remarks>
+            <returns>The verification report.</returns>
+            <exception cref="T:System.ObjectDisposedException">
+            The session was disposed without completing, which ends its lifetime without producing a report.
+            </exception>
+        </member>
+        <member name="M:KeelMatrix.MetricBudget.MetricBudgetSession.Dispose">
+            <summary>
+            Stops observing and releases the listener.
+            </summary>
+            <remarks>
+            Disposal stops the session and disables every instrument it enabled, but it does not produce a report. Call
+            <see cref="M:KeelMatrix.MetricBudget.MetricBudgetSession.Complete"/> before disposing to keep the verification result.
+            </remarks>
+        </member>
+        <member name="T:KeelMatrix.MetricBudget.MetricBudgetTagResult">
+            <summary>
+            Observed distinct values for one tag key on one instrument, and the budget that applied to it.
+            </summary>
+            <remarks>
+            The result contains the tag key and counts only. Tag values are never included, so a report is safe to print in
+            shared logs and CI output even when tag values contain identifiers or other sensitive data.
+            </remarks>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetTagResult.Key">
+            <summary>
+            The delivered tag key, or <see langword="null"/> when the workload delivered a <see langword="null"/> tag
+            key.
+            </summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetTagResult.IsConfigured">
+            <summary>
+            Whether a tag budget was declared for this key.
+            </summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetTagResult.WasObserved">
+            <summary>
+            Whether the workload delivered this tag key on the instrument during the session.
+            </summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetTagResult.ConfiguredMaxDistinctValues">
+            <summary>
+            Configured maximum distinct values for this key, or <see langword="null"/> when no budget applies.
+            </summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetTagResult.ObservedDistinctValueCount">
+            <summary>
+            Distinct values observed for this key. A lower bound when <see cref="P:KeelMatrix.MetricBudget.MetricBudgetTagResult.ValueTrackingIncomplete"/> is
+            <see langword="true"/>.
+            </summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetTagResult.ValueTrackingIncomplete">
+            <summary>
+            Whether the per-tag value bound for this instrument identity was reached for this key, which means the
+            observed count is a lower bound and no within-budget conclusion can be drawn from it.
+            </summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetTagResult.UntrackedValueObservations">
+            <summary>
+            Measurements whose tag value could not be tracked because the safety bound was already reached.
+            </summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetTagResult.IsWithinBudget">
+            <summary>
+            Whether this key stayed within its budget and was tracked completely.
+            </summary>
+        </member>
+        <member name="M:KeelMatrix.MetricBudget.MetricBudgetTagResult.ToString">
+            <summary>
+            Describes the observed count, the configured limit, and whether tracking was complete.
+            </summary>
+            <returns>A short description.</returns>
+        </member>
+        <member name="T:KeelMatrix.MetricBudget.MetricBudgetViolationKind">
+            <summary>
+            What kind of problem one structured record describes.
+            </summary>
+        </member>
+        <member name="F:KeelMatrix.MetricBudget.MetricBudgetViolationKind.ObservedSeriesBudgetExceeded">
+            <summary>One instrument identity produced more distinct observed series than its configured budget.</summary>
+        </member>
+        <member name="F:KeelMatrix.MetricBudget.MetricBudgetViolationKind.TagDistinctValuesBudgetExceeded">
+            <summary>One tag key on one instrument identity produced more distinct values than its configured budget.</summary>
+        </member>
+        <member name="F:KeelMatrix.MetricBudget.MetricBudgetViolationKind.InstrumentNotObserved">
+            <summary>At least one configured rule selected no published instrument.</summary>
+        </member>
+        <member name="F:KeelMatrix.MetricBudget.MetricBudgetViolationKind.InstrumentProducedNoMeasurements">
+            <summary>A selected instrument was published but delivered no measurements.</summary>
+        </member>
+        <member name="F:KeelMatrix.MetricBudget.MetricBudgetViolationKind.SafetyLimitReached">
+            <summary>A safety bound for an instrument identity was reached, so the observed counts are lower bounds.</summary>
+        </member>
+        <member name="F:KeelMatrix.MetricBudget.MetricBudgetViolationKind.ConfigurationInvalid">
+            <summary>One instrument identity matched more than one rule, so no budget can be applied.</summary>
+        </member>
+        <member name="F:KeelMatrix.MetricBudget.MetricBudgetViolationKind.AccountingInconsistent">
+            <summary>
+            The session detected accounting that cannot be true, for example tracked series outnumbering measurements.
+            This should never happen and is reported loudly rather than ignored.
+            </summary>
+        </member>
+        <member name="T:KeelMatrix.MetricBudget.MetricBudgetViolation">
+            <summary>
+            One structured problem record from a completed verification.
+            </summary>
+            <remarks>
+            A record carries instrument identity, limits, counts, and tag keys. It never carries a raw tag value, a metric
+            value, or a sample of the observed workload.
+            </remarks>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetViolation.Kind">
+            <summary>
+            Kind of problem this record describes.
+            </summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetViolation.Description">
+            <summary>
+            Actionable, privacy-safe description of the problem.
+            </summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetViolation.MeterName">
+            <summary>
+            Meter name when the record refers to an instrument identity, otherwise <see langword="null"/>.
+            </summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetViolation.MeterVersion">
+            <summary>
+            Meter version when the meter declares one, otherwise <see langword="null"/>.
+            </summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetViolation.InstrumentName">
+            <summary>
+            Instrument name when the record refers to an instrument identity, otherwise <see langword="null"/>.
+            </summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetViolation.InstrumentKind">
+            <summary>
+            Instrument kind when the record refers to an instrument identity, otherwise
+            <see cref="F:KeelMatrix.MetricBudget.MetricInstrumentKind.Unknown"/>.
+            </summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetViolation.TagKey">
+            <summary>
+            Tag key for tag-level records, otherwise <see langword="null"/>. A delivered <see langword="null"/> tag key
+            is reported as <see langword="null"/>.
+            </summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetViolation.ObservedCount">
+            <summary>
+            Observed count for the record, or <see langword="null"/> when the record is not a count comparison.
+            </summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetViolation.ConfiguredLimit">
+            <summary>
+            Configured limit for the record, or <see langword="null"/> when no limit applies.
+            </summary>
+        </member>
+        <member name="M:KeelMatrix.MetricBudget.MetricBudgetViolation.ToString">
+            <summary>
+            Returns the actionable description.
+            </summary>
+            <returns>The description of this record.</returns>
+        </member>
+        <member name="T:KeelMatrix.MetricBudget.MetricInstrumentKind">
+            <summary>
+            The kind of a <c>System.Diagnostics.Metrics</c> instrument observed by a session.
+            </summary>
+            <remarks>
+            Two instruments with the same name in one meter are distinguished by kind, and the kind is part of an
+            observed series identity so a counter and a histogram with the same name can never share accounting.
+            </remarks>
+        </member>
+        <member name="F:KeelMatrix.MetricBudget.MetricInstrumentKind.Unknown">
+            <summary>The instrument kind could not be determined, which should not happen for a BCL instrument.</summary>
+        </member>
+        <member name="F:KeelMatrix.MetricBudget.MetricInstrumentKind.Counter">
+            <summary>A synchronous counter, for example created with <c>Meter.CreateCounter</c>.</summary>
+        </member>
+        <member name="F:KeelMatrix.MetricBudget.MetricInstrumentKind.UpDownCounter">
+            <summary>A synchronous up/down counter, for example created with <c>Meter.CreateUpDownCounter</c>.</summary>
+        </member>
+        <member name="F:KeelMatrix.MetricBudget.MetricInstrumentKind.Histogram">
+            <summary>A synchronous histogram, for example created with <c>Meter.CreateHistogram</c>.</summary>
+        </member>
+        <member name="F:KeelMatrix.MetricBudget.MetricInstrumentKind.ObservableCounter">
+            <summary>An observable counter, for example created with <c>Meter.CreateObservableCounter</c>.</summary>
+        </member>
+        <member name="F:KeelMatrix.MetricBudget.MetricInstrumentKind.ObservableUpDownCounter">
+            <summary>An observable up/down counter, for example created with <c>Meter.CreateObservableUpDownCounter</c>.</summary>
+        </member>
+        <member name="F:KeelMatrix.MetricBudget.MetricInstrumentKind.ObservableGauge">
+            <summary>An observable gauge, for example created with <c>Meter.CreateObservableGauge</c>.</summary>
+        </member>
+        <member name="T:KeelMatrix.MetricBudget.TagBudget">
+            <summary>
+            Declares how many distinct values one tag key may produce for one instrument identity within a session.
+            </summary>
+            <remarks>
+            <para>
+            The budget applies to the distinct values observed for that tag key on that instrument identity during the exercised
+            workload. It is not a statement about the values production can produce, and no value here is a safe default
+            for any other codebase.
+            </para>
+            <para>
+            A tag budget is matched against the delivered tag key with ordinal comparison. A measurement that delivers a
+            <see langword="null"/> tag key is observed and reported, but a <see langword="null"/> key cannot be named by a
+            tag budget.
+            </para>
+            <para>
+            Only counts and the tag key are reported. Tag values are never written to the report, to diagnostics, or to
+            telemetry, and only fixed-size digests are retained while a session runs.
+            </para>
+            </remarks>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.TagBudget.Key">
+            <summary>
+            Tag key this budget applies to, exactly as configured.
+            </summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.TagBudget.MaxDistinctValues">
+            <summary>
+            Maximum number of distinct values this tag key may produce for the instrument identity.
+            </summary>
+            <remarks>
+            The value must be greater than zero. <see langword="null"/> means the tag is declared without a limit, which
+            is invalid configuration; declare the budget with a limit or remove the tag.
+            </remarks>
+        </member>
+        <member name="M:KeelMatrix.MetricBudget.TagBudget.ToString">
+            <summary>
+            Returns the configured tag budget in the form <c>"key" &lt;= N distinct values</c>.
+            </summary>
+            <returns>A short description.</returns>
+        </member>
+    </members>
+</doc>

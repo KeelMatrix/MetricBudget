@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <AssemblyName>KeelMatrix.MetricBudget.PackageConsumer</AssemblyName>
+    <RootNamespace>KeelMatrix.MetricBudget.PackageConsumer</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      This project consumes the built package, never a project reference. It is the smallest honest proof that a
+      clean consumer needs nothing from this repository beyond the .nupkg published to the local package source
+      configured in NuGet.config.
+    -->
+    <PackageReference Include="KeelMatrix.MetricBudget" />
+  </ItemGroup>
+</Project>

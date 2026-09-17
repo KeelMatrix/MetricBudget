@@ -1,0 +1,9 @@
+MetricBudget observed-cardinality report: INCOMPLETE (safety bound reached; counts are lower bounds)
+  rules: 1; instruments observed: 1; observed series: 1; measurements: 2
+  safety bounds per instrument identity: series 1, values per tag 5000, tag value length 256; accounting complete: False; accounting consistent: True
+  rule 1: instrument "requests" in meter "tests.metricbudget.documentation-scope" -> Observed
+    tests.metricbudget.documentation-scope@1.0.0/requests (counter): 2 measurements, 1 observed series, configured max 100, tracking incomplete
+      series tracking incomplete: 1 measurement(s) could not be tracked because the series safety bound for the instrument identity was reached
+      tag "tenant": 2 observed distinct values, configured max none (no budget configured)
+  problems:
+    - series safety bound for the instrument identity reached while observing meter "tests.metricbudget.documentation-scope" version 1.0.0, counter "requests": 1 distinct observed series were retained and 1 measurement(s) could not be tracked. Observed per-instrument-identity series counts are lower bounds; raise per-instrument-identity MaxTrackedSeries or narrow the workload.
