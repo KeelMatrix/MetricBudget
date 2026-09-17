@@ -457,7 +457,7 @@ function Invoke-CleanConsumerProof {
 }
 
 function Invoke-VulnerabilityAudit {
-    $output = Invoke-Dotnet @("list", $solutionPath, "package", "--vulnerable", "--include-transitive")
+    $output = Invoke-Dotnet @("list", $solutionPath, "package", "--vulnerable", "--include-transitive", "--no-restore")
     if ($output -match "(?im)has the following vulnerable packages|known vulnerability|severity\s*[:|]\s*(critical|high|moderate|low)")
     {
         throw "The dependency audit reported a vulnerability."
@@ -478,7 +478,12 @@ if (-not $InspectOnly)
         Remove-Item -LiteralPath $child.FullName -Recurse -Force
     }
 
-    Invoke-Dotnet @("pack", $projectPath, "-c", "Release", "-o", $packageDirectory) | Out-Null
+    $restoreArguments = @(
+        "restore", $projectPath, "--configfile", (Join-Path $repositoryRoot "NuGet.config"),
+        "--force-evaluate", "--no-cache", "--disable-build-servers"
+    )
+    Invoke-Dotnet $restoreArguments | Out-Null
+    Invoke-Dotnet @("pack", $projectPath, "-c", "Release", "-o", $packageDirectory, "--no-restore") | Out-Null
 }
 else
 {

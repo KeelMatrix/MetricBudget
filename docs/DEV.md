@@ -8,24 +8,22 @@ package documentation.
 Restore and build the solution before package-backed consumers:
 
 ```powershell
-dotnet restore KeelMatrix.MetricBudget.sln --configfile NuGet.config
+dotnet restore KeelMatrix.MetricBudget.sln --configfile NuGet.config --force-evaluate --no-cache
 dotnet build KeelMatrix.MetricBudget.sln -c Release --no-restore
-dotnet test tests/KeelMatrix.MetricBudget.Tests/KeelMatrix.MetricBudget.Tests.csproj -c Release --no-build --framework net8.0
-dotnet test tests/KeelMatrix.MetricBudget.Tests/KeelMatrix.MetricBudget.Tests.csproj -c Release --no-build --framework net472
+dotnet test tests/KeelMatrix.MetricBudget.Tests/KeelMatrix.MetricBudget.Tests.csproj -c Release --framework net8.0 --no-build --no-restore
+dotnet test tests/KeelMatrix.MetricBudget.Tests/KeelMatrix.MetricBudget.Tests.csproj -c Release --framework net472 --no-build --no-restore
+dotnet format KeelMatrix.MetricBudget.sln --verify-no-changes --no-restore
 ```
 
-Create the local package, then run both package-backed projects:
+Run the self-contained package and consumer gate:
 
 ```powershell
-dotnet pack src/KeelMatrix.MetricBudget/KeelMatrix.MetricBudget.csproj -c Release -o artifacts/packages --no-build
-dotnet run --project tests/KeelMatrix.MetricBudget.PackageConsumer -c Release
-dotnet run --project samples/KeelMatrix.MetricBudget.Sample -c Release
+pwsh -NoProfile -File scripts/verify-package.ps1
 ```
 
 The solution intentionally excludes those two projects because their `NuGet.config` files map the package under test
-to `artifacts/packages`. Run `scripts/verify-package.ps1` for deterministic archive inspection and clean-cache proof.
-Use `dotnet format KeelMatrix.MetricBudget.sln --verify-no-changes` and
-`dotnet list KeelMatrix.MetricBudget.sln package --vulnerable --include-transitive` for the remaining repository gates.
+to `artifacts/packages`. The package gate performs deterministic archive inspection, clean-cache consumer and sample
+proof, and the transitive vulnerability audit.
 
 ## GitHub Actions CI
 
@@ -35,15 +33,6 @@ restores with the committed `NuGet.config`, builds the solution in Release, runs
 formatting, and runs `scripts/verify-package.ps1`. The package gate packs the library, inspects both archives, runs
 the clean-cache package-consumer and sample smoke tests, and audits transitive dependencies. Windows additionally
 runs the `net472` test host against the `netstandard2.0` asset; that host is not available on Linux.
-
-The local commands above reproduce the build and test gates. Run the remaining CI-equivalent checks from the repository
-root with:
-
-```powershell
-dotnet format KeelMatrix.MetricBudget.sln --verify-no-changes
-pwsh -NoProfile -File scripts/verify-package.ps1
-dotnet list KeelMatrix.MetricBudget.sln package --vulnerable --include-transitive
-```
 
 ## Closed documentation guard
 
@@ -76,7 +65,7 @@ Any change to shipped text requires a deliberate approval commit. First review t
 the scope semantics are still **per instrument identity**, then build Release if generated XML may change and run:
 
 ```powershell
-$env:KEELMATRIX_METRICBUDGET_APPROVE_DOCUMENTATION_SNAPSHOTS='1'; dotnet test tests/KeelMatrix.MetricBudget.Tests/KeelMatrix.MetricBudget.Tests.csproj -c Release --no-build --filter FullyQualifiedName~DocumentationScopeTests
+$env:KEELMATRIX_METRICBUDGET_APPROVE_DOCUMENTATION_SNAPSHOTS='1'; dotnet test tests/KeelMatrix.MetricBudget.Tests/KeelMatrix.MetricBudget.Tests.csproj -c Release --no-build --no-restore --filter FullyQualifiedName~DocumentationScopeTests
 ```
 
 Inspect the resulting snapshot diff, unset the environment variable, rerun the focused guard, and commit the shipped

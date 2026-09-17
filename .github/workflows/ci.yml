@@ -37,7 +37,7 @@ jobs:
       - name: Set up .NET SDK
         uses: actions/setup-dotnet@v6.0.0
         with:
-          dotnet-version: 10.0.401
+          global-json-file: global.json
 
       - name: Assert CI telemetry opt-out
         shell: pwsh
@@ -53,15 +53,15 @@ jobs:
         run: dotnet build KeelMatrix.MetricBudget.sln --configuration Release --no-restore
 
       - name: Test net8.0
-        run: dotnet test tests/KeelMatrix.MetricBudget.Tests/KeelMatrix.MetricBudget.Tests.csproj --configuration Release --framework net8.0 --no-build
+        run: dotnet test tests/KeelMatrix.MetricBudget.Tests/KeelMatrix.MetricBudget.Tests.csproj --configuration Release --framework net8.0 --no-build --no-restore
 
       # The net472 host exercises the netstandard2.0 asset and does not exist on Linux.
       - name: Test net472 on Windows
         if: matrix.os == 'windows-latest'
-        run: dotnet test tests/KeelMatrix.MetricBudget.Tests/KeelMatrix.MetricBudget.Tests.csproj --configuration Release --framework net472 --no-build
+        run: dotnet test tests/KeelMatrix.MetricBudget.Tests/KeelMatrix.MetricBudget.Tests.csproj --configuration Release --framework net472 --no-build --no-restore
 
       - name: Verify formatting
-        run: dotnet format KeelMatrix.MetricBudget.sln --verify-no-changes
+        run: dotnet format KeelMatrix.MetricBudget.sln --verify-no-changes --no-restore
 
       - name: Pack and verify package
         shell: pwsh
