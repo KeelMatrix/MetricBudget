@@ -8,7 +8,7 @@ package documentation.
 Restore and build the solution before package-backed consumers:
 
 ```powershell
-dotnet restore KeelMatrix.MetricBudget.sln
+dotnet restore KeelMatrix.MetricBudget.sln --configfile NuGet.config
 dotnet build KeelMatrix.MetricBudget.sln -c Release --no-restore
 dotnet test tests/KeelMatrix.MetricBudget.Tests/KeelMatrix.MetricBudget.Tests.csproj -c Release --no-build --framework net8.0
 dotnet test tests/KeelMatrix.MetricBudget.Tests/KeelMatrix.MetricBudget.Tests.csproj -c Release --no-build --framework net472
@@ -26,6 +26,24 @@ The solution intentionally excludes those two projects because their `NuGet.conf
 to `artifacts/packages`. Run `scripts/verify-package.ps1` for deterministic archive inspection and clean-cache proof.
 Use `dotnet format KeelMatrix.MetricBudget.sln --verify-no-changes` and
 `dotnet list KeelMatrix.MetricBudget.sln package --vulnerable --include-transitive` for the remaining repository gates.
+
+## GitHub Actions CI
+
+`.github/workflows/ci.yml` runs for pushes to `main`, pull requests targeting `main`, and manual dispatches. Its
+matrix covers `windows-latest` and `ubuntu-latest`, and every job sets `KEELMATRIX_NO_TELEMETRY=1`. Each matrix leg
+restores with the committed `NuGet.config`, builds the solution in Release, runs the `net8.0` tests, verifies
+formatting, and runs `scripts/verify-package.ps1`. The package gate packs the library, inspects both archives, runs
+the clean-cache package-consumer and sample smoke tests, and audits transitive dependencies. Windows additionally
+runs the `net472` test host against the `netstandard2.0` asset; that host is not available on Linux.
+
+The local commands above reproduce the build and test gates. Run the remaining CI-equivalent checks from the repository
+root with:
+
+```powershell
+dotnet format KeelMatrix.MetricBudget.sln --verify-no-changes
+pwsh -NoProfile -File scripts/verify-package.ps1
+dotnet list KeelMatrix.MetricBudget.sln package --vulnerable --include-transitive
+```
 
 ## Closed documentation guard
 
