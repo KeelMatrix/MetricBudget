@@ -27,6 +27,20 @@ to `artifacts/packages`. Run `scripts/verify-package.ps1` for deterministic arch
 Use `dotnet format --verify-no-changes` and
 `dotnet list KeelMatrix.MetricBudget.sln package --vulnerable --include-transitive` for the remaining repository gates.
 
+## Closed documentation guard
+
+The bound-wording guard is closed by design. It approves only exact, whitespace-normalized units listed in
+`tests/KeelMatrix.MetricBudget.Tests/DocumentationScopeInventory.txt`; it does not infer correctness from verbs,
+adjectives, nouns, negation, or other wording patterns. A new or reworded bound statement therefore fails until it is
+deliberately approved.
+
+To approve a statement, first decide that the exact shipped unit is correct, then add one tab-separated
+`<surface><TAB><normalized unit>` entry to the inventory, update that surface's explicit floor in
+`DocumentationScopeTests.cs`, and rerun the focused `DocumentationScopeTests` for both test target frameworks. The
+floor requires every currently approved identity to remain present; change it only when the surface contract is
+deliberately changing. The test owns the surface declarations, including recursive/glob expansions, both XML
+documentation files, and the runtime diagnostic; a missing declared surface fails closed.
+
 ## Development evidence
 
 - [phase0-probe-evidence.md](phase0-probe-evidence.md) records feasibility measurements and is not a consumer guide.
