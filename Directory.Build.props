@@ -7,6 +7,9 @@
     <!-- Default target framework for projects that do not select their own. -->
     <TargetFramework Condition="'$(TargetFramework)' == '' and '$(TargetFrameworks)' == ''">net8.0</TargetFramework>
 
+    <!-- The shipping package version is the release tag contract. -->
+    <Version>0.1.0</Version>
+
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>

@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
     [switch] $InspectOnly,
-    [string] $PackageDirectory = ""
+    [string] $PackageDirectory = "",
+    [string] $ExpectedVersion = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -12,6 +13,29 @@ $projectPath = Join-Path $repositoryRoot "src/KeelMatrix.MetricBudget/KeelMatrix
 $solutionPath = Join-Path $repositoryRoot "KeelMatrix.MetricBudget.sln"
 $packageConsumerProject = Join-Path $repositoryRoot "tests/KeelMatrix.MetricBudget.PackageConsumer/KeelMatrix.MetricBudget.PackageConsumer.csproj"
 $sampleProject = Join-Path $repositoryRoot "samples/KeelMatrix.MetricBudget.Sample/KeelMatrix.MetricBudget.Sample.csproj"
+$buildPropsPath = Join-Path $repositoryRoot "Directory.Build.props"
+
+$buildProps = [Xml](Get-Content -Raw $buildPropsPath)
+$versionNode = $buildProps.SelectSingleNode("/*[local-name()='Project']/*[local-name()='PropertyGroup']/*[local-name()='Version']")
+if ($null -eq $versionNode -or [string]::IsNullOrWhiteSpace($versionNode.InnerText))
+{
+    throw "Directory.Build.props must define the shipping package <Version>."
+}
+
+$configuredVersion = $versionNode.InnerText.Trim()
+if ([string]::IsNullOrWhiteSpace($ExpectedVersion))
+{
+    $ExpectedVersion = $configuredVersion
+}
+
+if ($ExpectedVersion -notmatch '^\d+\.\d+\.\d+$')
+{
+    throw "Expected package version '$ExpectedVersion' is not a stable X.Y.Z version."
+}
+if ($ExpectedVersion -ne $configuredVersion)
+{
+    throw "Expected package version '$ExpectedVersion' does not match Directory.Build.props version '$configuredVersion'."
+}
 
 if ([string]::IsNullOrWhiteSpace($PackageDirectory))
 {
@@ -322,12 +346,13 @@ function Get-PngUInt32 {
 function Assert-PackageMetadata {
     param(
         [Parameter(Mandatory = $true)][string] $ArchivePath,
+        [Parameter(Mandatory = $true)][string] $ExpectedVersion,
         [Parameter(Mandatory = $true)][string] $ExpectedCommit
     )
 
     $metadata = Get-NuspecMetadata $ArchivePath
     Assert-Equal (Get-NuspecValue $metadata "id") "KeelMatrix.MetricBudget" "Package id mismatch."
-    Assert-Equal (Get-NuspecValue $metadata "version") "0.1.0" "Package version mismatch."
+    Assert-Equal (Get-NuspecValue $metadata "version") $ExpectedVersion "Package version mismatch."
     Assert-Equal (Get-NuspecValue $metadata "authors") "KeelMatrix" "Package authors mismatch."
     Assert-Equal (Get-NuspecValue $metadata "license") "MIT" "Package license mismatch."
     Assert-Equal (Get-NuspecValue $metadata "description") "Verify observed metric cardinality in .NET tests and CI. Observe the metric series the exercised workload actually emits, count the distinct values each tag key produced, and fail when an instrument exceeds an explicit observed-series or per-tag distinct-value budget." "Package description mismatch."
@@ -386,12 +411,13 @@ function Assert-PackageMetadata {
 function Assert-SymbolPackageMetadata {
     param(
         [Parameter(Mandatory = $true)][string] $ArchivePath,
+        [Parameter(Mandatory = $true)][string] $ExpectedVersion,
         [Parameter(Mandatory = $true)][string] $ExpectedCommit
     )
 
     $metadata = Get-NuspecMetadata $ArchivePath
     Assert-Equal (Get-NuspecValue $metadata "id") "KeelMatrix.MetricBudget" "Symbols package id mismatch."
-    Assert-Equal (Get-NuspecValue $metadata "version") "0.1.0" "Symbols package version mismatch."
+    Assert-Equal (Get-NuspecValue $metadata "version") $ExpectedVersion "Symbols package version mismatch."
     Assert-Equal (Get-NuspecValue $metadata "projectUrl") "https://github.com/KeelMatrix/MetricBudget#readme" "Symbols package project URL mismatch."
     Assert-Equal (Get-NuspecValue $metadata "description") "Verify observed metric cardinality in .NET tests and CI. Observe the metric series the exercised workload actually emits, count the distinct values each tag key produced, and fail when an instrument exceeds an explicit observed-series or per-tag distinct-value budget." "Symbols package description mismatch."
     Assert-Equal (Get-NuspecValue $metadata "tags") "metrics cardinality opentelemetry system-diagnostics-metrics testing ci observability" "Symbols package tags mismatch."
@@ -631,7 +657,7 @@ if (-not $InspectOnly)
         "--force-evaluate", "--no-cache", "--disable-build-servers"
     )
     Invoke-Dotnet -Step "Package project restore" -Arguments $restoreArguments | Out-Null
-    Invoke-Dotnet -Step "Release package build" -Arguments @("pack", $projectPath, "-c", "Release", "-o", $packageDirectory, "--no-restore") | Out-Null
+    Invoke-Dotnet -Step "Release package build" -Arguments @("pack", $projectPath, "-c", "Release", "-o", $packageDirectory, "--no-restore", "-p:Version=$ExpectedVersion") | Out-Null
 }
 else
 {
@@ -659,17 +685,17 @@ $expectedSnupkgEntries = @(
     "package/services/metadata/core-properties/nuget.psmdcp"
 )
 
-$nupkg = Join-Path $packageDirectory "KeelMatrix.MetricBudget.0.1.0.nupkg"
-$snupkg = Join-Path $packageDirectory "KeelMatrix.MetricBudget.0.1.0.snupkg"
+$nupkg = Join-Path $packageDirectory "KeelMatrix.MetricBudget.$ExpectedVersion.nupkg"
+$snupkg = Join-Path $packageDirectory "KeelMatrix.MetricBudget.$ExpectedVersion.snupkg"
 Assert-ArchiveSet $nupkg $expectedNupkgEntries ".nupkg"
 Assert-ArchiveSet $snupkg $expectedSnupkgEntries ".snupkg"
 Assert-Equal @((Get-ChildItem -LiteralPath $packageDirectory -File | Sort-Object Name | ForEach-Object Name)) @(
-    "KeelMatrix.MetricBudget.0.1.0.nupkg",
-    "KeelMatrix.MetricBudget.0.1.0.snupkg") "Package directory contains an unexpected artifact."
+    "KeelMatrix.MetricBudget.$ExpectedVersion.nupkg",
+    "KeelMatrix.MetricBudget.$ExpectedVersion.snupkg") "Package directory contains an unexpected artifact."
 
 $expectedCommit = (git -C $repositoryRoot rev-parse HEAD).Trim()
-Assert-PackageMetadata $nupkg $expectedCommit
-Assert-SymbolPackageMetadata $snupkg $expectedCommit
+Assert-PackageMetadata $nupkg $ExpectedVersion $expectedCommit
+Assert-SymbolPackageMetadata $snupkg $ExpectedVersion $expectedCommit
 Assert-Icon $nupkg
 Assert-SourceBytes $nupkg
 Write-Output "ARCHIVE_INSPECTION=PASS"

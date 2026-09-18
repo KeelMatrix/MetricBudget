@@ -9,7 +9,7 @@ The package is `KeelMatrix.MetricBudget`.
 ## Install
 
 ```bash
-dotnet add package KeelMatrix.MetricBudget
+dotnet add package KeelMatrix.MetricBudget --version 0.1.0
 ```
 
 The package works from a test project or a CI step and needs no collector, exporter, or backend. It targets

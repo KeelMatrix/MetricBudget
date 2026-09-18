@@ -80,6 +80,7 @@ either package-backed consumer. A plain solution build therefore never depends o
 ## Scope
 
 Do not add features the specification does not require: no raw tag-value exposure, no JSON report export, no
-vendor-specific types, no production-cost estimation, no hosted components, and no release workflow. Package
-identity, version, target frameworks, dependencies, and metadata are defined by the product specification; change
-them only with an approved specification change.
+vendor-specific types, no production-cost estimation, or hosted components. The tag-triggered release workflow and
+version/changelog validator are repository release infrastructure; they do not add product behavior. Package identity,
+version, target frameworks, dependencies, and metadata are defined by the product specification; change them only with
+an approved specification change.
