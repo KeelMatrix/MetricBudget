@@ -39,7 +39,7 @@ dotnet test tests/KeelMatrix.MetricBudget.Tests/KeelMatrix.MetricBudget.Tests.cs
 dotnet pack src/KeelMatrix.MetricBudget/KeelMatrix.MetricBudget.csproj -c Release -o artifacts/packages
 dotnet run --project tests/KeelMatrix.MetricBudget.PackageConsumer -c Release
 dotnet run --project samples/KeelMatrix.MetricBudget.Sample -c Release
-dotnet format --verify-no-changes
+dotnet format KeelMatrix.MetricBudget.sln --verify-no-changes
 dotnet list KeelMatrix.MetricBudget.sln package --vulnerable --include-transitive
 ```
 
