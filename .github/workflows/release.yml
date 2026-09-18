@@ -130,9 +130,7 @@ jobs:
         with:
           name: metricbudget-release-packages
           if-no-files-found: error
-          path: |
-            artifacts/packages/KeelMatrix.MetricBudget.${{ steps.release-version.outputs.version }}.nupkg
-            artifacts/packages/KeelMatrix.MetricBudget.${{ steps.release-version.outputs.version }}.snupkg
+          path: artifacts/packages/KeelMatrix.MetricBudget.${{ steps.release-version.outputs.version }}.*
 
   publish:
     name: Publish validated package set
