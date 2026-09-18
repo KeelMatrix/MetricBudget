@@ -179,6 +179,62 @@ if ($releaseText -match '(?i)\bnow\b|\bno longer\b|\bpreviously\b|\bformerly\b|\
     Fail "Changelog wording mismatch: first-release entry '$Version' contains pre-release remediation or transition wording."
 }
 
+function Get-LogicalReadmeLines {
+    param(
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string[]] $Lines,
+        [Parameter(Mandatory = $true)][string] $ReadmeRelativePath
+    )
+
+    $logicalLines = @()
+    $index = 0
+    while ($index -lt $Lines.Count)
+    {
+        $startLine = $index + 1
+        $text = $Lines[$index]
+
+        while ($true)
+        {
+            $hasContinuation = $text -match '`\s*$' -or $text -match '\\\s*$'
+            $hasVersionBreak = $text -match '(?i)--version\s*$'
+            if (-not $hasContinuation -and -not $hasVersionBreak)
+            {
+                break
+            }
+
+            if ($index + 1 -ge $Lines.Count)
+            {
+                Fail "Could not reconstruct '$ReadmeRelativePath' line ${startLine}: continuation has no following line."
+            }
+
+            if ($hasContinuation)
+            {
+                $text = $text -replace '`\s*$', ''
+                $text = $text -replace '\\\s*$', ''
+            }
+
+            $index++
+            $text = $text.TrimEnd() + ' ' + $Lines[$index].Trim()
+        }
+
+        $logicalLines += [pscustomobject]@{
+            Text = $text
+            LineNumber = $startLine
+        }
+        $index++
+    }
+
+    return @($logicalLines)
+}
+
+function Get-LineNumberAtOffset {
+    param(
+        [Parameter(Mandatory = $true)][string] $Text,
+        [Parameter(Mandatory = $true)][int] $Offset
+    )
+
+    return ([regex]::Matches($Text.Substring(0, $Offset), "\r?\n").Count + 1)
+}
+
 function Assert-InstallVersion {
     param(
         [Parameter(Mandatory = $true)][string] $ReadmeRelativePath,
@@ -187,17 +243,8 @@ function Assert-InstallVersion {
         [Parameter(Mandatory = $true)][AllowEmptyString()][string] $Arguments
     )
 
-    $versionMatch = $null
-    if ($Kind -eq "dotnet add package")
-    {
-        $versionMatch = [regex]::Match($Arguments, '(?i)(?:^|\s)--version\s+(?<version>[^\s`]+)')
-    }
-    else
-    {
-        $versionMatch = [regex]::Match($Arguments, '(?i)(?:^|\s)(?:-Version|-v)\s+(?<version>[^\s`]+)')
-    }
-
-    if (-not $versionMatch.Success)
+    $versionMatch = [regex]::Match($Arguments, '(?i)(?:^|\s)(?:--version|-Version|-v)(?:\s+(?<version>[^\s`]+))?')
+    if (-not $versionMatch.Success -or -not $versionMatch.Groups["version"].Success)
     {
         Fail "Install command mismatch: '$ReadmeRelativePath' line $LineNumber ($Kind) must name release version '$Version'."
     }
@@ -209,6 +256,28 @@ function Assert-InstallVersion {
     }
 }
 
+function Assert-VersionTokens {
+    param(
+        [Parameter(Mandatory = $true)][string] $ReadmeRelativePath,
+        [Parameter(Mandatory = $true)][int] $LineNumber,
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string] $Text
+    )
+
+    foreach ($versionToken in [regex]::Matches($Text, '(?i)(?<![\w-])--version(?:\s+(?<version>[^\s`]+))?'))
+    {
+        if (-not $versionToken.Groups["version"].Success)
+        {
+            Fail "Version token mismatch: '$ReadmeRelativePath' line $LineNumber (--version) must name release version '$Version'."
+        }
+
+        $tokenVersion = $versionToken.Groups["version"].Value
+        if ($tokenVersion -ne $Version)
+        {
+            Fail "Version token mismatch: '$ReadmeRelativePath' line $LineNumber (--version) names '$tokenVersion', expected '$Version'."
+        }
+    }
+}
+
 foreach ($readmeRelativePath in @("README.md", "src/KeelMatrix.MetricBudget/README.md"))
 {
     $readmePath = Join-Path $repositoryRoot $readmeRelativePath
@@ -217,34 +286,75 @@ foreach ($readmeRelativePath in @("README.md", "src/KeelMatrix.MetricBudget/READ
         Fail "Required README '$readmeRelativePath' is missing."
     }
 
-    $readmeLines = @(Get-Content $readmePath)
-    $installOccurrenceCount = 0
-    for ($index = 0; $index -lt $readmeLines.Count; $index++)
+    try
     {
-        $lineNumber = $index + 1
-        $line = $readmeLines[$index]
-        $commandMatches = [regex]::Matches($line, '(?i)\b(?<kind>dotnet\s+add\s+package|Install-Package|nuget\s+install)\s+KeelMatrix\.MetricBudget\b(?<arguments>.*?)(?=\s+(?:dotnet\s+add\s+package|Install-Package|nuget\s+install)\s+KeelMatrix\.MetricBudget\b|$)')
+        $readmeLines = [IO.File]::ReadAllLines($readmePath)
+        $readmeText = [IO.File]::ReadAllText($readmePath)
+    }
+    catch
+    {
+        Fail "Could not read README '$readmeRelativePath': $($_.Exception.Message)"
+    }
+
+    $logicalLines = Get-LogicalReadmeLines -Lines $readmeLines -ReadmeRelativePath $readmeRelativePath
+    $installOccurrenceCount = 0
+    $installCommandPattern = '(?i)\b(?<kind>dotnet\s+add\s+package|Install-Package|nuget\s+install)\s+KeelMatrix\.MetricBudget\b(?<arguments>.*?)(?=\s+(?:dotnet\s+add\s+package|Install-Package|nuget\s+install)\s+KeelMatrix\.MetricBudget\b|$)'
+    foreach ($logicalLine in $logicalLines)
+    {
+        $line = $logicalLine.Text
+        $lineNumber = $logicalLine.LineNumber
+        $commandMatches = [regex]::Matches($line, $installCommandPattern)
         foreach ($match in $commandMatches)
         {
             $installOccurrenceCount++
             Assert-InstallVersion $readmeRelativePath $lineNumber $match.Groups["kind"].Value $match.Groups["arguments"].Value
         }
 
-        $packageReferences = [regex]::Matches($line, '(?i)<PackageReference\b(?<attributes>[^>]*\bInclude\s*=\s*["'']KeelMatrix\.MetricBudget["''][^>]*)>')
-        foreach ($packageReference in $packageReferences)
+        if ($line -match '(?i)\b(?:dotnet\s+add\s+package|Install-Package|nuget\s+install)\s*$')
         {
-            $installOccurrenceCount++
-            $versionMatch = [regex]::Match($packageReference.Groups["attributes"].Value, '(?i)\bVersion\s*=\s*["''](?<version>[^"'']+)["'']')
-            if (-not $versionMatch.Success)
-            {
-                Fail "Install command mismatch: '$readmeRelativePath' line $lineNumber (PackageReference) must name release version '$Version'."
-            }
+            Fail "Install command mismatch: '$readmeRelativePath' line $lineNumber contains a package command that cannot be attributed to a package."
+        }
+    }
 
-            $installVersion = $versionMatch.Groups["version"].Value
-            if ($installVersion -ne $Version)
-            {
-                Fail "Install command/version mismatch: '$readmeRelativePath' line $lineNumber (PackageReference) names '$installVersion', expected '$Version'."
-            }
+    # Independent total rule: every --version token is checked separately
+    # from command recognition, so an unrecognized command cannot bypass it.
+    foreach ($logicalLine in $logicalLines)
+    {
+        Assert-VersionTokens $readmeRelativePath $logicalLine.LineNumber $logicalLine.Text
+    }
+
+    $packageReferenceStarts = [regex]::Matches($readmeText, '(?i)<PackageReference\b')
+    $packageReferences = [regex]::Matches($readmeText, '(?is)<PackageReference\b(?<attributes>[^>]*?)>')
+    if ($packageReferenceStarts.Count -ne $packageReferences.Count)
+    {
+        $lineNumber = if ($packageReferenceStarts.Count -gt $packageReferences.Count) {
+            Get-LineNumberAtOffset $readmeText $packageReferenceStarts[$packageReferences.Count].Index
+        }
+        else { 1 }
+        Fail "Could not reconstruct '$readmeRelativePath' line ${lineNumber}: an incomplete PackageReference element was found."
+    }
+
+    foreach ($packageReference in $packageReferences)
+    {
+        $attributes = $packageReference.Groups["attributes"].Value
+        $includeMatch = [regex]::Match($attributes, '(?i)\bInclude\s*=\s*["'']KeelMatrix\.MetricBudget["'']')
+        if (-not $includeMatch.Success)
+        {
+            continue
+        }
+
+        $installOccurrenceCount++
+        $lineNumber = Get-LineNumberAtOffset $readmeText $packageReference.Index
+        $versionMatches = [regex]::Matches($attributes, '(?i)\bVersion\s*=\s*["''](?<version>[^"'']+)["'']')
+        if ($versionMatches.Count -ne 1)
+        {
+            Fail "Install command mismatch: '$readmeRelativePath' line $lineNumber (PackageReference) must contain exactly one release version '$Version'."
+        }
+
+        $installVersion = $versionMatches[0].Groups["version"].Value
+        if ($installVersion -ne $Version)
+        {
+            Fail "Install command/version mismatch: '$readmeRelativePath' line $lineNumber (PackageReference) names '$installVersion', expected '$Version'."
         }
     }
 

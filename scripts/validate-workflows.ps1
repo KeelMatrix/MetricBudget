@@ -22,8 +22,8 @@ if (-not (Test-Path -LiteralPath $workflowDirectory -PathType Container))
 try
 {
     $workflowFiles = @(
-        Get-ChildItem -LiteralPath $workflowDirectory -File -Filter "*.yml"
-        Get-ChildItem -LiteralPath $workflowDirectory -File -Filter "*.yaml"
+        Get-ChildItem -LiteralPath $workflowDirectory -File -Filter "*.yml" -Recurse -Force
+        Get-ChildItem -LiteralPath $workflowDirectory -File -Filter "*.yaml" -Recurse -Force
     ) | Sort-Object FullName -Unique
 }
 catch
@@ -36,47 +36,168 @@ if ($workflowFiles.Count -lt $minimumWorkflowCount)
     Fail "Expected at least $minimumWorkflowCount workflow files, but found $($workflowFiles.Count)."
 }
 
+function Get-WorkflowRelativePath {
+    param([Parameter(Mandatory = $true)][string] $Path)
+
+    return [IO.Path]::GetRelativePath($workflowDirectory, $Path).Replace('\', '/')
+}
+
 function Get-LeadingIndent {
     param([Parameter(Mandatory = $true)][AllowEmptyString()][string] $Line)
 
     return ($Line.Length - $Line.TrimStart(' ').Length)
 }
 
-function Test-QuotedValue {
+function Normalize-YamlKey {
+    param(
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string] $RawKey,
+        [Parameter(Mandatory = $true)][string] $FileName,
+        [Parameter(Mandatory = $true)][int] $LineNumber
+    )
+
+    $key = $RawKey.Trim()
+    if ($key.Length -ge 2 -and (($key[0] -eq "'" -and $key[$key.Length - 1] -eq "'") -or ($key[0] -eq '"' -and $key[$key.Length - 1] -eq '"')))
+    {
+        $key = $key.Substring(1, $key.Length - 2)
+    }
+    elseif ($key.StartsWith("'") -or $key.StartsWith('"') -or $key.EndsWith("'") -or $key.EndsWith('"'))
+    {
+        Fail "Could not classify '$FileName' line ${LineNumber}: malformed quoted YAML key '$RawKey'."
+    }
+
+    $key = $key.Trim()
+    if ($key.Length -eq 0 -or $key -notmatch '^[A-Za-z0-9_.-]+$')
+    {
+        Fail "Could not classify '$FileName' line ${LineNumber}: unusual YAML key '$RawKey'."
+    }
+
+    return $key
+}
+
+function Test-ScalarValue {
     param(
         [Parameter(Mandatory = $true)][AllowEmptyString()][string] $Value,
         [Parameter(Mandatory = $true)][string] $FileName,
         [Parameter(Mandatory = $true)][int] $LineNumber
     )
 
-    $singleQuotes = 0
-    $doubleQuotes = 0
-    $escaped = $false
-    for ($index = 0; $index -lt $Value.Length; $index++)
+    $value = $Value.Trim()
+    if ($value.Length -eq 0)
     {
-        $character = $Value[$index]
-        if ($character -eq "'" -and -not $escaped)
-        {
-            $singleQuotes++
-        }
-        elseif ($character -eq '"' -and -not $escaped)
-        {
-            $doubleQuotes++
-        }
-
-        if ($character -eq '\\' -and -not $escaped)
-        {
-            $escaped = $true
-        }
-        else
-        {
-            $escaped = $false
-        }
+        return "Empty"
     }
 
-    if (($singleQuotes % 2) -ne 0 -or ($doubleQuotes % 2) -ne 0)
+    if ($value.StartsWith('{') -or $value.StartsWith('['))
     {
-        Fail "Could not parse '$FileName' line ${LineNumber}: unmatched quote."
+        Fail "Could not classify '$FileName' line ${LineNumber}: flow-style YAML value is not supported."
+    }
+
+    if ($value -match '^[|>](?:(?:[+-]\d*)|(?:\d*[+-]?))(?:\s+#.*)?$')
+    {
+        return "Block"
+    }
+
+    if ($value.StartsWith('&') -or $value.StartsWith('*') -or $value.StartsWith('!') -or $value.StartsWith('?'))
+    {
+        Fail "Could not classify '$FileName' line ${LineNumber}: YAML anchor, alias, tag, or explicit-key value is not supported."
+    }
+
+    if ($value.StartsWith("'"))
+    {
+        if ($value -notmatch '^''(?:[^'']|'''')*''(?:\s+#.*)?$')
+        {
+            Fail "Could not classify '$FileName' line ${LineNumber}: malformed single-quoted scalar."
+        }
+
+        return "Quoted"
+    }
+
+    if ($value.StartsWith('"'))
+    {
+        if ($value -notmatch '^"(?:[^"\\]|\\.)*"(?:\s+#.*)?$')
+        {
+            Fail "Could not classify '$FileName' line ${LineNumber}: malformed double-quoted scalar."
+        }
+
+        return "Quoted"
+    }
+
+    if ($value -match '(?<!\\)#(?=\S)' -and $value -notmatch '\s+#')
+    {
+        Fail "Could not classify '$FileName' line ${LineNumber}: unrecognized comment placement in scalar."
+    }
+
+    return "Plain"
+}
+
+$mappingPattern = '^(?<prefix>-\s*)?(?<rawKey>"(?:[^"\\]|\\.)*"|''(?:[^'']|'''')*''|[^\s:#][^:]*?)\s*:\s*(?<value>.*)$'
+function Get-MappingLine {
+    param(
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string] $TrimmedLine,
+        [Parameter(Mandatory = $true)][string] $FileName,
+        [Parameter(Mandatory = $true)][int] $LineNumber
+    )
+
+    $match = [regex]::Match($TrimmedLine, $mappingPattern)
+    if (-not $match.Success)
+    {
+        return $null
+    }
+
+    $key = Normalize-YamlKey $match.Groups["rawKey"].Value $FileName $LineNumber
+    $value = $match.Groups["value"].Value.Trim()
+    $valueKind = Test-ScalarValue $value $FileName $LineNumber
+    return [pscustomobject]@{
+        IsSequenceEntry = $match.Groups["prefix"].Success
+        Key = $key
+        Value = $value
+        ValueKind = $valueKind
+    }
+}
+
+# This is intentionally a separate, line-local pass. It does not consult the
+# indentation/state parser below, so a second independent mistake is needed
+# to put an expression into a shell body or another executable scalar.
+$expressionKeyAllowlist = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+foreach ($key in @(
+        "if", "name", "runs-on", "group", "env", "with", "path", "version", "timeout-minutes",
+        "RELEASE_EVENT_NAME", "RELEASE_REF_NAME", "RELEASE_INPUT_VERSION", "RELEASE_VERSION", "NUGET_PUSH_CREDENTIAL"
+    ))
+{
+    [void]$expressionKeyAllowlist.Add($key)
+}
+
+function Test-ExpressionSafety {
+    param(
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string[]] $Lines,
+        [Parameter(Mandatory = $true)][string] $FileName
+    )
+
+    for ($index = 0; $index -lt $Lines.Count; $index++)
+    {
+        $line = $Lines[$index]
+        if ($line.IndexOf('${{', [StringComparison]::Ordinal) -lt 0)
+        {
+            continue
+        }
+
+        $lineNumber = $index + 1
+        $trimmed = $line.Trim()
+        $mapping = Get-MappingLine $trimmed $FileName $lineNumber
+        if ($null -eq $mapping)
+        {
+            Fail "Could not classify expression in '$FileName' line ${lineNumber}: it is not on a recognized mapping key."
+        }
+
+        if (-not $expressionKeyAllowlist.Contains($mapping.Key))
+        {
+            Fail "Expression in '$FileName' line ${lineNumber} uses non-shell key '$($mapping.Key)'."
+        }
+
+        if ($mapping.ValueKind -eq "Block" -or $mapping.ValueKind -eq "Empty")
+        {
+            Fail "Expression in '$FileName' line ${lineNumber} is not in a single-line scalar value."
+        }
     }
 }
 
@@ -88,32 +209,29 @@ function Test-YamlLikeDocument {
 
     $stepsIndent = $null
     $checkedStepCount = 0
-    $blockScalarIndent = $null
-    $blockScalarIsRun = $false
+    $usesCount = 0
+    $blockScalarOwnerIndent = $null
 
     for ($index = 0; $index -lt $Lines.Count; $index++)
     {
         $lineNumber = $index + 1
         $line = $Lines[$index]
-        if ($line -match "`t")
+        if ($line.IndexOf("`t", [StringComparison]::Ordinal) -ge 0)
         {
-            Fail "Could not parse '$FileName' line ${lineNumber}: tabs are not valid indentation."
+            Fail "Could not classify '$FileName' line ${lineNumber}: tabs are not valid indentation."
         }
 
         $trimmed = $line.Trim()
         $indent = Get-LeadingIndent $line
-        if ($null -ne $blockScalarIndent)
+
+        if ($null -ne $blockScalarOwnerIndent)
         {
-            if ($blockScalarIsRun -and $line -match '\$\{\{')
-            {
-                Fail "Untrusted expression found inside run body in '$FileName' line $lineNumber."
-            }
-            if ($trimmed.Length -eq 0 -or $indent -gt $blockScalarIndent)
+            if ($trimmed.Length -eq 0 -or $indent -gt $blockScalarOwnerIndent)
             {
                 continue
             }
-            $blockScalarIndent = $null
-            $blockScalarIsRun = $false
+
+            $blockScalarOwnerIndent = $null
         }
 
         if ($trimmed.Length -eq 0 -or $trimmed.StartsWith('#'))
@@ -121,47 +239,38 @@ function Test-YamlLikeDocument {
             continue
         }
 
-        if (-not $trimmed.StartsWith('-') -and $trimmed -match '^(?<key>[^:#][^:]*):\s*(?<value>.*)$')
+        $mapping = Get-MappingLine $trimmed $FileName $lineNumber
+        if ($null -ne $mapping)
         {
-            $key = $Matches.key.Trim()
-            $value = $Matches.value.Trim()
-            if ($key.Length -eq 0)
+            if ($mapping.IsSequenceEntry -and $null -ne $stepsIndent -and $indent -eq ($stepsIndent + 2))
             {
-                Fail "Could not parse '$FileName' line ${lineNumber}: empty mapping key."
+                [void]$checkedStepCount++
             }
 
-            Test-QuotedValue $value $FileName $lineNumber
-            if ($value -match '^(?<indicator>[|>])(?<chomp>[+-]?)(?<indentHint>\d*)\s*(?:#.*)?$')
-            {
-                $blockScalarIndent = $indent + 1
-                $blockScalarIsRun = $key -eq 'run'
-            }
-
-            if ($key -eq 'steps' -and $value.Length -eq 0)
-            {
-                $stepsIndent = $indent
-            }
-            elseif ($null -ne $stepsIndent -and $indent -le $stepsIndent -and $key -ne 'steps')
+            if ($null -ne $stepsIndent -and $indent -le $stepsIndent -and $mapping.Key -ne 'steps')
             {
                 $stepsIndent = $null
             }
 
-            if ($key -eq 'run')
+            if ($mapping.Key -eq 'steps' -and $mapping.ValueKind -eq 'Empty')
             {
-                $inlineRun = $value -replace '^(?:[|>])[+-]?\s*', ''
-                if ($inlineRun -match '\$\{\{')
-                {
-                    Fail "Untrusted expression found inside run body in '$FileName' line $lineNumber."
-                }
+                $stepsIndent = $indent
             }
 
-            if ($key -eq 'uses')
+            if ($mapping.Key -eq 'uses')
             {
-                $usesValue = $value -replace '\s+#.*$', ''
+                $usesValue = $mapping.Value -replace '\s+#.*$', ''
                 if ($usesValue -notmatch '^[^\s#]+@[0-9a-fA-F]{40}$')
                 {
                     Fail "Unpinned or malformed uses value in '$FileName' line ${lineNumber}: '$usesValue'."
                 }
+
+                [void]$usesCount++
+            }
+
+            if ($mapping.ValueKind -eq 'Block')
+            {
+                $blockScalarOwnerIndent = $indent
             }
 
             continue
@@ -170,83 +279,62 @@ function Test-YamlLikeDocument {
         if ($trimmed -match '^-(?:\s+(?<entry>.*))?$')
         {
             $entry = $Matches.entry.Trim()
-            Test-QuotedValue $entry $FileName $lineNumber
-            if ($null -ne $stepsIndent -and $indent -gt $stepsIndent -and $indent -eq ($stepsIndent + 2))
+            if ($null -ne $stepsIndent -and $indent -eq ($stepsIndent + 2))
             {
                 [void]$checkedStepCount++
             }
 
-            if ($entry -match '^(?<key>[^:#][^:]*):\s*(?<value>.*)$')
+            if ($entry.Length -eq 0)
             {
-                $key = $Matches.key.Trim()
-                $value = $Matches.value.Trim()
-                Test-QuotedValue $value $FileName $lineNumber
-                if ($key -eq 'run')
-                {
-                    $inlineRun = $value -replace '^(?:[|>])[+-]?\s*', ''
-                    if ($inlineRun -match '\$\{\{')
-                    {
-                        Fail "Untrusted expression found inside run body in '$FileName' line $lineNumber."
-                    }
-                }
-                elseif ($key -eq 'uses')
-                {
-                    $usesValue = $value -replace '\s+#.*$', ''
-                    if ($usesValue -notmatch '^[^\s#]+@[0-9a-fA-F]{40}$')
-                    {
-                        Fail "Unpinned or malformed uses value in '$FileName' line ${lineNumber}: '$usesValue'."
-                    }
-                }
-
-                if ($value -match '^(?:[|>])[+-]?\s*$')
-                {
-                    $blockScalarIndent = $indent + 3
-                    $blockScalarIsRun = $key -eq 'run'
-                }
+                continue
             }
 
+            if ($entry.StartsWith('{') -or $entry.StartsWith('['))
+            {
+                Fail "Could not classify '$FileName' line ${lineNumber}: flow-style YAML sequence entry is not supported."
+            }
+
+            # A sequence entry with a mapping key was already handled above
+            # only when the prefix is present in the full line. Any remaining
+            # entry must be an ordinary, single-line scalar.
+            [void](Test-ScalarValue $entry $FileName $lineNumber)
             continue
         }
 
-        if ($trimmed -match '^\S')
-        {
-            Fail "Could not parse '$FileName' line ${lineNumber}: expected a YAML mapping or sequence entry."
-        }
+        Fail "Could not classify '$FileName' line ${lineNumber}: unsupported YAML construct."
     }
 
-    return $checkedStepCount
+    return [pscustomobject]@{
+        Steps = $checkedStepCount
+        Uses = $usesCount
+    }
 }
 
 $totalStepCount = 0
-$runBodyExpressions = @()
 $usesCount = 0
 foreach ($workflowFile in $workflowFiles)
 {
+    $fileName = Get-WorkflowRelativePath $workflowFile.FullName
     try
     {
         $lines = [IO.File]::ReadAllLines($workflowFile.FullName)
     }
     catch
     {
-        Fail "Could not read workflow '$($workflowFile.Name)': $($_.Exception.Message)"
+        Fail "Could not read workflow '$fileName': $($_.Exception.Message)"
     }
 
     try
     {
-        $totalStepCount += Test-YamlLikeDocument -Lines $lines -FileName $workflowFile.Name
+        Test-ExpressionSafety -Lines $lines -FileName $fileName
+        $result = Test-YamlLikeDocument -Lines $lines -FileName $fileName
+        $totalStepCount += $result.Steps
+        $usesCount += $result.Uses
     }
     catch
     {
         if ($_.Exception.Message -like 'WORKFLOW_GUARD=FAIL:*') { throw }
-        Fail "Could not parse workflow '$($workflowFile.Name)': $($_.Exception.Message)"
-    }
-
-    foreach ($line in $lines)
-    {
-        if ($line -match '^\s*uses:\s*')
-        {
-            $usesCount++
-        }
+        Fail "Could not parse workflow '$fileName': $($_.Exception.Message)"
     }
 }
 
