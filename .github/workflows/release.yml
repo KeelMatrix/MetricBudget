@@ -50,6 +50,10 @@ jobs:
               throw 'Release source validation failed: could not resolve the checked-out commit.'
           }
 
+          # This proves that the tagged commit is contained in the origin/main ref fetched in this run,
+          # which catches a tag placed outside main. It does not defend against a party able to modify or
+          # serve the repository's main ref, or to push to the repository, because that party can also push
+          # the tag itself. That residual is accepted because origin is the same remote that receives the tag.
           git merge-base --is-ancestor HEAD origin/main
           if ($LASTEXITCODE -ne 0) {
               throw "Release source validation failed: tagged commit '$taggedCommit' is not contained in origin/main."

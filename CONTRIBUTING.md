@@ -16,7 +16,7 @@ feature requests, documentation improvements, and pull requests.
 1. Fork the repository and create your feature branch from `main`: `git checkout -b my-feature`.
 2. If you added code that should be tested, add tests.
 3. Ensure the test suite passes: `dotnet test tests/KeelMatrix.MetricBudget.Tests/KeelMatrix.MetricBudget.Tests.csproj -c Release`.
-4. Format your code with `dotnet format` and ensure there are no warnings in a Release build.
+4. Format your code with `dotnet format KeelMatrix.MetricBudget.sln --verify-no-changes` and ensure there are no warnings in a Release build.
 5. Update the relevant documentation, including the package README when user-visible behavior changes.
 
 Repository-only feasibility and test-internals evidence is linked from [docs/DEV.md](docs/DEV.md); it is not part of
