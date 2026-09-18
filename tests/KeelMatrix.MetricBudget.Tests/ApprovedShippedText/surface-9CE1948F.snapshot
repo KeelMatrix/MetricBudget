@@ -33,7 +33,7 @@ exceeds the budget you declared.
 ## Install
 
 ```text
-dotnet add package KeelMatrix.MetricBudget
+dotnet add package KeelMatrix.MetricBudget --version 0.1.0
 ```
 
 The package has no OpenTelemetry dependency. It works with any library that emits `System.Diagnostics.Metrics`

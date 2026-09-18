@@ -1,0 +1,199 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Optional package version to validate; defaults to Directory.Build.props'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate and package
+    runs-on: windows-latest
+    timeout-minutes: 60
+    outputs:
+      version: ${{ steps.release-version.outputs.version }}
+    env:
+      KEELMATRIX_NO_TELEMETRY: '1'
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7.0.1
+
+      - name: Validate release version
+        id: release-version
+        shell: pwsh
+        run: |
+          $props = [Xml](Get-Content -Raw Directory.Build.props)
+          $configuredVersion = $props.SelectSingleNode("/*[local-name()='Project']/*[local-name()='PropertyGroup']/*[local-name()='Version']").InnerText.Trim()
+          if ([string]::IsNullOrWhiteSpace($configuredVersion) -or $configuredVersion -notmatch '^\d+\.\d+\.\d+$') {
+              throw "Directory.Build.props must define a stable X.Y.Z <Version>."
+          }
+
+          if ('${{ github.event_name }}' -eq 'push') {
+              $tag = '${{ github.ref_name }}'
+              if ($tag -notmatch '^v(?<version>\d+\.\d+\.\d+)$') {
+                  throw "Malformed release tag '$tag'. Expected v<major>.<minor>.<patch>."
+              }
+              $releaseVersion = $Matches.version
+              pwsh -NoProfile -File scripts/validate-release.ps1 -Tag $tag
+          }
+          else {
+              $requestedVersion = '${{ inputs.version }}'.Trim()
+              $releaseVersion = if ([string]::IsNullOrWhiteSpace($requestedVersion)) { $configuredVersion } else { $requestedVersion }
+              if ($releaseVersion -ne $configuredVersion) {
+                  throw "Manual validation version '$releaseVersion' does not match Directory.Build.props version '$configuredVersion'."
+              }
+          }
+
+          "version=$releaseVersion" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "RELEASE_VERSION=$releaseVersion" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Set up .NET SDK
+        uses: actions/setup-dotnet@v6.0.0
+        with:
+          global-json-file: global.json
+
+      - name: Verify resolved .NET SDK
+        shell: pwsh
+        run: |
+          $expected = ([string](Get-Content -Raw global.json | ConvertFrom-Json).sdk.version).Trim()
+          $resolved = (& dotnet --version).Trim()
+          if ($resolved -ne $expected) {
+              throw "Resolved .NET SDK '$resolved' does not match the global.json pin '$expected'."
+          }
+
+      - name: Assert release telemetry opt-out
+        shell: pwsh
+        run: |
+          if ($env:KEELMATRIX_NO_TELEMETRY -ne '1') {
+              throw 'Release validation must run with KEELMATRIX_NO_TELEMETRY=1.'
+          }
+
+      - name: Restore solution from committed NuGet.config
+        run: dotnet restore KeelMatrix.MetricBudget.sln --configfile NuGet.config --force-evaluate --no-cache --disable-build-servers
+
+      - name: Build solution (Release)
+        run: dotnet build KeelMatrix.MetricBudget.sln --configuration Release --no-restore
+
+      - name: Test net8.0
+        run: dotnet test tests/KeelMatrix.MetricBudget.Tests/KeelMatrix.MetricBudget.Tests.csproj --configuration Release --framework net8.0 --no-build --no-restore
+
+      - name: Test net472
+        run: dotnet test tests/KeelMatrix.MetricBudget.Tests/KeelMatrix.MetricBudget.Tests.csproj --configuration Release --framework net472 --no-build --no-restore
+
+      - name: Verify formatting
+        run: dotnet format KeelMatrix.MetricBudget.sln --verify-no-changes --no-restore
+
+      - name: Clear release artifact directory
+        shell: pwsh
+        run: |
+          $packageDirectory = Join-Path $PWD 'artifacts/packages'
+          if (Test-Path -LiteralPath $packageDirectory) {
+              Get-ChildItem -LiteralPath $packageDirectory -Force | Remove-Item -Recurse -Force
+          }
+          else {
+              New-Item -ItemType Directory -Path $packageDirectory -Force | Out-Null
+          }
+
+      - name: Pack release artifacts
+        run: dotnet pack src/KeelMatrix.MetricBudget/KeelMatrix.MetricBudget.csproj --configuration Release --no-build --no-restore --include-symbols -p:SymbolPackageFormat=snupkg -p:Version=${{ steps.release-version.outputs.version }} --output artifacts/packages
+
+      - name: Run exact package gate
+        shell: pwsh
+        run: pwsh -NoProfile -File scripts/verify-package.ps1 -InspectOnly -ExpectedVersion $env:RELEASE_VERSION
+
+      - name: Upload exact validated artifact set
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: metricbudget-release-packages
+          if-no-files-found: error
+          path: |
+            artifacts/packages/KeelMatrix.MetricBudget.${{ steps.release-version.outputs.version }}.nupkg
+            artifacts/packages/KeelMatrix.MetricBudget.${{ steps.release-version.outputs.version }}.snupkg
+
+  publish:
+    name: Publish validated package set
+    needs: validate
+    if: ${{ github.event_name == 'push' && github.ref_type == 'tag' && needs.validate.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      KEELMATRIX_NO_TELEMETRY: '1'
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7.0.1
+
+      - name: Set up .NET SDK
+        uses: actions/setup-dotnet@v6.0.0
+        with:
+          global-json-file: global.json
+
+      - name: Assert publish telemetry opt-out
+        shell: bash
+        run: test "$KEELMATRIX_NO_TELEMETRY" = '1'
+
+      - name: Download exact validated artifact set
+        uses: actions/download-artifact@v5.0.0
+        with:
+          name: metricbudget-release-packages
+          path: artifacts/packages
+
+      - name: Recheck exact artifact set
+        shell: pwsh
+        env:
+          RELEASE_VERSION: ${{ needs.validate.outputs.version }}
+        run: |
+          $expected = @(
+              "KeelMatrix.MetricBudget.$env:RELEASE_VERSION.nupkg",
+              "KeelMatrix.MetricBudget.$env:RELEASE_VERSION.snupkg"
+          ) | Sort-Object
+          $actual = @(Get-ChildItem -LiteralPath artifacts/packages -File | ForEach-Object Name | Sort-Object)
+          if ((@($actual) -join "`n") -ne (@($expected) -join "`n")) {
+              throw "Refusing to publish an unexpected artifact set. Expected: $($expected -join ', '). Actual: $($actual -join ', ')."
+          }
+
+      # The repository owner must configure a NuGet Trusted Publishing policy for this repository and workflow before the founder authorizes a release tag.
+      - name: Authenticate to NuGet.org with Trusted Publishing
+        id: nuget-login
+        uses: NuGet/login@v1
+        with:
+          user: dmitriyzen
+
+      - name: Push validated package
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ needs.validate.outputs.version }}
+          NUGET_PUSH_CREDENTIAL: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
+        run: >-
+          dotnet nuget push
+          "artifacts/packages/KeelMatrix.MetricBudget.${RELEASE_VERSION}.nupkg"
+          --source https://api.nuget.org/v3/index.json
+          --api-key "$NUGET_PUSH_CREDENTIAL"
+
+      - name: Push validated symbols package
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ needs.validate.outputs.version }}
+          NUGET_PUSH_CREDENTIAL: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
+        run: >-
+          dotnet nuget push
+          "artifacts/packages/KeelMatrix.MetricBudget.${RELEASE_VERSION}.snupkg"
+          --source https://api.nuget.org/v3/index.json
+          --api-key "$NUGET_PUSH_CREDENTIAL"
