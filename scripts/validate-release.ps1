@@ -179,23 +179,78 @@ if ($releaseText -match '(?i)\bnow\b|\bno longer\b|\bpreviously\b|\bformerly\b|\
     Fail "Changelog wording mismatch: first-release entry '$Version' contains pre-release remediation or transition wording."
 }
 
+function Assert-InstallVersion {
+    param(
+        [Parameter(Mandatory = $true)][string] $ReadmeRelativePath,
+        [Parameter(Mandatory = $true)][int] $LineNumber,
+        [Parameter(Mandatory = $true)][string] $Kind,
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string] $Arguments
+    )
+
+    $versionMatch = $null
+    if ($Kind -eq "dotnet add package")
+    {
+        $versionMatch = [regex]::Match($Arguments, '(?i)(?:^|\s)--version\s+(?<version>[^\s`]+)')
+    }
+    else
+    {
+        $versionMatch = [regex]::Match($Arguments, '(?i)(?:^|\s)(?:-Version|-v)\s+(?<version>[^\s`]+)')
+    }
+
+    if (-not $versionMatch.Success)
+    {
+        Fail "Install command mismatch: '$ReadmeRelativePath' line $LineNumber ($Kind) must name release version '$Version'."
+    }
+
+    $installVersion = $versionMatch.Groups["version"].Value
+    if ($installVersion -ne $Version)
+    {
+        Fail "Install command/version mismatch: '$ReadmeRelativePath' line $LineNumber ($Kind) names '$installVersion', expected '$Version'."
+    }
+}
+
 foreach ($readmeRelativePath in @("README.md", "src/KeelMatrix.MetricBudget/README.md"))
 {
     $readmePath = Join-Path $repositoryRoot $readmeRelativePath
-    $readme = Get-Content -Raw $readmePath
-    if ($readme -notmatch '(?im)^\s*dotnet\s+add\s+package\s+KeelMatrix\.MetricBudget\b(?<arguments>.*)$')
+    if (-not (Test-Path -LiteralPath $readmePath -PathType Leaf))
     {
-        Fail "Install command mismatch: '$readmeRelativePath' must show 'dotnet add package KeelMatrix.MetricBudget --version $Version'."
+        Fail "Required README '$readmeRelativePath' is missing."
     }
 
-    $arguments = $Matches.arguments
-    if ($arguments -notmatch '(?i)(?:^|\s)--version\s+(?<installVersion>[^\s`]+)')
+    $readmeLines = @(Get-Content $readmePath)
+    $installOccurrenceCount = 0
+    for ($index = 0; $index -lt $readmeLines.Count; $index++)
     {
-        Fail "Install command mismatch: '$readmeRelativePath' must name release version '$Version'."
+        $lineNumber = $index + 1
+        $line = $readmeLines[$index]
+        $commandMatches = [regex]::Matches($line, '(?i)\b(?<kind>dotnet\s+add\s+package|Install-Package|nuget\s+install)\s+KeelMatrix\.MetricBudget\b(?<arguments>.*?)(?=\s+(?:dotnet\s+add\s+package|Install-Package|nuget\s+install)\s+KeelMatrix\.MetricBudget\b|$)')
+        foreach ($match in $commandMatches)
+        {
+            $installOccurrenceCount++
+            Assert-InstallVersion $readmeRelativePath $lineNumber $match.Groups["kind"].Value $match.Groups["arguments"].Value
+        }
+
+        $packageReferences = [regex]::Matches($line, '(?i)<PackageReference\b(?<attributes>[^>]*\bInclude\s*=\s*["'']KeelMatrix\.MetricBudget["''][^>]*)>')
+        foreach ($packageReference in $packageReferences)
+        {
+            $installOccurrenceCount++
+            $versionMatch = [regex]::Match($packageReference.Groups["attributes"].Value, '(?i)\bVersion\s*=\s*["''](?<version>[^"'']+)["'']')
+            if (-not $versionMatch.Success)
+            {
+                Fail "Install command mismatch: '$readmeRelativePath' line $lineNumber (PackageReference) must name release version '$Version'."
+            }
+
+            $installVersion = $versionMatch.Groups["version"].Value
+            if ($installVersion -ne $Version)
+            {
+                Fail "Install command/version mismatch: '$readmeRelativePath' line $lineNumber (PackageReference) names '$installVersion', expected '$Version'."
+            }
+        }
     }
-    if ($Matches.installVersion -ne $Version)
+
+    if ($installOccurrenceCount -eq 0)
     {
-        Fail "Install command/version mismatch: '$readmeRelativePath' names '$($Matches.installVersion)', expected '$Version'."
+        Fail "Install command mismatch: '$readmeRelativePath' must contain a versioned install command for KeelMatrix.MetricBudget."
     }
 }
 
