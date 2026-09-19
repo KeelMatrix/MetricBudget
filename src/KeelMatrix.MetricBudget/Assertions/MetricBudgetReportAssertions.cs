@@ -135,7 +135,9 @@ public static class MetricBudgetReportAssertions
         }
 
         MetricBudgetInstrumentResult? instrument = FindInstrument(report, meterName, instrumentName);
-        if (instrument is not null && !instrument.SeriesTrackingIncomplete && instrument.ObservedSeriesCount <= maxObservedSeries)
+        if (instrument is not null
+            && !InstrumentTrackingIncomplete(instrument)
+            && instrument.ObservedSeriesCount <= maxObservedSeries)
         {
             return report;
         }
@@ -147,7 +149,7 @@ public static class MetricBudgetReportAssertions
                 ? "it was not selected."
                 : instrument.ObservedSeriesCount.ToString(CultureInfo.InvariantCulture)
                     + " were observed"
-                    + (instrument.SeriesTrackingIncomplete ? " and tracking was incomplete." : "."))
+                    + (InstrumentTrackingIncomplete(instrument) ? " and tracking was incomplete." : "."))
             + Environment.NewLine
             + report.ToDiagnosticString());
     }
@@ -190,23 +192,34 @@ public static class MetricBudgetReportAssertions
         MetricBudgetTagResult? tag = FindTag(instrument, tagKey);
         if (tag is not null
             && tag.WasObserved
+            && instrument is not null
+            && !InstrumentTrackingIncomplete(instrument)
             && !tag.ValueTrackingIncomplete
             && tag.ObservedDistinctValueCount <= maxDistinctValues)
         {
             return report;
         }
 
+        bool trackingIncomplete = instrument is not null
+            && (InstrumentTrackingIncomplete(instrument) || (tag is not null && tag.ValueTrackingIncomplete));
         string observed = tag is null || !tag.WasObserved
             ? "the workload never delivered that tag key"
             : tag.ObservedDistinctValueCount.ToString(CultureInfo.InvariantCulture)
                 + " distinct values were observed"
-                + (tag.ValueTrackingIncomplete ? " and tracking was incomplete" : string.Empty);
+                + (trackingIncomplete ? " and tracking was incomplete" : string.Empty);
 
         throw new MetricBudgetAssertionException(
             "Expected tag \"" + tagKey + "\" on instrument \"" + instrumentName + "\" in meter \"" + meterName
             + "\" to stay at or below " + maxDistinctValues.ToString(CultureInfo.InvariantCulture)
             + " observed distinct values, but " + observed + "." + Environment.NewLine
             + report.ToDiagnosticString());
+    }
+
+    private static bool InstrumentTrackingIncomplete(MetricBudgetInstrumentResult instrument)
+    {
+        return instrument.SeriesTrackingIncomplete
+            || instrument.TagSetTrackingIncomplete
+            || instrument.TagKeyTrackingIncomplete;
     }
 
     private static MetricBudgetInstrumentResult? FindInstrument(

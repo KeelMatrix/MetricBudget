@@ -35,6 +35,13 @@ public sealed class FrontierRegressionTests
         Assert.Single(instrument.Tags);
         Assert.True(report.Safety.SeriesTrackingIncomplete);
         Assert.True(report.AccountingIsConsistent);
+        Assert.Contains("INCOMPLETE", report.ToDiagnosticString(), StringComparison.Ordinal);
+        Assert.Contains("observed series: 1", report.ToDiagnosticString(), StringComparison.Ordinal);
+        Assert.Contains("measurements: 100", report.ToDiagnosticString(), StringComparison.Ordinal);
+        Assert.Throws<MetricBudgetAssertionException>(
+            () => report.AssertObservedSeriesAtMost(meterName, "requests", 1));
+        Assert.Throws<MetricBudgetAssertionException>(
+            () => report.AssertTagDistinctValuesAtMost(meterName, "requests", "key-0", 1));
     }
 
     [Fact]
@@ -115,6 +122,14 @@ public sealed class FrontierRegressionTests
         Assert.Equal(0, instrument.ObservedSeriesCount);
         Assert.True(instrument.TagSetTrackingIncomplete);
         Assert.Empty(instrument.Tags);
+        Assert.Equal(1, report.TotalMeasurementsObserved);
+        Assert.Equal(1, report.ObservedInstrumentCount);
+        Assert.Contains("INCOMPLETE", report.ToDiagnosticString(), StringComparison.Ordinal);
+        Assert.Contains("observed series: 0", report.ToDiagnosticString(), StringComparison.Ordinal);
+        Assert.Contains("measurements: 1", report.ToDiagnosticString(), StringComparison.Ordinal);
+        Assert.False(report.IsWithinBudget);
+        Assert.Throws<MetricBudgetAssertionException>(
+            () => report.AssertObservedSeriesAtMost(meterName, "requests", 10));
     }
 
     [Fact]
@@ -203,6 +218,49 @@ public sealed class FrontierRegressionTests
         Assert.Equal(MetricBudgetOutcome.ObservationIncomplete, report.Outcome);
         Assert.True(report.Safety.TagSetTrackingIncomplete);
         Assert.Empty(report.Rules[0].Instruments[0].Tags);
+        Assert.Equal(1, report.TotalMeasurementsObserved);
+        Assert.Equal(1, report.ObservedInstrumentCount);
+        Assert.Contains("INCOMPLETE", report.ToDiagnosticString(), StringComparison.Ordinal);
+        Assert.Contains("measurements: 1", report.ToDiagnosticString(), StringComparison.Ordinal);
+        Assert.False(report.IsWithinBudget);
+        Assert.Throws<MetricBudgetAssertionException>(
+            () => report.AssertObservedSeriesAtMost(meterName, "requests", 10));
+    }
+
+    [Fact]
+    public void RetainedTagKeyOverflowFailsFocusedAssertions()
+    {
+        string meterName = TestNames.Meter(nameof(RetainedTagKeyOverflowFailsFocusedAssertions));
+        using Meter meter = new Meter(meterName, "1.0.0");
+        Counter<long> counter = meter.CreateCounter<long>("requests");
+        MetricBudgetOptions options = new MetricBudgetOptions
+        {
+            MaxTrackedSeries = 10,
+            MaxTrackedTagKeysPerInstrument = 1,
+        };
+        options.ForInstrument(meterName, "requests", budget => budget.MaxObservedSeries = 2);
+
+        using MetricBudgetSession session = MetricBudgetSession.Start(options);
+        counter.Add(1, new KeyValuePair<string, object?>("first", "value"));
+        counter.Add(1, new KeyValuePair<string, object?>("second", "value"));
+
+        MetricBudgetReport report = session.Complete();
+        MetricBudgetInstrumentResult instrument = Assert.Single(report.Rules[0].Instruments);
+
+        Assert.Equal(MetricBudgetOutcome.ObservationIncomplete, report.Outcome);
+        Assert.Equal(2, report.ObservedSeriesCount);
+        Assert.Equal(2, report.TotalMeasurementsObserved);
+        Assert.True(instrument.TagKeyTrackingIncomplete);
+        Assert.True(report.Safety.TagKeyTrackingIncomplete);
+        Assert.True(report.AccountingIsConsistent);
+        Assert.Contains("INCOMPLETE", report.ToDiagnosticString(), StringComparison.Ordinal);
+        Assert.Contains("observed series: 2", report.ToDiagnosticString(), StringComparison.Ordinal);
+        Assert.Contains("measurements: 2", report.ToDiagnosticString(), StringComparison.Ordinal);
+        Assert.False(report.IsWithinBudget);
+        Assert.Throws<MetricBudgetAssertionException>(
+            () => report.AssertObservedSeriesAtMost(meterName, "requests", 2));
+        Assert.Throws<MetricBudgetAssertionException>(
+            () => report.AssertTagDistinctValuesAtMost(meterName, "requests", "first", 1));
     }
 
     [Fact]
