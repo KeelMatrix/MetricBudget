@@ -15,11 +15,25 @@ internal sealed class FrozenOptions
         int maxTrackedSeries,
         int maxTrackedValuesPerTag,
         int maxTagValueLength,
+        int maxTrackedInstrumentIdentities,
+        int maxTrackedInstrumentInstances,
+        int maxTrackedConflicts,
+        int maxTrackedTagKeysPerInstrument,
+        int maxTagCount,
+        int maxInstrumentIdentityLength,
+        int maxTagKeyLength,
         FrozenRule[] rules)
     {
         MaxTrackedSeries = maxTrackedSeries;
         MaxTrackedValuesPerTag = maxTrackedValuesPerTag;
         MaxTagValueLength = maxTagValueLength;
+        MaxTrackedInstrumentIdentities = maxTrackedInstrumentIdentities;
+        MaxTrackedInstrumentInstances = maxTrackedInstrumentInstances;
+        MaxTrackedConflicts = maxTrackedConflicts;
+        MaxTrackedTagKeysPerInstrument = maxTrackedTagKeysPerInstrument;
+        MaxTagCount = maxTagCount;
+        MaxInstrumentIdentityLength = maxInstrumentIdentityLength;
+        MaxTagKeyLength = maxTagKeyLength;
         Rules = rules;
     }
 
@@ -28,6 +42,20 @@ internal sealed class FrozenOptions
     internal int MaxTrackedValuesPerTag { get; }
 
     internal int MaxTagValueLength { get; }
+
+    internal int MaxTrackedInstrumentIdentities { get; }
+
+    internal int MaxTrackedInstrumentInstances { get; }
+
+    internal int MaxTrackedConflicts { get; }
+
+    internal int MaxTrackedTagKeysPerInstrument { get; }
+
+    internal int MaxTagCount { get; }
+
+    internal int MaxInstrumentIdentityLength { get; }
+
+    internal int MaxTagKeyLength { get; }
 
     internal FrozenRule[] Rules { get; }
 }
@@ -67,9 +95,9 @@ internal sealed class FrozenRule
         return tagBudgets.TryGetValue(tagKey, out maxDistinctValues);
     }
 
-    internal static FrozenRule Create(MetricBudgetRule rule)
+    internal static FrozenRule Create(InstrumentBudget budget, InstrumentSelector selector)
     {
-        IReadOnlyList<TagBudget> tags = rule.Budget.Tags;
+        IReadOnlyList<TagBudget> tags = budget.Tags;
         TagBudgetLimit[] ordered = new TagBudgetLimit[tags.Count];
         Dictionary<string, int> byKey = new Dictionary<string, int>(tags.Count, StringComparer.Ordinal);
 
@@ -81,7 +109,7 @@ internal sealed class FrozenRule
             byKey[tag.Key] = limit;
         }
 
-        return new FrozenRule(rule.Selector, rule.Budget.MaxObservedSeries, ordered, byKey);
+        return new FrozenRule(selector, budget.MaxObservedSeries, ordered, byKey);
     }
 }
 

@@ -145,6 +145,27 @@ if ([string]::IsNullOrWhiteSpace($releaseDate))
     Fail "Changelog mismatch: released version '$Version' must include a release date in its heading."
 }
 
+if ($releaseDate -notmatch '^\d{4}-\d{2}-\d{2}$')
+{
+    Fail "Changelog mismatch: released version '$Version' date '$releaseDate' must use YYYY-MM-DD."
+}
+
+[DateTime]$parsedReleaseDate = [DateTime]::MinValue
+$dateParsed = [DateTime]::TryParseExact(
+    $releaseDate,
+    'yyyy-MM-dd',
+    [Globalization.CultureInfo]::InvariantCulture,
+    [Globalization.DateTimeStyles]::None,
+    [ref]$parsedReleaseDate)
+if (-not $dateParsed)
+{
+    Fail "Changelog mismatch: released version '$Version' date '$releaseDate' is not a real calendar date."
+}
+if ($parsedReleaseDate.Date -gt [DateTime]::UtcNow.Date)
+{
+    Fail "Changelog mismatch: released version '$Version' date '$releaseDate' cannot be in the future."
+}
+
 $releaseEnd = $changelogLines.Count
 for ($index = $releaseStart + 1; $index -lt $changelogLines.Count; $index++)
 {

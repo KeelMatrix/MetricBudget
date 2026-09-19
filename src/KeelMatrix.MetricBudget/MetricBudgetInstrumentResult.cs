@@ -1,5 +1,6 @@
 // Copyright (c) KeelMatrix
 
+using System.Collections.ObjectModel;
 using System.Globalization;
 
 namespace KeelMatrix.MetricBudget;
@@ -23,6 +24,10 @@ public sealed class MetricBudgetInstrumentResult
         int? configuredMaxObservedSeries,
         long untrackedSeriesObservations,
         bool seriesTrackingIncomplete,
+        long untrackedTagSetObservations,
+        long untrackedTagKeyObservations,
+        bool tagSetTrackingIncomplete,
+        bool tagKeyTrackingIncomplete,
         IReadOnlyList<MetricBudgetTagResult> tags)
     {
         MeterName = meterName;
@@ -34,7 +39,17 @@ public sealed class MetricBudgetInstrumentResult
         ConfiguredMaxObservedSeries = configuredMaxObservedSeries;
         UntrackedSeriesObservations = untrackedSeriesObservations;
         SeriesTrackingIncomplete = seriesTrackingIncomplete;
-        Tags = tags;
+        UntrackedTagSetObservations = untrackedTagSetObservations;
+        UntrackedTagKeyObservations = untrackedTagKeyObservations;
+        TagSetTrackingIncomplete = tagSetTrackingIncomplete;
+        TagKeyTrackingIncomplete = tagKeyTrackingIncomplete;
+        MetricBudgetTagResult[] copy = new MetricBudgetTagResult[tags.Count];
+        for (int i = 0; i < copy.Length; i++)
+        {
+            copy[i] = tags[i];
+        }
+
+        Tags = new ReadOnlyCollection<MetricBudgetTagResult>(copy);
     }
 
     /// <summary>
@@ -86,6 +101,18 @@ public sealed class MetricBudgetInstrumentResult
     /// </summary>
     public bool SeriesTrackingIncomplete { get; }
 
+    /// <summary>Measurements whose tag set could not be canonically tracked.</summary>
+    public long UntrackedTagSetObservations { get; }
+
+    /// <summary>Delivered tag keys that could not be retained after the per-instrument key bound was reached.</summary>
+    public long UntrackedTagKeyObservations { get; }
+
+    /// <summary>Whether a tag set was rejected because it was oversized or contained an unsupported value.</summary>
+    public bool TagSetTrackingIncomplete { get; }
+
+    /// <summary>Whether the per-instrument retained tag-key bound was reached.</summary>
+    public bool TagKeyTrackingIncomplete { get; }
+
     /// <summary>
     /// Per-tag results for this instrument identity, ordered by tag key, including configured keys the workload
     /// never delivered.
@@ -104,7 +131,7 @@ public sealed class MetricBudgetInstrumentResult
     {
         get
         {
-            if (!WasObserved || SeriesTrackingIncomplete)
+            if (!WasObserved || SeriesTrackingIncomplete || TagSetTrackingIncomplete || TagKeyTrackingIncomplete)
             {
                 return false;
             }

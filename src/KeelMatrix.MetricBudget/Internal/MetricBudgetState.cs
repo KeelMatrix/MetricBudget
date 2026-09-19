@@ -1,6 +1,5 @@
 // Copyright (c) KeelMatrix
 
-using System.Collections.Concurrent;
 using System.Diagnostics.Metrics;
 
 namespace KeelMatrix.MetricBudget.Internal;
@@ -9,29 +8,32 @@ namespace KeelMatrix.MetricBudget.Internal;
 /// Single writer path for everything a session counts.
 /// </summary>
 /// <remarks>
-/// <para>
 /// Every counter, flag, and map is written under one writer lock, so measurements arriving concurrently from a
-/// parallel test suite are accounted exactly and a summary is a single consistent snapshot. Canonicalization runs
-/// before the lock because it is pure, which keeps delivery latency from serializing the whole workload.
-/// </para>
-/// <para>
-/// Instrument identity lookup uses a concurrent map that measurement callbacks only read. Entries are added under
-/// the writer lock before the instrument is enabled for delivery, so a callback can never observe a half-built
-/// account.
-/// </para>
+/// parallel test suite are accounted exactly and a summary is a single consistent snapshot. Publication enablement
+/// also occurs under this lock, which makes stopping and late publication one coordinated state transition.
 /// </remarks>
 internal sealed class MetricBudgetState
 {
+    // Test-only synchronization point for proving that publication cannot pass shutdown while enabling.
+    internal static Action? BeforeEnableForTesting { get; set; }
+
     private readonly FrozenOptions options;
     private readonly object sync = new();
     private readonly Dictionary<InstrumentIdentity, InstrumentAccount> accounts = new();
-    private readonly ConcurrentDictionary<Instrument, InstrumentIdentity> identityByInstrument = new();
+    private readonly Dictionary<Instrument, InstrumentIdentity> identityByInstrument = new();
     private readonly List<Instrument> enabledInstruments = new();
     private readonly Dictionary<InstrumentIdentity, int[]> conflicts = new();
 
     private long measurementsDelivered;
     private long unmatchedMeasurements;
+    private long untrackedInstrumentIdentities;
+    private long untrackedInstrumentInstances;
+    private long untrackedConflicts;
+    private bool instrumentIdentityTrackingIncomplete;
+    private bool instrumentInstanceTrackingIncomplete;
+    private bool conflictTrackingIncomplete;
     private bool stopped;
+    private int activeMeasurements;
 
     internal MetricBudgetState(FrozenOptions options)
     {
@@ -41,18 +43,23 @@ internal sealed class MetricBudgetState
     internal FrozenOptions Options => options;
 
     /// <summary>
-    /// Handles instrument publication. Selection is decided here, and an instrument is enabled for delivery only
-    /// when exactly one rule selects it.
+    /// Handles instrument publication. Selection, bounded admission, and enabling are one locked operation.
     /// </summary>
     internal void OnInstrumentPublished(Instrument instrument, MeterListener listener)
     {
         InstrumentIdentity identity = InstrumentIdentity.FromInstrument(instrument);
-        bool enable = false;
 
         lock (sync)
         {
             if (stopped)
             {
+                return;
+            }
+
+            if (!identity.HasComponentLengthsAtMost(options.MaxInstrumentIdentityLength))
+            {
+                instrumentIdentityTrackingIncomplete = true;
+                untrackedInstrumentIdentities++;
                 return;
             }
 
@@ -74,7 +81,6 @@ internal sealed class MetricBudgetState
 
             if (matchCount == 0)
             {
-                // Not selected: the session never enables delivery for it and never accounts it.
                 return;
             }
 
@@ -82,74 +88,89 @@ internal sealed class MetricBudgetState
             {
                 if (!conflicts.ContainsKey(identity))
                 {
-                    int[] matched = new int[matchCount];
-                    int position = 0;
-                    for (int i = 0; i < options.Rules.Length; i++)
+                    // A conflict record retains every matching rule index. Use the conflict bound as the
+                    // per-record ceiling as well, so an options object with a very large number of overlapping
+                    // rules cannot force one unbounded int[] allocation.
+                    if (conflicts.Count >= options.MaxTrackedConflicts || matchCount > options.MaxTrackedConflicts)
                     {
-                        if (options.Rules[i].Matches(identity))
-                        {
-                            matched[position] = i;
-                            position++;
-                        }
+                        conflictTrackingIncomplete = true;
+                        untrackedConflicts++;
                     }
+                    else
+                    {
+                        int[] matched = new int[matchCount];
+                        int position = 0;
+                        for (int i = 0; i < options.Rules.Length; i++)
+                        {
+                            if (options.Rules[i].Matches(identity))
+                            {
+                                matched[position++] = i;
+                            }
+                        }
 
-                    conflicts.Add(identity, matched);
+                        conflicts.Add(identity, matched);
+                    }
                 }
 
                 // Ambiguous selection is reported as invalid configuration, and nothing is observed for it.
                 return;
             }
 
-            if (!accounts.ContainsKey(identity))
+            bool alreadyKnownIdentity = accounts.ContainsKey(identity);
+            if (!alreadyKnownIdentity && accounts.Count >= options.MaxTrackedInstrumentIdentities)
+            {
+                instrumentIdentityTrackingIncomplete = true;
+                untrackedInstrumentIdentities++;
+                return;
+            }
+
+            if (identityByInstrument.ContainsKey(instrument))
+            {
+                return;
+            }
+
+            if (identityByInstrument.Count >= options.MaxTrackedInstrumentInstances)
+            {
+                instrumentInstanceTrackingIncomplete = true;
+                untrackedInstrumentInstances++;
+                return;
+            }
+
+            if (!alreadyKnownIdentity)
             {
                 accounts.Add(identity, new InstrumentAccount(identity, firstMatch));
             }
 
-            if (identityByInstrument.TryAdd(instrument, identity))
-            {
-                enabledInstruments.Add(instrument);
-                enable = true;
-            }
-        }
+            identityByInstrument.Add(instrument, identity);
+            enabledInstruments.Add(instrument);
 
-        if (enable)
-        {
+            // Keep this call under the same lock as stopped and the enabled-instrument registry. Complete/Dispose
+            // cannot observe an enabled-but-unregistered instrument, and publication cannot enable after stopping.
+            BeforeEnableForTesting?.Invoke();
+            if (stopped)
+            {
+                identityByInstrument.Remove(instrument);
+                enabledInstruments.RemoveAt(enabledInstruments.Count - 1);
+                if (!alreadyKnownIdentity)
+                {
+                    accounts.Remove(identity);
+                }
+
+                return;
+            }
+
             listener.EnableMeasurementEvents(instrument, state: null);
         }
     }
 
-    /// <summary>
-    /// Records one delivered measurement for a selected instrument.
-    /// </summary>
-    /// <typeparam name="T">Measurement type, supplied by the listener callback registration.</typeparam>
-    /// <param name="instrument">Instrument that delivered the measurement.</param>
-    /// <param name="measurement">Measurement value, which this verifier does not interpret.</param>
-    /// <param name="tags">Tag span, valid only for the duration of the callback.</param>
-    /// <param name="state">Listener state, unused.</param>
+    /// <summary>Records one delivered measurement for a selected instrument.</summary>
     internal void OnMeasurement<T>(
         Instrument instrument,
         T measurement,
         ReadOnlySpan<KeyValuePair<string, object?>> tags,
         object? state)
     {
-        if (!identityByInstrument.TryGetValue(instrument, out InstrumentIdentity identity))
-        {
-            lock (sync)
-            {
-                if (!stopped)
-                {
-                    measurementsDelivered++;
-                    unmatchedMeasurements++;
-                }
-            }
-
-            return;
-        }
-
-        // Canonicalization and hashing stay outside the writer lock; they are pure and allocate no shared state.
-        string tagSetKey = TagIdentity.CreateTagSetKey(tags, options.MaxTagValueLength, out TagField[] fields);
-        Sha256Digest seriesDigest = Sha256TextHash.Digest(TagIdentity.CreateSeriesKey(identity, tagSetKey));
-
+        InstrumentIdentity identity;
         lock (sync)
         {
             if (stopped)
@@ -157,26 +178,75 @@ internal sealed class MetricBudgetState
                 return;
             }
 
-            measurementsDelivered++;
-
-            if (!accounts.TryGetValue(identity, out InstrumentAccount? account))
+            if (!identityByInstrument.TryGetValue(instrument, out identity))
             {
-                // A delivered measurement always belongs to a previously created account, so this is an anomaly.
+                measurementsDelivered++;
                 unmatchedMeasurements++;
                 return;
             }
 
-            account.Record(fields, seriesDigest, options);
+            activeMeasurements++;
+        }
+
+        try
+        {
+            if (!TagIdentity.TryCreateTagSetKey(
+                    tags,
+                    options.MaxTagValueLength,
+                    options.MaxTagCount,
+                    options.MaxTagKeyLength,
+                    out string tagSetKey,
+                    out TagField[] fields))
+            {
+                _ = TagIdentity.GetLastFailure();
+                lock (sync)
+                {
+                    if (!stopped && accounts.TryGetValue(identity, out InstrumentAccount? failedAccount))
+                    {
+                        measurementsDelivered++;
+                        failedAccount.RecordIncompleteMeasurement();
+                    }
+                }
+
+                return;
+            }
+
+            Sha256Digest seriesDigest = Sha256TextHash.Digest(TagIdentity.CreateSeriesKey(identity, tagSetKey));
+
+            lock (sync)
+            {
+                if (!stopped)
+                {
+                    measurementsDelivered++;
+
+                    if (!accounts.TryGetValue(identity, out InstrumentAccount? account))
+                    {
+                        unmatchedMeasurements++;
+                    }
+                    else
+                    {
+                        account.Record(fields, seriesDigest, options);
+                    }
+                }
+            }
+        }
+        finally
+        {
+            lock (sync)
+            {
+                activeMeasurements--;
+                if (activeMeasurements == 0)
+                {
+                    Monitor.PulseAll(sync);
+                }
+            }
         }
     }
 
     /// <summary>
-    /// Stops accounting and returns the instruments whose delivery must be disabled explicitly.
+    /// Stops accounting and waits for callbacks already admitted before stopping. The returned instruments must be
+    /// disabled explicitly by the session.
     /// </summary>
-    /// <remarks>
-    /// <c>MeterListener.Dispose</c> does not stop measurement delivery for instruments that a listener already
-    /// enabled, so the session disables every one of them before it disposes the listener.
-    /// </remarks>
     internal Instrument[] BeginStop()
     {
         lock (sync)
@@ -187,6 +257,11 @@ internal sealed class MetricBudgetState
             }
 
             stopped = true;
+            while (activeMeasurements != 0)
+            {
+                Monitor.Wait(sync);
+            }
+
             return enabledInstruments.ToArray();
         }
     }
@@ -199,22 +274,18 @@ internal sealed class MetricBudgetState
             int index = 0;
             foreach (InstrumentAccount account in accounts.Values)
             {
-                instruments[index] = account.CreateSnapshot();
-                index++;
+                instruments[index++] = account.CreateSnapshot();
             }
 
             Array.Sort(
                 instruments,
-                static (left, right) => string.CompareOrdinal(
-                    left.Identity.Describe(),
-                    right.Identity.Describe()));
+                static (left, right) => string.CompareOrdinal(left.Identity.Describe(), right.Identity.Describe()));
 
             ConfigurationConflictSnapshot[] conflictSnapshots = new ConfigurationConflictSnapshot[conflicts.Count];
             int conflictIndex = 0;
             foreach (KeyValuePair<InstrumentIdentity, int[]> entry in conflicts)
             {
-                conflictSnapshots[conflictIndex] = new ConfigurationConflictSnapshot(entry.Key, entry.Value);
-                conflictIndex++;
+                conflictSnapshots[conflictIndex++] = new ConfigurationConflictSnapshot(entry.Key, entry.Value);
             }
 
             Array.Sort(
@@ -228,9 +299,22 @@ internal sealed class MetricBudgetState
                 conflictSnapshots,
                 measurementsDelivered,
                 unmatchedMeasurements,
+                untrackedInstrumentIdentities,
+                untrackedInstrumentInstances,
+                untrackedConflicts,
+                instrumentIdentityTrackingIncomplete,
+                instrumentInstanceTrackingIncomplete,
+                conflictTrackingIncomplete,
                 options.MaxTrackedSeries,
                 options.MaxTrackedValuesPerTag,
-                options.MaxTagValueLength);
+                options.MaxTagValueLength,
+                options.MaxTrackedInstrumentIdentities,
+                options.MaxTrackedInstrumentInstances,
+                options.MaxTrackedConflicts,
+                options.MaxTrackedTagKeysPerInstrument,
+                options.MaxTagCount,
+                options.MaxInstrumentIdentityLength,
+                options.MaxTagKeyLength);
         }
     }
 }

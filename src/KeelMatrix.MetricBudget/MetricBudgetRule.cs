@@ -15,6 +15,13 @@ public sealed class MetricBudgetRule
     internal MetricBudgetRule(InstrumentSelector selector, InstrumentBudget budget)
     {
         Selector = selector;
+        ConfigurationBudget = budget;
+        Budget = MetricBudgetBudget.From(budget);
+    }
+
+    internal MetricBudgetRule(InstrumentSelector selector, MetricBudgetBudget budget)
+    {
+        Selector = selector;
         Budget = budget;
     }
 
@@ -26,7 +33,9 @@ public sealed class MetricBudgetRule
     /// <summary>
     /// Budget applied to every instrument this rule selects.
     /// </summary>
-    public InstrumentBudget Budget { get; }
+    public MetricBudgetBudget Budget { get; }
+
+    internal InstrumentBudget? ConfigurationBudget { get; }
 
     /// <summary>
     /// Describes the rule as <c>selector: budget</c>.

@@ -19,14 +19,72 @@ internal sealed class SessionSnapshot
         int maxTrackedSeries,
         int maxTrackedValuesPerTag,
         int maxTagValueLength)
+        : this(
+            instruments,
+            conflicts,
+            measurementsDelivered,
+            unmatchedMeasurements,
+            untrackedInstrumentIdentities: 0,
+            untrackedInstrumentInstances: 0,
+            untrackedConflicts: 0,
+            instrumentIdentityTrackingIncomplete: false,
+            instrumentInstanceTrackingIncomplete: false,
+            conflictTrackingIncomplete: false,
+            maxTrackedSeries,
+            maxTrackedValuesPerTag,
+            maxTagValueLength,
+            MetricBudgetOptions.DefaultMaxTrackedInstrumentIdentities,
+            MetricBudgetOptions.DefaultMaxTrackedInstrumentInstances,
+            MetricBudgetOptions.DefaultMaxTrackedConflicts,
+            MetricBudgetOptions.DefaultMaxTrackedTagKeysPerInstrument,
+            MetricBudgetOptions.DefaultMaxTagCount,
+            MetricBudgetOptions.DefaultMaxInstrumentIdentityLength,
+            MetricBudgetOptions.DefaultMaxTagKeyLength)
+    {
+    }
+
+    internal SessionSnapshot(
+        InstrumentAccountSnapshot[] instruments,
+        ConfigurationConflictSnapshot[] conflicts,
+        long measurementsDelivered,
+        long unmatchedMeasurements,
+        long untrackedInstrumentIdentities,
+        long untrackedInstrumentInstances,
+        long untrackedConflicts,
+        bool instrumentIdentityTrackingIncomplete,
+        bool instrumentInstanceTrackingIncomplete,
+        bool conflictTrackingIncomplete,
+        int maxTrackedSeries,
+        int maxTrackedValuesPerTag,
+        int maxTagValueLength,
+        int maxTrackedInstrumentIdentities,
+        int maxTrackedInstrumentInstances,
+        int maxTrackedConflicts,
+        int maxTrackedTagKeysPerInstrument,
+        int maxTagCount,
+        int maxInstrumentIdentityLength,
+        int maxTagKeyLength)
     {
         Instruments = instruments;
         Conflicts = conflicts;
         MeasurementsDelivered = measurementsDelivered;
         UnmatchedMeasurements = unmatchedMeasurements;
+        UntrackedInstrumentIdentities = untrackedInstrumentIdentities;
+        UntrackedInstrumentInstances = untrackedInstrumentInstances;
+        UntrackedConflicts = untrackedConflicts;
+        InstrumentIdentityTrackingIncomplete = instrumentIdentityTrackingIncomplete;
+        InstrumentInstanceTrackingIncomplete = instrumentInstanceTrackingIncomplete;
+        ConflictTrackingIncomplete = conflictTrackingIncomplete;
         MaxTrackedSeries = maxTrackedSeries;
         MaxTrackedValuesPerTag = maxTrackedValuesPerTag;
         MaxTagValueLength = maxTagValueLength;
+        MaxTrackedInstrumentIdentities = maxTrackedInstrumentIdentities;
+        MaxTrackedInstrumentInstances = maxTrackedInstrumentInstances;
+        MaxTrackedConflicts = maxTrackedConflicts;
+        MaxTrackedTagKeysPerInstrument = maxTrackedTagKeysPerInstrument;
+        MaxTagCount = maxTagCount;
+        MaxInstrumentIdentityLength = maxInstrumentIdentityLength;
+        MaxTagKeyLength = maxTagKeyLength;
     }
 
     internal InstrumentAccountSnapshot[] Instruments { get; }
@@ -39,11 +97,37 @@ internal sealed class SessionSnapshot
     /// <summary>Delivery callbacks that could not be attributed to a selected instrument.</summary>
     internal long UnmatchedMeasurements { get; }
 
+    internal long UntrackedInstrumentIdentities { get; }
+
+    internal long UntrackedInstrumentInstances { get; }
+
+    internal long UntrackedConflicts { get; }
+
+    internal bool InstrumentIdentityTrackingIncomplete { get; }
+
+    internal bool InstrumentInstanceTrackingIncomplete { get; }
+
+    internal bool ConflictTrackingIncomplete { get; }
+
     internal int MaxTrackedSeries { get; }
 
     internal int MaxTrackedValuesPerTag { get; }
 
     internal int MaxTagValueLength { get; }
+
+    internal int MaxTrackedInstrumentIdentities { get; }
+
+    internal int MaxTrackedInstrumentInstances { get; }
+
+    internal int MaxTrackedConflicts { get; }
+
+    internal int MaxTrackedTagKeysPerInstrument { get; }
+
+    internal int MaxTagCount { get; }
+
+    internal int MaxInstrumentIdentityLength { get; }
+
+    internal int MaxTagKeyLength { get; }
 
     internal long AccountedMeasurements
     {
@@ -63,6 +147,11 @@ internal sealed class SessionSnapshot
     {
         get
         {
+            if (InstrumentIdentityTrackingIncomplete || InstrumentInstanceTrackingIncomplete)
+            {
+                return true;
+            }
+
             for (int i = 0; i < Instruments.Length; i++)
             {
                 if (Instruments[i].SeriesTrackingIncomplete)
@@ -90,6 +179,11 @@ internal sealed class SessionSnapshot
             return false;
         }
     }
+
+    internal bool StateTrackingIncomplete =>
+        InstrumentIdentityTrackingIncomplete
+        || InstrumentInstanceTrackingIncomplete
+        || ConflictTrackingIncomplete;
 }
 
 /// <summary>
@@ -108,6 +202,39 @@ internal sealed class InstrumentAccountSnapshot
         bool seriesCapExhausted,
         bool tagValueCapExhausted,
         TagValueSnapshot[] tags)
+        : this(
+            identity,
+            ruleIndex,
+            measurementCount,
+            newSeriesObservations,
+            existingSeriesObservations,
+            untrackedSeriesObservations,
+            untrackedTagSetObservations: 0,
+            untrackedTagKeyObservations: 0,
+            observedSeriesCount,
+            seriesCapExhausted,
+            tagValueCapExhausted,
+            tagKeyCapExhausted: false,
+            tagSetTrackingIncomplete: false,
+            tags)
+    {
+    }
+
+    internal InstrumentAccountSnapshot(
+        InstrumentIdentity identity,
+        int ruleIndex,
+        long measurementCount,
+        long newSeriesObservations,
+        long existingSeriesObservations,
+        long untrackedSeriesObservations,
+        long untrackedTagSetObservations,
+        long untrackedTagKeyObservations,
+        int observedSeriesCount,
+        bool seriesCapExhausted,
+        bool tagValueCapExhausted,
+        bool tagKeyCapExhausted,
+        bool tagSetTrackingIncomplete,
+        TagValueSnapshot[] tags)
     {
         Identity = identity;
         RuleIndex = ruleIndex;
@@ -115,9 +242,13 @@ internal sealed class InstrumentAccountSnapshot
         NewSeriesObservations = newSeriesObservations;
         ExistingSeriesObservations = existingSeriesObservations;
         UntrackedSeriesObservations = untrackedSeriesObservations;
+        UntrackedTagSetObservations = untrackedTagSetObservations;
+        UntrackedTagKeyObservations = untrackedTagKeyObservations;
         ObservedSeriesCount = observedSeriesCount;
         SeriesCapExhausted = seriesCapExhausted;
         TagValueCapExhausted = tagValueCapExhausted;
+        TagKeyCapExhausted = tagKeyCapExhausted;
+        TagSetTrackingIncomplete = tagSetTrackingIncomplete;
         Tags = tags;
     }
 
@@ -133,6 +264,10 @@ internal sealed class InstrumentAccountSnapshot
 
     internal long UntrackedSeriesObservations { get; }
 
+    internal long UntrackedTagSetObservations { get; }
+
+    internal long UntrackedTagKeyObservations { get; }
+
     /// <summary>
     /// Distinct observed series that are tracked in full. A lower bound when
     /// <see cref="SeriesTrackingIncomplete"/> is <see langword="true"/>.
@@ -143,6 +278,10 @@ internal sealed class InstrumentAccountSnapshot
 
     internal bool TagValueCapExhausted { get; }
 
+    internal bool TagKeyCapExhausted { get; }
+
+    internal bool TagSetTrackingIncomplete { get; }
+
     internal TagValueSnapshot[] Tags { get; }
 
     internal bool SeriesTrackingIncomplete => SeriesCapExhausted || UntrackedSeriesObservations > 0;
@@ -151,7 +290,7 @@ internal sealed class InstrumentAccountSnapshot
     {
         get
         {
-            if (TagValueCapExhausted)
+            if (TagValueCapExhausted || TagKeyCapExhausted || TagSetTrackingIncomplete)
             {
                 return true;
             }

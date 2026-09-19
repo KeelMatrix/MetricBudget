@@ -17,4 +17,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Test-friendly assertion helpers that require no test-framework dependency and fail with privacy-safe diagnostics.
 - Explicit outcomes for a budget violation, invalid configuration, an instrument that was never observed, a
   session that observed no measurements, and incomplete accounting.
-- Hard in-memory safety bounds with explicit bounded-state diagnostics that can never be reported as a pass.
+- Hard in-memory safety bounds over retained identities, physical instances, conflicts, series, tag keys, tag sets,
+  and tag values, with explicit bounded-state diagnostics that can never be reported as a pass.
+
+### Fixed
+
+- Preserve lossless supported tag identity semantics, reject unsupported values without invoking user formatting, and
+  close session shutdown races, report mutability, ambiguous focused assertions, observable-listener coexistence, and
+  duplicate symbols publication paths.

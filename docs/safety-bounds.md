@@ -1,13 +1,20 @@
 # Safety bounds and bounded memory
 
 The verifier observes exactly the failure class that can create huge numbers of combinations, so its own memory
-has to be bounded and honest. Every session applies three explicit bounds.
+has to be bounded and honest. Every session applies explicit bounds to every retained accounting dimension.
 
 | Option | Default | What it bounds |
 | --- | --- | --- |
 | `MaxTrackedSeries` (per instrument identity) | 100,000 | Distinct observed series retained for one instrument identity. |
 | `MaxTrackedValuesPerTag` (per instrument identity) | 5,000 | Distinct values retained per tag key and instrument identity. |
 | `MaxTagValueLength` | 256 | Length of a tag value's invariant text before it is replaced by a stable digest in the identity. |
+| `MaxTrackedInstrumentIdentities` | 1,024 | Selected instrument identities retained by one session. |
+| `MaxTrackedInstrumentInstances` | 2,048 | Physical instrument instances retained and enabled by one session. |
+| `MaxTrackedConflicts` | 1,024 | Ambiguous identity records retained; a conflict requiring more rule indexes than this is also dropped. |
+| `MaxTrackedTagKeysPerInstrument` | 256 | Distinct delivered tag keys retained per instrument identity. |
+| `MaxTagCount` | 64 | Delivered tags admitted from one measurement. |
+| `MaxInstrumentIdentityLength` | 256 | Length of each meter name, meter version, and instrument name retained in identity state. |
+| `MaxTagKeyLength` | 256 | Length of a delivered tag key admitted to identity construction. |
 
 The defaults exist so an accidentally explosive workload cannot make the verifier unbounded. They are not budgets,
 they are not recommendations for an application, and reaching one never turns a failing workload into a passing
@@ -24,6 +31,9 @@ instrument identity's bound is reached - the outcome is not deferred until every
 - The observation is still counted as delivered.
 - The observation is recorded as **untracked**; it is never matched to an existing series, so the session cannot
   silently undercount.
+- A series-cap exhaustion stops admission of tag-key state for later measurements. A tag-key cap stops admission of
+  new keys while preserving already tracked keys. An oversized tag set, unsupported value, oversized key, or
+  rejected instrument identity is not canonicalized or retained.
 - The report names the bound, the instrument that reached it, and how many observations could not be tracked. Once
   any instrument reports an exhausted bound, the whole session outcome is `ObservationIncomplete`.
 - Counts that depend on the exhausted bound become explicit lower bounds:
@@ -39,12 +49,14 @@ A definite budget breach that is already proven is reported as `Violation`; reac
 
 - Series identity and tag-value identity are held as fixed-size SHA-256 digests, not as the canonical text, so no
   raw tag value is retained.
-- Retained memory grows with tracked series and tracked distinct values, and stops growing when the bounds are
-  reached. Because the series bound applies per instrument identity, the retained series ceiling grows with the
-  number of matched instrument identities: *(matched instrument identities) x `MaxTrackedSeries`* fixed-size
-  digests, plus the per-tag value sets.
-- Canonicalization cost is linear in the number of delivered tags per measurement plus one ordinal sort of those
-  entries; the resource gate in the test suite measures per-measurement cost at representative series counts.
+- Retained memory grows with tracked identities, physical instances, conflicts, series, tag keys, and distinct tag
+  values only up to their corresponding bounds. Because the series bound applies per instrument identity, the
+  retained series ceiling grows with the number of admitted identities: *(matched instrument identities) x
+  `MaxTrackedSeries`* fixed-size digests, plus the bounded per-tag key/value state.
+- Identity components and delivered tag keys are length-bounded, and each delivered tag set is count-bounded before
+  canonicalization. The conflict bound also limits the number of rule indexes retained in one conflict record.
+- Canonicalization cost is linear in the bounded number of delivered tags per measurement plus one ordinal sort of
+  those entries; the resource gate in the test suite measures per-measurement cost at representative series counts.
 
 ## Choosing tighter bounds
 

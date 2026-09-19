@@ -41,6 +41,27 @@ public sealed class MetricBudgetOptions
     /// </summary>
     public const int DefaultMaxTagValueLength = 256;
 
+    /// <summary>Default number of instrument identities retained by one session.</summary>
+    public const int DefaultMaxTrackedInstrumentIdentities = 1_024;
+
+    /// <summary>Default number of physical instrument instances retained by one session.</summary>
+    public const int DefaultMaxTrackedInstrumentInstances = 2_048;
+
+    /// <summary>Default number of ambiguous instrument identities retained by one session.</summary>
+    public const int DefaultMaxTrackedConflicts = 1_024;
+
+    /// <summary>Default number of delivered tag keys retained per instrument identity.</summary>
+    public const int DefaultMaxTrackedTagKeysPerInstrument = 256;
+
+    /// <summary>Default number of tags accepted from one delivered measurement.</summary>
+    public const int DefaultMaxTagCount = 64;
+
+    /// <summary>Default maximum length of each meter or instrument identity component.</summary>
+    public const int DefaultMaxInstrumentIdentityLength = 256;
+
+    /// <summary>Default maximum length of a delivered tag key.</summary>
+    public const int DefaultMaxTagKeyLength = 256;
+
     private readonly List<MetricBudgetRule> rules = new();
     private readonly ReadOnlyCollection<MetricBudgetRule> rulesView;
 
@@ -90,6 +111,48 @@ public sealed class MetricBudgetOptions
     /// different values, and the digest is never a raw value. The value must be greater than zero.
     /// </remarks>
     public int MaxTagValueLength { get; set; } = DefaultMaxTagValueLength;
+
+    /// <summary>
+    /// Maximum number of distinct instrument identities retained by one session.
+    /// </summary>
+    /// <remarks>
+    /// When this bound is reached, newly published selected identities are not enabled or retained. The report is
+    /// explicitly incomplete and cannot pass.
+    /// </remarks>
+    public int MaxTrackedInstrumentIdentities { get; set; } = DefaultMaxTrackedInstrumentIdentities;
+
+    /// <summary>
+    /// Maximum number of physical instrument instances retained and enabled by one session.
+    /// </summary>
+    /// <remarks>
+    /// This is separate from the identity bound because several physical instruments can share one meter name,
+    /// version, instrument name, and kind. When it is reached, later instances are not enabled or retained.
+    /// </remarks>
+    public int MaxTrackedInstrumentInstances { get; set; } = DefaultMaxTrackedInstrumentInstances;
+
+    /// <summary>
+    /// Maximum number of ambiguous instrument identities retained for diagnostics.
+    /// </summary>
+    /// <remarks>
+    /// Additional conflicts are not retained; the report remains explicitly incomplete and non-passing.
+    /// </remarks>
+    public int MaxTrackedConflicts { get; set; } = DefaultMaxTrackedConflicts;
+
+    /// <summary>Maximum number of delivered tag keys retained per instrument identity.</summary>
+    /// <remarks>Additional keys are not retained and make the report explicitly incomplete.</remarks>
+    public int MaxTrackedTagKeysPerInstrument { get; set; } = DefaultMaxTrackedTagKeysPerInstrument;
+
+    /// <summary>Maximum number of tags accepted from one delivered measurement.</summary>
+    /// <remarks>A larger tag set is not canonicalized or retained and makes the report explicitly incomplete.</remarks>
+    public int MaxTagCount { get; set; } = DefaultMaxTagCount;
+
+    /// <summary>Maximum length of each meter name, meter version, and instrument name retained in identity state.</summary>
+    /// <remarks>An identity with a longer component is not retained or enabled.</remarks>
+    public int MaxInstrumentIdentityLength { get; set; } = DefaultMaxInstrumentIdentityLength;
+
+    /// <summary>Maximum length of a delivered tag key retained in tag accounting state.</summary>
+    /// <remarks>A measurement containing a longer key is not canonicalized or retained.</remarks>
+    public int MaxTagKeyLength { get; set; } = DefaultMaxTagKeyLength;
 
     /// <summary>
     /// Instrument-selection rules and their budgets, in declaration order.
@@ -178,6 +241,13 @@ public sealed class MetricBudgetOptions
         ValidatePositive(MaxTrackedSeries, nameof(MaxTrackedSeries), problems);
         ValidatePositive(MaxTrackedValuesPerTag, nameof(MaxTrackedValuesPerTag), problems);
         ValidatePositive(MaxTagValueLength, nameof(MaxTagValueLength), problems);
+        ValidatePositive(MaxTrackedInstrumentIdentities, nameof(MaxTrackedInstrumentIdentities), problems);
+        ValidatePositive(MaxTrackedInstrumentInstances, nameof(MaxTrackedInstrumentInstances), problems);
+        ValidatePositive(MaxTrackedConflicts, nameof(MaxTrackedConflicts), problems);
+        ValidatePositive(MaxTrackedTagKeysPerInstrument, nameof(MaxTrackedTagKeysPerInstrument), problems);
+        ValidatePositive(MaxTagCount, nameof(MaxTagCount), problems);
+        ValidatePositive(MaxInstrumentIdentityLength, nameof(MaxInstrumentIdentityLength), problems);
+        ValidatePositive(MaxTagKeyLength, nameof(MaxTagKeyLength), problems);
 
         FrozenRule[] frozenRules = new FrozenRule[rules.Count];
         for (int i = 0; i < rules.Count; i++)
@@ -185,12 +255,14 @@ public sealed class MetricBudgetOptions
             MetricBudgetRule rule = rules[i];
             string prefix = "Rule " + (i + 1).ToString(CultureInfo.InvariantCulture) + " (" + rule.Selector + "): ";
 
-            if (!rule.Budget.HasLimit())
+            InstrumentBudget configurationBudget = rule.ConfigurationBudget!;
+
+            if (!configurationBudget.HasLimit())
             {
                 problems.Add(prefix + "no budget is configured. Set MaxObservedSeries or declare at least one tag budget with MaxDistinctValues.");
             }
 
-            if (rule.Budget.MaxObservedSeries is int maxSeries)
+            if (configurationBudget.MaxObservedSeries is int maxSeries)
             {
                 if (maxSeries <= 0)
                 {
@@ -198,7 +270,7 @@ public sealed class MetricBudgetOptions
                 }
             }
 
-            foreach (TagBudget tag in rule.Budget.Tags)
+            foreach (TagBudget tag in configurationBudget.Tags)
             {
                 if (!tag.MaxDistinctValues.HasValue)
                 {
@@ -210,7 +282,7 @@ public sealed class MetricBudgetOptions
                 }
             }
 
-            frozenRules[i] = FrozenRule.Create(rule);
+            frozenRules[i] = FrozenRule.Create(configurationBudget, rule.Selector);
         }
 
         if (problems.Count > 0)
@@ -219,7 +291,18 @@ public sealed class MetricBudgetOptions
                 "Invalid MetricBudget configuration: " + string.Join(" ", problems));
         }
 
-        return new FrozenOptions(MaxTrackedSeries, MaxTrackedValuesPerTag, MaxTagValueLength, frozenRules);
+        return new FrozenOptions(
+            MaxTrackedSeries,
+            MaxTrackedValuesPerTag,
+            MaxTagValueLength,
+            MaxTrackedInstrumentIdentities,
+            MaxTrackedInstrumentInstances,
+            MaxTrackedConflicts,
+            MaxTrackedTagKeysPerInstrument,
+            MaxTagCount,
+            MaxInstrumentIdentityLength,
+            MaxTagKeyLength,
+            frozenRules);
     }
 
     private static void ValidatePositive(int value, string name, List<string> problems)

@@ -16,10 +16,11 @@ namespace KeelMatrix.MetricBudget;
 /// </para>
 /// <para>
 /// <b>Containment.</b> <c>MeterListener.Dispose</c> does not stop measurement delivery for instruments that the
-/// listener already enabled: measured on .NET 8.0.31, callbacks keep firing and <c>Instrument.Enabled</c> stays
-/// true after disposal. This session therefore disables measurement events explicitly for every instrument it
-/// enabled, both when <see cref="Complete"/> runs and when it is disposed without completing. Disposal is not the
-/// containment mechanism; the explicit disable is.
+/// listener already enabled: callbacks can keep firing after disposal, and <c>Instrument.Enabled</c> describes all
+/// listeners rather than this session alone. This session therefore disables measurement events explicitly for
+/// every instrument it enabled, both when <see cref="Complete"/> runs and when it is disposed without completing.
+/// Disposal is not the containment mechanism; the explicit disable is. The flag may remain true when another
+/// listener still has the instrument enabled.
 /// </para>
 /// <para>
 /// <b>Isolation.</b> Instrument publication is process-global, so a session sees instruments created by any code
@@ -104,11 +105,11 @@ public sealed class MetricBudgetSession : IDisposable
     /// </summary>
     /// <remarks>
     /// Observable instruments deliver measurements only when their callbacks run, and the BCL never runs them at
-    /// listener start. Call this method when the application under test has no metrics SDK that already collects
-    /// observable instruments, otherwise an observable instrument reports
-    /// <see cref="MetricBudgetOutcome.NoMeasurementsObserved"/>. Calling it again records another measurement per
-    /// observable instrument, exactly as the BCL does, and calling it after the session completed does nothing
-    /// because every selected instrument has been disabled.
+    /// listener start. Call this method at the intended observation points even when OpenTelemetry or another
+    /// metrics SDK is collecting: observable callbacks deliver to the specific listener that requested collection,
+    /// so another listener's collection does not populate this session. Calling it again records another measurement
+    /// per observable instrument, exactly as the BCL does, and calling it after the session completed does nothing
+    /// because every selected instrument has been disabled for this session.
     /// </remarks>
     public void RecordObservableInstruments()
     {

@@ -25,7 +25,9 @@ The instrument exists but delivered nothing.
 
 - Observable instruments deliver measurements only when their callbacks run. If the application under test has no
   metrics SDK collecting them, call `session.RecordObservableInstruments()` where you want the collection to
-  happen. The BCL never invokes observable callbacks when a listener starts.
+  happen. Call it even when OpenTelemetry or another metrics listener is active: observable callbacks deliver to the
+  specific listener that requested collection, and another listener's collection does not populate this session.
+  The BCL never invokes observable callbacks when a listener starts.
 - Counters and histograms only record when the instrumented operation runs. A request that short-circuits, a
   cache hit, or an early return can skip the measurement.
 
@@ -40,10 +42,11 @@ with a non-positive safety bound throws `MetricBudgetConfigurationException` bef
 
 ## `ObservationIncomplete`
 
-A safety bound was reached. The report names the bound, the instrument, and how many observations could not be
-tracked, and every affected count is a lower bound. See [safety-bounds.md](safety-bounds.md). Raise the
-per-instrument-identity `MaxTrackedSeries` or `MaxTrackedValuesPerTag` when the workload is representative; narrow the workload when the
-cardinality is the finding you were looking for.
+A safety bound was reached, or a delivered value/tag set could not be admitted under the supported identity policy.
+The report names the bound or incomplete state, and every affected count is a lower bound. See
+[safety-bounds.md](safety-bounds.md). Raise the relevant bound when the workload is representative; narrow the
+workload when the cardinality is the finding you were looking for. Unsupported tag values are rejected without
+calling user-defined `ToString()`.
 
 ## A tag budget never triggers
 
