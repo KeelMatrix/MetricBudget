@@ -67,6 +67,10 @@ internal static class ReportBuilder
                     rule.MaxObservedSeries,
                     account.UntrackedSeriesObservations,
                     account.SeriesTrackingIncomplete,
+                    account.UntrackedTagSetObservations,
+                    account.UntrackedTagKeyObservations,
+                    account.TagSetTrackingIncomplete,
+                    account.TagKeyCapExhausted,
                     tags);
 
                 instruments.Add(instrument);
@@ -91,6 +95,39 @@ internal static class ReportBuilder
                 }
 
                 ruleHasMeasurements = true;
+
+                if (account.TagSetTrackingIncomplete)
+                {
+                    violations.Add(new MetricBudgetViolation(
+                        MetricBudgetViolationKind.SafetyLimitReached,
+                        "one or more delivered tag sets for " + account.Identity.Describe()
+                        + " could not be tracked because a tag set was oversized or contained an unsupported value."
+                        + " The observed series count is a lower bound; use only supported tag value types and keep"
+                        + " tag keys and tag sets within the configured safety bounds.",
+                        account.Identity.MeterName,
+                        account.Identity.MeterVersion,
+                        account.Identity.InstrumentName,
+                        account.Identity.Kind,
+                        tagKey: null,
+                        observedCount: null,
+                        configuredLimit: null));
+                }
+
+                if (account.TagKeyCapExhausted)
+                {
+                    violations.Add(new MetricBudgetViolation(
+                        MetricBudgetViolationKind.SafetyLimitReached,
+                        "the retained tag-key safety bound for " + account.Identity.Describe()
+                        + " was reached; additional delivered keys were not tracked and the observed tag state is a"
+                        + " lower bound. Raise MaxTrackedTagKeysPerInstrument or narrow the workload.",
+                        account.Identity.MeterName,
+                        account.Identity.MeterVersion,
+                        account.Identity.InstrumentName,
+                        account.Identity.Kind,
+                        tagKey: null,
+                        observedCount: null,
+                        configuredLimit: null));
+                }
 
                 if (rule.MaxObservedSeries is int maxSeries && account.ObservedSeriesCount > maxSeries)
                 {
@@ -195,6 +232,57 @@ internal static class ReportBuilder
         bool seriesTrackingIncomplete = snapshot.SeriesTrackingIncomplete;
         bool tagValueTrackingIncomplete = snapshot.TagValueTrackingIncomplete;
 
+        if (snapshot.InstrumentIdentityTrackingIncomplete)
+        {
+            violations.Add(new MetricBudgetViolation(
+                MetricBudgetViolationKind.SafetyLimitReached,
+                "the instrument-identity safety bound was reached; "
+                + snapshot.UntrackedInstrumentIdentities.ToString(CultureInfo.InvariantCulture)
+                + " selected published identity(ies) were not retained or enabled. The report is incomplete; raise "
+                + "MaxTrackedInstrumentIdentities or narrow the workload.",
+                meterName: null,
+                meterVersion: null,
+                instrumentName: null,
+                instrumentKind: MetricInstrumentKind.Unknown,
+                tagKey: null,
+                observedCount: null,
+                configuredLimit: snapshot.MaxTrackedInstrumentIdentities));
+        }
+
+        if (snapshot.InstrumentInstanceTrackingIncomplete)
+        {
+            violations.Add(new MetricBudgetViolation(
+                MetricBudgetViolationKind.SafetyLimitReached,
+                "the physical-instrument safety bound was reached; "
+                + snapshot.UntrackedInstrumentInstances.ToString(CultureInfo.InvariantCulture)
+                + " selected instance(s) were not retained or enabled. The report is incomplete; raise "
+                + "MaxTrackedInstrumentInstances or narrow the workload.",
+                meterName: null,
+                meterVersion: null,
+                instrumentName: null,
+                instrumentKind: MetricInstrumentKind.Unknown,
+                tagKey: null,
+                observedCount: null,
+                configuredLimit: snapshot.MaxTrackedInstrumentInstances));
+        }
+
+        if (snapshot.ConflictTrackingIncomplete)
+        {
+            violations.Add(new MetricBudgetViolation(
+                MetricBudgetViolationKind.SafetyLimitReached,
+                "the configuration-conflict safety bound was reached; "
+                + snapshot.UntrackedConflicts.ToString(CultureInfo.InvariantCulture)
+                + " ambiguous identity record(s) were not retained. The report is incomplete; raise "
+                + "MaxTrackedConflicts or narrow the workload.",
+                meterName: null,
+                meterVersion: null,
+                instrumentName: null,
+                instrumentKind: MetricInstrumentKind.Unknown,
+                tagKey: null,
+                observedCount: null,
+                configuredLimit: snapshot.MaxTrackedConflicts));
+        }
+
         for (int i = 0; i < snapshot.Instruments.Length; i++)
         {
             InstrumentAccountSnapshot account = snapshot.Instruments[i];
@@ -258,7 +346,8 @@ internal static class ReportBuilder
             anyInstrumentUnmeasured,
             accountingIsConsistent,
             seriesTrackingIncomplete,
-            tagValueTrackingIncomplete);
+            tagValueTrackingIncomplete,
+            snapshot.StateTrackingIncomplete);
 
         MetricBudgetSafetyReport safety = new MetricBudgetSafetyReport(
             snapshot.MaxTrackedSeries,
@@ -267,7 +356,23 @@ internal static class ReportBuilder
             seriesTrackingIncomplete,
             UntrackedSeriesObservations(snapshot),
             tagValueTrackingIncomplete,
-            untrackedTagValueObservations);
+            untrackedTagValueObservations,
+            snapshot.MaxTrackedInstrumentIdentities,
+            snapshot.MaxTrackedInstrumentInstances,
+            snapshot.MaxTrackedConflicts,
+            snapshot.MaxTrackedTagKeysPerInstrument,
+            snapshot.MaxTagCount,
+            snapshot.MaxInstrumentIdentityLength,
+            snapshot.MaxTagKeyLength,
+            snapshot.InstrumentIdentityTrackingIncomplete || snapshot.InstrumentInstanceTrackingIncomplete,
+            snapshot.UntrackedInstrumentIdentities,
+            snapshot.UntrackedInstrumentInstances,
+            snapshot.ConflictTrackingIncomplete,
+            snapshot.UntrackedConflicts,
+            TagSetTrackingIncomplete(snapshot),
+            UntrackedTagSetObservations(snapshot),
+            TagKeyTrackingIncomplete(snapshot),
+            UntrackedTagKeyObservations(snapshot));
 
         int observedInstrumentCount = 0;
         int observedSeriesCount = 0;
@@ -299,7 +404,8 @@ internal static class ReportBuilder
         bool anyInstrumentUnmeasured,
         bool accountingIsConsistent,
         bool seriesTrackingIncomplete,
-        bool tagValueTrackingIncomplete)
+        bool tagValueTrackingIncomplete,
+        bool stateTrackingIncomplete)
     {
         if (snapshot.Conflicts.Length > 0)
         {
@@ -311,7 +417,7 @@ internal static class ReportBuilder
             return MetricBudgetOutcome.Violation;
         }
 
-        if (!accountingIsConsistent || seriesTrackingIncomplete || tagValueTrackingIncomplete)
+        if (!accountingIsConsistent || seriesTrackingIncomplete || tagValueTrackingIncomplete || stateTrackingIncomplete)
         {
             return MetricBudgetOutcome.ObservationIncomplete;
         }
@@ -338,6 +444,54 @@ internal static class ReportBuilder
         }
 
         return total;
+    }
+
+    private static long UntrackedTagSetObservations(SessionSnapshot snapshot)
+    {
+        long total = 0;
+        for (int i = 0; i < snapshot.Instruments.Length; i++)
+        {
+            total += snapshot.Instruments[i].UntrackedTagSetObservations;
+        }
+
+        return total;
+    }
+
+    private static long UntrackedTagKeyObservations(SessionSnapshot snapshot)
+    {
+        long total = 0;
+        for (int i = 0; i < snapshot.Instruments.Length; i++)
+        {
+            total += snapshot.Instruments[i].UntrackedTagKeyObservations;
+        }
+
+        return total;
+    }
+
+    private static bool TagSetTrackingIncomplete(SessionSnapshot snapshot)
+    {
+        for (int i = 0; i < snapshot.Instruments.Length; i++)
+        {
+            if (snapshot.Instruments[i].TagSetTrackingIncomplete)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool TagKeyTrackingIncomplete(SessionSnapshot snapshot)
+    {
+        for (int i = 0; i < snapshot.Instruments.Length; i++)
+        {
+            if (snapshot.Instruments[i].TagKeyCapExhausted)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static List<MetricBudgetTagResult> BuildTagResults(FrozenRule rule, InstrumentAccountSnapshot account)
@@ -393,20 +547,16 @@ internal static class ReportBuilder
     /// Rebuilds a public rule description from the frozen configuration. The budget object is a copy so a report
     /// never exposes a mutable configuration object that a later session change could alter.
     /// </summary>
-    private static InstrumentBudget OriginalBudget(FrozenRule rule)
+    private static MetricBudgetBudget OriginalBudget(FrozenRule rule)
     {
-        InstrumentBudget budget = new InstrumentBudget
-        {
-            MaxObservedSeries = rule.MaxObservedSeries,
-        };
-
-        for (int i = 0; i < rule.OrderedTagBudgets.Length; i++)
+        MetricBudgetTagBudget[] tags = new MetricBudgetTagBudget[rule.OrderedTagBudgets.Length];
+        for (int i = 0; i < tags.Length; i++)
         {
             TagBudgetLimit tag = rule.OrderedTagBudgets[i];
-            budget.Tag(tag.Key).MaxDistinctValues = tag.MaxDistinctValues;
+            tags[i] = new MetricBudgetTagBudget(tag.Key, tag.MaxDistinctValues);
         }
 
-        return budget;
+        return MetricBudgetBudget.Create(rule.MaxObservedSeries, tags);
     }
 
     private static string DescribeTagKey(string? key)

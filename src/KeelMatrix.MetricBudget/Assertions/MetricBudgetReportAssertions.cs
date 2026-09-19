@@ -214,6 +214,18 @@ public static class MetricBudgetReportAssertions
         string meterName,
         string instrumentName)
     {
+        if (meterName is null)
+        {
+            throw new ArgumentNullException(nameof(meterName));
+        }
+
+        if (instrumentName is null)
+        {
+            throw new ArgumentNullException(nameof(instrumentName));
+        }
+
+        MetricBudgetInstrumentResult? match = null;
+        List<string>? ambiguous = null;
         for (int i = 0; i < report.Rules.Count; i++)
         {
             IReadOnlyList<MetricBudgetInstrumentResult> instruments = report.Rules[i].Instruments;
@@ -223,12 +235,42 @@ public static class MetricBudgetReportAssertions
                 if (string.Equals(candidate.MeterName, meterName, StringComparison.Ordinal)
                     && string.Equals(candidate.InstrumentName, instrumentName, StringComparison.Ordinal))
                 {
-                    return candidate;
+                    if (match is null)
+                    {
+                        match = candidate;
+                    }
+                    else
+                    {
+                        ambiguous ??= new List<string>();
+                        if (ambiguous.Count == 0)
+                        {
+                            ambiguous.Add(DescribeIdentity(match));
+                        }
+
+                        ambiguous.Add(DescribeIdentity(candidate));
+                    }
                 }
             }
         }
 
-        return null;
+        if (ambiguous is not null)
+        {
+            throw new MetricBudgetAssertionException(
+                "The focused assertion for meter \"" + meterName + "\" and instrument \"" + instrumentName
+                + "\" is ambiguous. It matched multiple instrument identities: "
+                + string.Join(", ", ambiguous)
+                + ". Inspect the report and select the full meter version and instrument kind before asserting."
+                + Environment.NewLine
+                + report.ToDiagnosticString());
+        }
+
+        return match;
+    }
+
+    private static string DescribeIdentity(MetricBudgetInstrumentResult instrument)
+    {
+        return "meter version " + (instrument.MeterVersion ?? "<none>")
+            + ", kind " + instrument.InstrumentKind;
     }
 
     private static MetricBudgetTagResult? FindTag(MetricBudgetInstrumentResult? instrument, string tagKey)

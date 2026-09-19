@@ -44,6 +44,21 @@ internal static class AccountingInvariants
                 + " measurement(s) arrived from an instrument the session did not enable");
         }
 
+        if (snapshot.UntrackedInstrumentIdentities > 0 && !snapshot.InstrumentIdentityTrackingIncomplete)
+        {
+            problems.Add("accounting is inconsistent: instrument identities were dropped without reporting an identity bound");
+        }
+
+        if (snapshot.UntrackedInstrumentInstances > 0 && !snapshot.InstrumentInstanceTrackingIncomplete)
+        {
+            problems.Add("accounting is inconsistent: physical instrument instances were dropped without reporting an instance bound");
+        }
+
+        if (snapshot.UntrackedConflicts > 0 && !snapshot.ConflictTrackingIncomplete)
+        {
+            problems.Add("accounting is inconsistent: configuration conflicts were dropped without reporting a conflict bound");
+        }
+
         for (int i = 0; i < snapshot.Instruments.Length; i++)
         {
             InstrumentAccountSnapshot instrument = snapshot.Instruments[i];
@@ -51,7 +66,8 @@ internal static class AccountingInvariants
 
             long classified = instrument.NewSeriesObservations
                 + instrument.ExistingSeriesObservations
-                + instrument.UntrackedSeriesObservations;
+                + instrument.UntrackedSeriesObservations
+                + instrument.UntrackedTagSetObservations;
             if (classified != instrument.MeasurementCount)
             {
                 problems.Add(

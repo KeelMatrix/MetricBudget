@@ -43,6 +43,13 @@ internal readonly struct InstrumentIdentity : IEquatable<InstrumentIdentity>
     /// <summary>Stable lowercase token for the instrument kind, used inside series identity text.</summary>
     internal string KindName => KindToken(Kind);
 
+    internal bool HasComponentLengthsAtMost(int maximum)
+    {
+        return MeterName.Length <= maximum
+            && (MeterVersion is null || MeterVersion.Length <= maximum)
+            && InstrumentName.Length <= maximum;
+    }
+
     internal static InstrumentIdentity FromInstrument(Instrument instrument)
     {
         Meter meter = instrument.Meter;

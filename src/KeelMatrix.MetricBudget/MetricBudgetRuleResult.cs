@@ -1,5 +1,7 @@
 // Copyright (c) KeelMatrix
 
+using System.Collections.ObjectModel;
+
 namespace KeelMatrix.MetricBudget;
 
 /// <summary>
@@ -31,7 +33,13 @@ public sealed class MetricBudgetRuleResult
         Rule = rule;
         RuleIndex = ruleIndex;
         State = state;
-        Instruments = instruments;
+        MetricBudgetInstrumentResult[] copy = new MetricBudgetInstrumentResult[instruments.Count];
+        for (int i = 0; i < copy.Length; i++)
+        {
+            copy[i] = instruments[i];
+        }
+
+        Instruments = new ReadOnlyCollection<MetricBudgetInstrumentResult>(copy);
     }
 
     /// <summary>

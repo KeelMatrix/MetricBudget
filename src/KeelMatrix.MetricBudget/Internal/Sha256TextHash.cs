@@ -66,7 +66,7 @@ internal readonly struct Sha256Digest : IEquatable<Sha256Digest>
 }
 
 /// <summary>
-/// UTF-8 SHA-256 helper for tag identity work.
+/// Lossless UTF-16-code-unit SHA-256 helper for tag identity work.
 /// </summary>
 /// <remarks>
 /// A hasher is cached per thread because one measurement computes one digest per delivered tag plus one digest for
@@ -105,24 +105,24 @@ internal static class Sha256TextHash
         SHA256 sha = hasher ??= SHA256.Create();
         sha.Initialize();
 
-        if (text.Length <= ChunkChars)
-        {
-            byte[] bytes = Encoding.UTF8.GetBytes(text);
-            return sha.ComputeHash(bytes);
-        }
-
-        byte[] chunkBytes = new byte[ChunkChars * 4];
+        byte[] chunkBytes = new byte[ChunkChars * 2];
         int offset = 0;
         while (offset < text.Length)
         {
             int length = Math.Min(ChunkChars, text.Length - offset);
-            if (offset + length < text.Length && char.IsHighSurrogate(text[offset + length - 1]))
+            int byteCount = 0;
+            for (int i = 0; i < length; i++)
             {
-                // Never split a surrogate pair across chunks.
-                length--;
+                char character = text[offset + i];
+                chunkBytes[byteCount++] = (byte)character;
+                chunkBytes[byteCount++] = (byte)(character >> 8);
             }
 
-            int byteCount = Encoding.UTF8.GetBytes(text, offset, length, chunkBytes, 0);
+            if (offset == 0 && length == text.Length)
+            {
+                return sha.ComputeHash(chunkBytes, 0, byteCount);
+            }
+
             sha.TransformBlock(chunkBytes, 0, byteCount, outputBuffer: null, outputOffset: 0);
             offset += length;
         }

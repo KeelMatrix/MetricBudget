@@ -36,6 +36,42 @@ if ($workflowFiles.Count -lt $minimumWorkflowCount)
     Fail "Expected at least $minimumWorkflowCount workflow files, but found $($workflowFiles.Count)."
 }
 
+$releaseWorkflowPath = Join-Path $workflowDirectory "release.yml"
+if (-not (Test-Path -LiteralPath $releaseWorkflowPath -PathType Leaf))
+{
+    Fail "Release workflow '$releaseWorkflowPath' is missing."
+}
+
+$releaseWorkflowLines = [IO.File]::ReadAllLines($releaseWorkflowPath)
+$packagePushIndexes = @()
+for ($index = 0; $index -lt $releaseWorkflowLines.Count; $index++)
+{
+    if ($releaseWorkflowLines[$index].Trim() -eq 'dotnet nuget push')
+    {
+        $packagePushIndexes += $index
+    }
+}
+
+if ($packagePushIndexes.Count -ne 1)
+{
+    Fail "Release publication contract requires exactly one dotnet nuget push command; found $($packagePushIndexes.Count)."
+}
+
+$primaryPushWindowEnd = [Math]::Min($releaseWorkflowLines.Count - 1, $packagePushIndexes[0] + 12)
+$primaryPushWindow = ($releaseWorkflowLines[$packagePushIndexes[0]..$primaryPushWindowEnd] -join "`n")
+if ($primaryPushWindow -match '(?i)\.snupkg')
+{
+    Fail "Release publication contract requires the primary .nupkg push to submit its matching symbols package automatically; a direct .snupkg push was found."
+}
+if ($primaryPushWindow -match '(?i)--no-symbols')
+{
+    Fail "Release publication contract does not allow --no-symbols without one separate symbols push."
+}
+if ($releaseWorkflowLines -match '(?i)Push validated symbols package')
+{
+    Fail "Release publication contract must not contain a redundant explicit symbols push."
+}
+
 function Get-WorkflowRelativePath {
     param([Parameter(Mandatory = $true)][string] $Path)
 

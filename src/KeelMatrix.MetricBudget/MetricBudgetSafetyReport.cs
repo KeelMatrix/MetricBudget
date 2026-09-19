@@ -19,7 +19,23 @@ public sealed class MetricBudgetSafetyReport
         bool seriesTrackingIncomplete,
         long untrackedSeriesObservations,
         bool tagValueTrackingIncomplete,
-        long untrackedTagValueObservations)
+        long untrackedTagValueObservations,
+        int maxTrackedInstrumentIdentities,
+        int maxTrackedInstrumentInstances,
+        int maxTrackedConflicts,
+        int maxTrackedTagKeysPerInstrument,
+        int maxTagCount,
+        int maxInstrumentIdentityLength,
+        int maxTagKeyLength,
+        bool instrumentTrackingIncomplete,
+        long untrackedInstrumentIdentities,
+        long untrackedInstrumentInstances,
+        bool conflictTrackingIncomplete,
+        long untrackedConflicts,
+        bool tagSetTrackingIncomplete,
+        long untrackedTagSetObservations,
+        bool tagKeyTrackingIncomplete,
+        long untrackedTagKeyObservations)
     {
         MaxTrackedSeries = maxTrackedSeries;
         MaxTrackedValuesPerTag = maxTrackedValuesPerTag;
@@ -28,6 +44,22 @@ public sealed class MetricBudgetSafetyReport
         UntrackedSeriesObservations = untrackedSeriesObservations;
         TagValueTrackingIncomplete = tagValueTrackingIncomplete;
         UntrackedTagValueObservations = untrackedTagValueObservations;
+        MaxTrackedInstrumentIdentities = maxTrackedInstrumentIdentities;
+        MaxTrackedInstrumentInstances = maxTrackedInstrumentInstances;
+        MaxTrackedConflicts = maxTrackedConflicts;
+        MaxTrackedTagKeysPerInstrument = maxTrackedTagKeysPerInstrument;
+        MaxTagCount = maxTagCount;
+        MaxInstrumentIdentityLength = maxInstrumentIdentityLength;
+        MaxTagKeyLength = maxTagKeyLength;
+        InstrumentTrackingIncomplete = instrumentTrackingIncomplete;
+        UntrackedInstrumentIdentities = untrackedInstrumentIdentities;
+        UntrackedInstrumentInstances = untrackedInstrumentInstances;
+        ConflictTrackingIncomplete = conflictTrackingIncomplete;
+        UntrackedConflicts = untrackedConflicts;
+        TagSetTrackingIncomplete = tagSetTrackingIncomplete;
+        UntrackedTagSetObservations = untrackedTagSetObservations;
+        TagKeyTrackingIncomplete = tagKeyTrackingIncomplete;
+        UntrackedTagKeyObservations = untrackedTagKeyObservations;
     }
 
     /// <summary>
@@ -72,8 +104,61 @@ public sealed class MetricBudgetSafetyReport
     /// </summary>
     public long UntrackedTagValueObservations { get; }
 
+    /// <summary>Configured bound on retained instrument identities.</summary>
+    public int MaxTrackedInstrumentIdentities { get; }
+
+    /// <summary>Configured bound on retained physical instrument instances.</summary>
+    public int MaxTrackedInstrumentInstances { get; }
+
+    /// <summary>Configured bound on retained ambiguous identity records.</summary>
+    public int MaxTrackedConflicts { get; }
+
+    /// <summary>Configured bound on retained tag keys per instrument identity.</summary>
+    public int MaxTrackedTagKeysPerInstrument { get; }
+
+    /// <summary>Configured bound on tags accepted from one measurement.</summary>
+    public int MaxTagCount { get; }
+
+    /// <summary>Configured bound on each meter and instrument identity component.</summary>
+    public int MaxInstrumentIdentityLength { get; }
+
+    /// <summary>Configured bound on a delivered tag key.</summary>
+    public int MaxTagKeyLength { get; }
+
+    /// <summary>Whether an instrument identity or physical instance bound was reached.</summary>
+    public bool InstrumentTrackingIncomplete { get; }
+
+    /// <summary>Selected published identities not retained after the identity bound was reached.</summary>
+    public long UntrackedInstrumentIdentities { get; }
+
+    /// <summary>Physical instrument instances not retained after the instance bound was reached.</summary>
+    public long UntrackedInstrumentInstances { get; }
+
+    /// <summary>Whether the conflict-record bound was reached.</summary>
+    public bool ConflictTrackingIncomplete { get; }
+
+    /// <summary>Ambiguous identities whose conflict record was not retained.</summary>
+    public long UntrackedConflicts { get; }
+
+    /// <summary>Whether one or more delivered tag sets could not be canonicalized.</summary>
+    public bool TagSetTrackingIncomplete { get; }
+
+    /// <summary>Measurements whose tag set could not be canonicalized.</summary>
+    public long UntrackedTagSetObservations { get; }
+
+    /// <summary>Whether the retained tag-key bound was reached.</summary>
+    public bool TagKeyTrackingIncomplete { get; }
+
+    /// <summary>Delivered tag keys that were not retained after the key bound was reached.</summary>
+    public long UntrackedTagKeyObservations { get; }
+
     /// <summary>
     /// Whether all accounting completed inside the configured safety bounds.
     /// </summary>
-    public bool IsComplete => !SeriesTrackingIncomplete && !TagValueTrackingIncomplete;
+    public bool IsComplete => !SeriesTrackingIncomplete
+        && !TagValueTrackingIncomplete
+        && !InstrumentTrackingIncomplete
+        && !ConflictTrackingIncomplete
+        && !TagSetTrackingIncomplete
+        && !TagKeyTrackingIncomplete;
 }

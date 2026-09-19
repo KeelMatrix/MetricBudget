@@ -34,9 +34,17 @@ internal sealed class InstrumentAccount
 
     internal long UntrackedSeriesObservations { get; private set; }
 
+    internal long UntrackedTagSetObservations { get; private set; }
+
+    internal long UntrackedTagKeyObservations { get; private set; }
+
     internal bool SeriesCapExhausted { get; private set; }
 
     internal bool TagValueCapExhausted { get; private set; }
+
+    internal bool TagKeyCapExhausted { get; private set; }
+
+    internal bool TagSetTrackingIncomplete { get; private set; }
 
     internal int ObservedSeriesCount => series.Count;
 
@@ -60,18 +68,39 @@ internal sealed class InstrumentAccount
             UntrackedSeriesObservations++;
         }
 
+        if (series.Count == options.MaxTrackedSeries && SeriesCapExhausted)
+        {
+            // No tag state can be safely inferred after the series bound is exhausted. In particular, do not
+            // admit a new key for every untracked series.
+            return;
+        }
+
         for (int i = 0; i < fields.Length; i++)
         {
             TagField field = fields[i];
 
             if (!tagValues.TryGetValue(field.KeyField, out TagValueAccount? account))
             {
+                if (tagValues.Count >= options.MaxTrackedTagKeysPerInstrument)
+                {
+                    TagKeyCapExhausted = true;
+                    UntrackedTagKeyObservations++;
+                    continue;
+                }
+
                 account = new TagValueAccount();
                 tagValues.Add(field.KeyField, account);
             }
 
             account.Record(field.ValueDigest, options.MaxTrackedValuesPerTag);
         }
+    }
+
+    internal void RecordIncompleteMeasurement()
+    {
+        MeasurementCount++;
+        TagSetTrackingIncomplete = true;
+        UntrackedTagSetObservations++;
     }
 
     internal InstrumentAccountSnapshot CreateSnapshot()
@@ -93,9 +122,13 @@ internal sealed class InstrumentAccount
             NewSeriesObservations,
             ExistingSeriesObservations,
             UntrackedSeriesObservations,
+            UntrackedTagSetObservations,
+            UntrackedTagKeyObservations,
             ObservedSeriesCount,
             SeriesCapExhausted,
             TagValueCapExhausted,
+            TagKeyCapExhausted,
+            TagSetTrackingIncomplete,
             tags);
     }
 

@@ -22,6 +22,13 @@ internal readonly struct TagField
     internal Sha256Digest ValueDigest { get; }
 }
 
+internal enum TagIdentityFailure
+{
+    TooManyTags,
+    TagKeyTooLong,
+    UnsupportedValue,
+}
+
 /// <summary>
 /// Deterministic, order-independent identity for a delivered tag set.
 /// </summary>
@@ -33,10 +40,11 @@ internal readonly struct TagField
 /// <see langword="null"/>. Length-prefixed fields always start with an ASCII digit, so no delivered key can
 /// produce the bare marker.</item>
 /// <item>A value field is <c>{descriptorLength}:{descriptor}</c>.</item>
-/// <item>A descriptor is <c>{CLR type full name}:{invariant text}</c>, so <c>int 1</c> and <c>string "1"</c> are
-/// different identities, and a <see langword="null"/> value is the descriptor <c>null</c>.</item>
-/// <item>A value whose invariant text is longer than the configured bound becomes
-/// <c>{type}#chars={count}#sha256={hex}</c>, so one pathological value cannot inflate an identity.</item>
+/// <item>Only the documented primitive values, strings, GUIDs, date/time values, and time spans are supported.
+/// Their exact type and lossless representation define identity; unsupported objects are rejected as incomplete and
+/// are never formatted.</item>
+/// <item>Strings are sequences of UTF-16 code units, including unpaired surrogates. Oversized strings become
+/// <c>{type}#chars={count}#sha256={hex}</c>, where the digest is over those exact code units.</item>
 /// <item>Entries are sorted with <see cref="StringComparer.Ordinal"/> and joined with U+001F, so tag order does
 /// not change identity.</item>
 /// <item>Duplicate keys are retained, so a tag set is a sorted multiset rather than a set.</item>
@@ -60,17 +68,33 @@ internal static class TagIdentity
     /// </summary>
     /// <param name="tags">Tag span delivered by <c>MeterListener</c>. Only valid during the callback.</param>
     /// <param name="maxValueLength">Bound applied to a tag value's invariant text.</param>
+    /// <param name="maxTagCount">Maximum number of delivered tags admitted to identity construction.</param>
+    /// <param name="maxTagKeyLength">Maximum length of a delivered tag key admitted to identity construction.</param>
+    /// <param name="tagSetKey">Canonical tag-set identity text, when construction succeeds.</param>
     /// <param name="fields">Per-tag accounting fields in delivered order.</param>
     /// <returns>The canonical tag-set identity text used to derive the observed-series identity.</returns>
-    internal static string CreateTagSetKey(
+    internal static bool TryCreateTagSetKey(
         ReadOnlySpan<KeyValuePair<string, object?>> tags,
         int maxValueLength,
+        int maxTagCount,
+        int maxTagKeyLength,
+        out string tagSetKey,
         out TagField[] fields)
     {
+        if (tags.Length > maxTagCount)
+        {
+            fields = NoTagFields;
+            tagSetKey = string.Empty;
+            LastFailure = TagIdentityFailure.TooManyTags;
+            return false;
+        }
+
         if (tags.Length == 0)
         {
             fields = NoTagFields;
-            return string.Empty;
+            tagSetKey = string.Empty;
+            LastFailure = null;
+            return true;
         }
 
         fields = new TagField[tags.Length];
@@ -79,14 +103,40 @@ internal static class TagIdentity
         for (int i = 0; i < tags.Length; i++)
         {
             string? key = tags[i].Key;
-            string descriptor = DescribeValue(tags[i].Value, maxValueLength);
+            if (key is not null && key.Length > maxTagKeyLength)
+            {
+                fields = NoTagFields;
+                tagSetKey = string.Empty;
+                LastFailure = TagIdentityFailure.TagKeyTooLong;
+                return false;
+            }
+
+            if (!TryDescribeValue(tags[i].Value, maxValueLength, out string descriptor))
+            {
+                fields = NoTagFields;
+                tagSetKey = string.Empty;
+                LastFailure = TagIdentityFailure.UnsupportedValue;
+                return false;
+            }
 
             fields[i] = new TagField(EncodeKeyField(key), Sha256TextHash.Digest(descriptor));
             entries[i] = EncodeEntry(key, descriptor);
         }
 
         Array.Sort(entries, StringComparer.Ordinal);
-        return string.Join(EntrySeparator.ToString(), entries);
+        tagSetKey = string.Join(EntrySeparator.ToString(), entries);
+        LastFailure = null;
+        return true;
+    }
+
+    [ThreadStatic]
+    private static TagIdentityFailure? LastFailure;
+
+    internal static TagIdentityFailure GetLastFailure()
+    {
+        TagIdentityFailure failure = LastFailure ?? TagIdentityFailure.UnsupportedValue;
+        LastFailure = null;
+        return failure;
     }
 
     /// <summary>
@@ -115,28 +165,104 @@ internal static class TagIdentity
 
     internal static string DescribeValue(object? value, int maxValueLength)
     {
+        return TryDescribeValue(value, maxValueLength, out string descriptor)
+            ? descriptor
+            : "unsupported";
+    }
+
+    private static bool TryDescribeValue(object? value, int maxValueLength, out string descriptor)
+    {
         if (value is null)
         {
-            return "null";
+            descriptor = "null";
+            return true;
         }
 
-        Type type = value.GetType();
-        string typeName = type.FullName ?? type.Name;
+        switch (value)
+        {
+            case string text:
+                return DescribeText(typeof(string).FullName!, text, maxValueLength, out descriptor);
+            case bool boolean:
+                descriptor = typeof(bool).FullName + ":" + (boolean ? "true" : "false");
+                return true;
+            case byte number:
+                descriptor = typeof(byte).FullName + ":" + number.ToString(CultureInfo.InvariantCulture);
+                return true;
+            case sbyte number:
+                descriptor = typeof(sbyte).FullName + ":" + number.ToString(CultureInfo.InvariantCulture);
+                return true;
+            case short number:
+                descriptor = typeof(short).FullName + ":" + number.ToString(CultureInfo.InvariantCulture);
+                return true;
+            case ushort number:
+                descriptor = typeof(ushort).FullName + ":" + number.ToString(CultureInfo.InvariantCulture);
+                return true;
+            case int number:
+                descriptor = typeof(int).FullName + ":" + number.ToString(CultureInfo.InvariantCulture);
+                return true;
+            case uint number:
+                descriptor = typeof(uint).FullName + ":" + number.ToString(CultureInfo.InvariantCulture);
+                return true;
+            case long number:
+                descriptor = typeof(long).FullName + ":" + number.ToString(CultureInfo.InvariantCulture);
+                return true;
+            case ulong number:
+                descriptor = typeof(ulong).FullName + ":" + number.ToString(CultureInfo.InvariantCulture);
+                return true;
+            case float number:
+                descriptor = typeof(float).FullName + ":bits="
+                    + BitConverter.ToInt32(BitConverter.GetBytes(number), 0).ToString("X8", CultureInfo.InvariantCulture);
+                return true;
+            case double number:
+                descriptor = typeof(double).FullName + ":bits="
+                    + BitConverter.DoubleToInt64Bits(number).ToString("X16", CultureInfo.InvariantCulture);
+                return true;
+            case decimal number:
+                int[] bits = decimal.GetBits(number);
+                descriptor = typeof(decimal).FullName + ":bits="
+                    + bits[0].ToString("X8", CultureInfo.InvariantCulture)
+                    + bits[1].ToString("X8", CultureInfo.InvariantCulture)
+                    + bits[2].ToString("X8", CultureInfo.InvariantCulture)
+                    + bits[3].ToString("X8", CultureInfo.InvariantCulture);
+                return true;
+            case char character:
+                descriptor = typeof(char).FullName + ":U+"
+                    + ((int)character).ToString("X4", CultureInfo.InvariantCulture);
+                return true;
+            case DateTime dateTime:
+                descriptor = typeof(DateTime).FullName + ":binary="
+                    + dateTime.ToBinary().ToString(CultureInfo.InvariantCulture);
+                return true;
+            case DateTimeOffset dateTimeOffset:
+                descriptor = typeof(DateTimeOffset).FullName + ":ticks="
+                    + dateTimeOffset.Ticks.ToString(CultureInfo.InvariantCulture)
+                    + ":offset=" + dateTimeOffset.Offset.Ticks.ToString(CultureInfo.InvariantCulture);
+                return true;
+            case TimeSpan timeSpan:
+                descriptor = typeof(TimeSpan).FullName + ":ticks="
+                    + timeSpan.Ticks.ToString(CultureInfo.InvariantCulture);
+                return true;
+            case Guid guid:
+                descriptor = typeof(Guid).FullName + ":" + guid.ToString("D").ToUpperInvariant();
+                return true;
+            default:
+                descriptor = string.Empty;
+                return false;
+        }
+    }
 
-        string text = value is string textValue
-            ? textValue
-            : value is IFormattable formattable
-                ? formattable.ToString(null, CultureInfo.InvariantCulture) ?? string.Empty
-                : value.ToString() ?? string.Empty;
-
+    private static bool DescribeText(string typeName, string text, int maxValueLength, out string descriptor)
+    {
         if (maxValueLength > 0 && text.Length > maxValueLength)
         {
-            return typeName
+            descriptor = typeName
                 + "#chars=" + text.Length.ToString(CultureInfo.InvariantCulture)
                 + "#sha256=" + Sha256TextHash.HexDigest(text);
+            return true;
         }
 
-        return typeName + ":" + text;
+        descriptor = typeName + ":" + text;
+        return true;
     }
 
     private static string EncodeEntry(string? key, string descriptor)

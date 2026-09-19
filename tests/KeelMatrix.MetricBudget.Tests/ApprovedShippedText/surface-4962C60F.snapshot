@@ -315,42 +315,24 @@
             Single writer path for everything a session counts.
             </summary>
             <remarks>
-            <para>
             Every counter, flag, and map is written under one writer lock, so measurements arriving concurrently from a
-            parallel test suite are accounted exactly and a summary is a single consistent snapshot. Canonicalization runs
-            before the lock because it is pure, which keeps delivery latency from serializing the whole workload.
-            </para>
-            <para>
-            Instrument identity lookup uses a concurrent map that measurement callbacks only read. Entries are added under
-            the writer lock before the instrument is enabled for delivery, so a callback can never observe a half-built
-            account.
-            </para>
+            parallel test suite are accounted exactly and a summary is a single consistent snapshot. Publication enablement
+            also occurs under this lock, which makes stopping and late publication one coordinated state transition.
             </remarks>
         </member>
         <member name="M:KeelMatrix.MetricBudget.Internal.MetricBudgetState.OnInstrumentPublished(System.Diagnostics.Metrics.Instrument,System.Diagnostics.Metrics.MeterListener)">
             <summary>
-            Handles instrument publication. Selection is decided here, and an instrument is enabled for delivery only
-            when exactly one rule selects it.
+            Handles instrument publication. Selection, bounded admission, and enabling are one locked operation.
             </summary>
         </member>
         <member name="M:KeelMatrix.MetricBudget.Internal.MetricBudgetState.OnMeasurement``1(System.Diagnostics.Metrics.Instrument,``0,System.ReadOnlySpan{System.Collections.Generic.KeyValuePair{System.String,System.Object}},System.Object)">
-            <summary>
-            Records one delivered measurement for a selected instrument.
-            </summary>
-            <typeparam name="T">Measurement type, supplied by the listener callback registration.</typeparam>
-            <param name="instrument">Instrument that delivered the measurement.</param>
-            <param name="measurement">Measurement value, which this verifier does not interpret.</param>
-            <param name="tags">Tag span, valid only for the duration of the callback.</param>
-            <param name="state">Listener state, unused.</param>
+            <summary>Records one delivered measurement for a selected instrument.</summary>
         </member>
         <member name="M:KeelMatrix.MetricBudget.Internal.MetricBudgetState.BeginStop">
             <summary>
-            Stops accounting and returns the instruments whose delivery must be disabled explicitly.
+            Stops accounting and waits for callbacks already admitted before stopping. The returned instruments must be
+            disabled explicitly by the session.
             </summary>
-            <remarks>
-            <c>MeterListener.Dispose</c> does not stop measurement delivery for instruments that a listener already
-            enabled, so the session disables every one of them before it disposes the listener.
-            </remarks>
         </member>
         <member name="T:KeelMatrix.MetricBudget.Internal.ReportBuilder">
             <summary>
@@ -428,7 +410,7 @@
         </member>
         <member name="T:KeelMatrix.MetricBudget.Internal.Sha256TextHash">
             <summary>
-            UTF-8 SHA-256 helper for tag identity work.
+            Lossless UTF-16-code-unit SHA-256 helper for tag identity work.
             </summary>
             <remarks>
             A hasher is cached per thread because one measurement computes one digest per delivered tag plus one digest for
@@ -464,10 +446,11 @@
             <see langword="null"/>. Length-prefixed fields always start with an ASCII digit, so no delivered key can
             produce the bare marker.</item>
             <item>A value field is <c>{descriptorLength}:{descriptor}</c>.</item>
-            <item>A descriptor is <c>{CLR type full name}:{invariant text}</c>, so <c>int 1</c> and <c>string "1"</c> are
-            different identities, and a <see langword="null"/> value is the descriptor <c>null</c>.</item>
-            <item>A value whose invariant text is longer than the configured bound becomes
-            <c>{type}#chars={count}#sha256={hex}</c>, so one pathological value cannot inflate an identity.</item>
+            <item>Only the documented primitive values, strings, GUIDs, date/time values, and time spans are supported.
+            Their exact type and lossless representation define identity; unsupported objects are rejected as incomplete and
+            are never formatted.</item>
+            <item>Strings are sequences of UTF-16 code units, including unpaired surrogates. Oversized strings become
+            <c>{type}#chars={count}#sha256={hex}</c>, where the digest is over those exact code units.</item>
             <item>Entries are sorted with <see cref="P:System.StringComparer.Ordinal"/> and joined with U+001F, so tag order does
             not change identity.</item>
             <item>Duplicate keys are retained, so a tag set is a sorted multiset rather than a set.</item>
@@ -480,12 +463,15 @@
         <member name="F:KeelMatrix.MetricBudget.Internal.TagIdentity.NullKeyMarker">
             <summary>Bare key-field marker for a delivered <see langword="null"/> tag key.</summary>
         </member>
-        <member name="M:KeelMatrix.MetricBudget.Internal.TagIdentity.CreateTagSetKey(System.ReadOnlySpan{System.Collections.Generic.KeyValuePair{System.String,System.Object}},System.Int32,KeelMatrix.MetricBudget.Internal.TagField[]@)">
+        <member name="M:KeelMatrix.MetricBudget.Internal.TagIdentity.TryCreateTagSetKey(System.ReadOnlySpan{System.Collections.Generic.KeyValuePair{System.String,System.Object}},System.Int32,System.Int32,System.Int32,System.String@,KeelMatrix.MetricBudget.Internal.TagField[]@)">
             <summary>
             Builds the canonical tag-set identity and the per-tag accounting fields for one delivered measurement.
             </summary>
             <param name="tags">Tag span delivered by <c>MeterListener</c>. Only valid during the callback.</param>
             <param name="maxValueLength">Bound applied to a tag value's invariant text.</param>
+            <param name="maxTagCount">Maximum number of delivered tags admitted to identity construction.</param>
+            <param name="maxTagKeyLength">Maximum length of a delivered tag key admitted to identity construction.</param>
+            <param name="tagSetKey">Canonical tag-set identity text, when construction succeeds.</param>
             <param name="fields">Per-tag accounting fields in delivered order.</param>
             <returns>The canonical tag-set identity text used to derive the observed-series identity.</returns>
         </member>
@@ -590,6 +576,37 @@
             Replaces the sink so a test can inspect the signal without touching the shared client.
             </summary>
         </member>
+        <member name="T:KeelMatrix.MetricBudget.MetricBudgetBudget">
+            <summary>
+            Immutable description of the budget captured by a completed report rule.
+            </summary>
+            <remarks>
+            This type is separate from the mutable configuration object used by
+            <see cref="T:KeelMatrix.MetricBudget.InstrumentBudget"/>. A completed report
+            never exposes a mutable budget graph.
+            </remarks>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetBudget.MaxObservedSeries">
+            <summary>Maximum observed series configured for the rule, or <see langword="null"/>.</summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetBudget.Tags">
+            <summary>Immutable tag budgets in declaration order.</summary>
+        </member>
+        <member name="M:KeelMatrix.MetricBudget.MetricBudgetBudget.ToString">
+            <summary>Describes the configured limits.</summary>
+        </member>
+        <member name="T:KeelMatrix.MetricBudget.MetricBudgetTagBudget">
+            <summary>One immutable tag-budget description in a completed report.</summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetTagBudget.Key">
+            <summary>The exact configured tag key.</summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetTagBudget.MaxDistinctValues">
+            <summary>Maximum distinct values configured for the tag, or <see langword="null"/>.</summary>
+        </member>
+        <member name="M:KeelMatrix.MetricBudget.MetricBudgetTagBudget.ToString">
+            <summary>Describes the configured tag limit.</summary>
+        </member>
         <member name="T:KeelMatrix.MetricBudget.MetricBudgetConfigurationException">
             <summary>
             Thrown when a session is started with options that cannot describe a meaningful verification.
@@ -677,6 +694,18 @@
             <see cref="P:KeelMatrix.MetricBudget.MetricBudgetInstrumentResult.ObservedSeriesCount"/> is a lower bound.
             </summary>
         </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetInstrumentResult.UntrackedTagSetObservations">
+            <summary>Measurements whose tag set could not be canonically tracked.</summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetInstrumentResult.UntrackedTagKeyObservations">
+            <summary>Delivered tag keys that could not be retained after the per-instrument key bound was reached.</summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetInstrumentResult.TagSetTrackingIncomplete">
+            <summary>Whether a tag set was rejected because it was oversized or contained an unsupported value.</summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetInstrumentResult.TagKeyTrackingIncomplete">
+            <summary>Whether the per-instrument retained tag-key bound was reached.</summary>
+        </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetInstrumentResult.Tags">
             <summary>
             Per-tag results for this instrument identity, ordered by tag key, including configured keys the workload
@@ -734,6 +763,27 @@
             statement about which tag values are acceptable.
             </summary>
         </member>
+        <member name="F:KeelMatrix.MetricBudget.MetricBudgetOptions.DefaultMaxTrackedInstrumentIdentities">
+            <summary>Default number of instrument identities retained by one session.</summary>
+        </member>
+        <member name="F:KeelMatrix.MetricBudget.MetricBudgetOptions.DefaultMaxTrackedInstrumentInstances">
+            <summary>Default number of physical instrument instances retained by one session.</summary>
+        </member>
+        <member name="F:KeelMatrix.MetricBudget.MetricBudgetOptions.DefaultMaxTrackedConflicts">
+            <summary>Default number of ambiguous instrument identities retained by one session.</summary>
+        </member>
+        <member name="F:KeelMatrix.MetricBudget.MetricBudgetOptions.DefaultMaxTrackedTagKeysPerInstrument">
+            <summary>Default number of delivered tag keys retained per instrument identity.</summary>
+        </member>
+        <member name="F:KeelMatrix.MetricBudget.MetricBudgetOptions.DefaultMaxTagCount">
+            <summary>Default number of tags accepted from one delivered measurement.</summary>
+        </member>
+        <member name="F:KeelMatrix.MetricBudget.MetricBudgetOptions.DefaultMaxInstrumentIdentityLength">
+            <summary>Default maximum length of each meter or instrument identity component.</summary>
+        </member>
+        <member name="F:KeelMatrix.MetricBudget.MetricBudgetOptions.DefaultMaxTagKeyLength">
+            <summary>Default maximum length of a delivered tag key.</summary>
+        </member>
         <member name="M:KeelMatrix.MetricBudget.MetricBudgetOptions.#ctor">
             <summary>
             Initializes a new set of options with no rules and the default safety bounds.
@@ -777,6 +827,48 @@
             The bound keeps one pathological value from inflating an identity. The digested form still distinguishes
             different values, and the digest is never a raw value. The value must be greater than zero.
             </remarks>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetOptions.MaxTrackedInstrumentIdentities">
+            <summary>
+            Maximum number of distinct instrument identities retained by one session.
+            </summary>
+            <remarks>
+            When this bound is reached, newly published selected identities are not enabled or retained. The report is
+            explicitly incomplete and cannot pass.
+            </remarks>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetOptions.MaxTrackedInstrumentInstances">
+            <summary>
+            Maximum number of physical instrument instances retained and enabled by one session.
+            </summary>
+            <remarks>
+            This is separate from the identity bound because several physical instruments can share one meter name,
+            version, instrument name, and kind. When it is reached, later instances are not enabled or retained.
+            </remarks>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetOptions.MaxTrackedConflicts">
+            <summary>
+            Maximum number of ambiguous instrument identities retained for diagnostics.
+            </summary>
+            <remarks>
+            Additional conflicts are not retained; the report remains explicitly incomplete and non-passing.
+            </remarks>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetOptions.MaxTrackedTagKeysPerInstrument">
+            <summary>Maximum number of delivered tag keys retained per instrument identity.</summary>
+            <remarks>Additional keys are not retained and make the report explicitly incomplete.</remarks>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetOptions.MaxTagCount">
+            <summary>Maximum number of tags accepted from one delivered measurement.</summary>
+            <remarks>A larger tag set is not canonicalized or retained and makes the report explicitly incomplete.</remarks>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetOptions.MaxInstrumentIdentityLength">
+            <summary>Maximum length of each meter name, meter version, and instrument name retained in identity state.</summary>
+            <remarks>An identity with a longer component is not retained or enabled.</remarks>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetOptions.MaxTagKeyLength">
+            <summary>Maximum length of a delivered tag key retained in tag accounting state.</summary>
+            <remarks>A measurement containing a longer key is not canonicalized or retained.</remarks>
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetOptions.Rules">
             <summary>
@@ -1096,6 +1188,54 @@
             Measurements whose tag value could not be tracked because a per-tag bound was already reached.
             </summary>
         </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.MaxTrackedInstrumentIdentities">
+            <summary>Configured bound on retained instrument identities.</summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.MaxTrackedInstrumentInstances">
+            <summary>Configured bound on retained physical instrument instances.</summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.MaxTrackedConflicts">
+            <summary>Configured bound on retained ambiguous identity records.</summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.MaxTrackedTagKeysPerInstrument">
+            <summary>Configured bound on retained tag keys per instrument identity.</summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.MaxTagCount">
+            <summary>Configured bound on tags accepted from one measurement.</summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.MaxInstrumentIdentityLength">
+            <summary>Configured bound on each meter and instrument identity component.</summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.MaxTagKeyLength">
+            <summary>Configured bound on a delivered tag key.</summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.InstrumentTrackingIncomplete">
+            <summary>Whether an instrument identity or physical instance bound was reached.</summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.UntrackedInstrumentIdentities">
+            <summary>Selected published identities not retained after the identity bound was reached.</summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.UntrackedInstrumentInstances">
+            <summary>Physical instrument instances not retained after the instance bound was reached.</summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.ConflictTrackingIncomplete">
+            <summary>Whether the conflict-record bound was reached.</summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.UntrackedConflicts">
+            <summary>Ambiguous identities whose conflict record was not retained.</summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.TagSetTrackingIncomplete">
+            <summary>Whether one or more delivered tag sets could not be canonicalized.</summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.UntrackedTagSetObservations">
+            <summary>Measurements whose tag set could not be canonicalized.</summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.TagKeyTrackingIncomplete">
+            <summary>Whether the retained tag-key bound was reached.</summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.UntrackedTagKeyObservations">
+            <summary>Delivered tag keys that were not retained after the key bound was reached.</summary>
+        </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.IsComplete">
             <summary>
             Whether all accounting completed inside the configured safety bounds.
@@ -1113,10 +1253,11 @@
             </para>
             <para>
             <b>Containment.</b> <c>MeterListener.Dispose</c> does not stop measurement delivery for instruments that the
-            listener already enabled: measured on .NET 8.0.31, callbacks keep firing and <c>Instrument.Enabled</c> stays
-            true after disposal. This session therefore disables measurement events explicitly for every instrument it
-            enabled, both when <see cref="M:KeelMatrix.MetricBudget.MetricBudgetSession.Complete"/> runs and when it is disposed without completing. Disposal is not the
-            containment mechanism; the explicit disable is.
+            listener already enabled: callbacks can keep firing after disposal, and <c>Instrument.Enabled</c> describes all
+            listeners rather than this session alone. This session therefore disables measurement events explicitly for
+            every instrument it enabled, both when <see cref="M:KeelMatrix.MetricBudget.MetricBudgetSession.Complete"/> runs and when it is disposed without completing.
+            Disposal is not the containment mechanism; the explicit disable is. The flag may remain true when another
+            listener still has the instrument enabled.
             </para>
             <para>
             <b>Isolation.</b> Instrument publication is process-global, so a session sees instruments created by any code
@@ -1154,11 +1295,11 @@
             </summary>
             <remarks>
             Observable instruments deliver measurements only when their callbacks run, and the BCL never runs them at
-            listener start. Call this method when the application under test has no metrics SDK that already collects
-            observable instruments, otherwise an observable instrument reports
-            <see cref="F:KeelMatrix.MetricBudget.MetricBudgetOutcome.NoMeasurementsObserved"/>. Calling it again records another measurement per
-            observable instrument, exactly as the BCL does, and calling it after the session completed does nothing
-            because every selected instrument has been disabled.
+            listener start. Call this method at the intended observation points even when OpenTelemetry or another
+            metrics SDK is collecting: observable callbacks deliver to the specific listener that requested collection,
+            so another listener's collection does not populate this session. Calling it again records another measurement
+            per observable instrument, exactly as the BCL does, and calling it after the session completed does nothing
+            because every selected instrument has been disabled for this session.
             </remarks>
         </member>
         <member name="M:KeelMatrix.MetricBudget.MetricBudgetSession.Complete">

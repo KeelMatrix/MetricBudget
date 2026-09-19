@@ -223,8 +223,10 @@ MetricBudgetReport report = session.Complete();
 report.AssertWithinBudget();
 ```
 
-If you already run an OpenTelemetry SDK in the same process, the metrics it exports come from the same instruments,
-so the same session observes them. The package neither requires nor controls an exporter.
+If you already run an OpenTelemetry SDK or another metrics listener in the same process, its collection does not
+populate this session. Invoke this session's `RecordObservableInstruments()` at each intended observation point for
+observable instruments; each listener requests observable collection independently. The package neither requires nor
+controls an exporter.
 
 ## Measurements it observes
 
@@ -234,17 +236,18 @@ measurement type when the instrument is created. All six instrument kinds are ob
 `UpDownCounter`, `Histogram`, `ObservableCounter`, `ObservableUpDownCounter`, and `ObservableGauge`.
 
 Observable instruments deliver measurements only when their callbacks run, and the BCL never runs them when a
-listener starts. Call `session.RecordObservableInstruments()` once per collection point if the application under
-test has no metrics SDK doing it, otherwise the session reports `NoMeasurementsObserved`.
+listener starts. Call `session.RecordObservableInstruments()` once per collection point, even if another metrics SDK
+is collecting, because another listener's collection does not populate this session. Otherwise the session reports
+`NoMeasurementsObserved`.
 
 ## Lifecycle, containment, and isolation
 
 `MeterListener.Dispose` does **not** stop measurement delivery for instruments a listener already enabled:
-verified on .NET 8.0.31, callbacks keep firing and `Instrument.Enabled` stays `true` after disposal. This session
-therefore disables measurement events explicitly for every instrument it enabled, both when `Complete()` runs and
-when it is disposed without completing. Disposal is not the containment mechanism; the explicit disable is. After
-a session completes, `Instrument.Enabled` is `false` for everything it enabled, and later measurements are not
-accounted.
+verified on .NET 8.0.31, callbacks can keep firing and `Instrument.Enabled` describes all listeners, not this
+session. This session therefore disables measurement events explicitly for every instrument it enabled, both when
+`Complete()` runs and when it is disposed without completing. Disposal is not the containment mechanism; the explicit
+disable is. After a session completes, this session is unsubscribed and later measurements are not accounted; the
+instrument can correctly remain enabled for another listener.
 
 Instrument publication is process-global, so a session sees instruments created by any code in the process,
 including other tests running in parallel. Delivery is scoped: a session receives measurements only from the
@@ -261,6 +264,13 @@ Cardinality is exactly the failure mode this package observes, so its own accoun
 | `MaxTrackedSeries` (per instrument identity) | 100,000 | Applies per instrument identity. Further distinct series of an instrument at its bound are counted as untracked observations, the report says series tracking is incomplete, and the outcome becomes `ObservationIncomplete`. |
 | `MaxTrackedValuesPerTag` (per instrument identity) | 5,000 | Applies per instrument identity and tag key. Further distinct values for that tag key are counted as untracked, the report names the key, and the outcome becomes `ObservationIncomplete`. |
 | `MaxTagValueLength` | 256 | A longer tag value is replaced by a stable digest in the identity, so one pathological value cannot inflate the session. |
+| `MaxTrackedInstrumentIdentities` | 1,024 | Bounds selected identities retained by a session; later identities are not enabled and the result is incomplete. |
+| `MaxTrackedInstrumentInstances` | 2,048 | Bounds physical instances retained and enabled, including repeated instances with one logical identity. |
+| `MaxTrackedConflicts` | 1,024 | Bounds retained ambiguous identities and rule indexes per conflict. |
+| `MaxTrackedTagKeysPerInstrument` | 256 | Bounds retained delivered keys for one instrument; later keys are not retained. |
+| `MaxTagCount` | 64 | Bounds tags admitted from one measurement; larger sets are not canonicalized. |
+| `MaxInstrumentIdentityLength` | 256 | Bounds meter name, meter version, and instrument name components retained in identity state. |
+| `MaxTagKeyLength` | 256 | Bounds delivered key length; longer keys are not canonicalized. |
 
 A bounded run is never reported as a pass, and untracked observations are never matched to an existing series, so
 the session cannot silently undercount. The defaults are safety bounds for the verifier, not budgets, and not
@@ -326,7 +336,8 @@ instruments created before and after the session starts, so a rule that never ma
 or a code path the workload did not reach.
 
 **`NoMeasurementsObserved`** - the instrument exists but delivered nothing. For observable instruments, call
-`session.RecordObservableInstruments()` (the BCL never invokes observable callbacks on its own). For counters and
+`session.RecordObservableInstruments()` at the intended observation point, even when another listener is collecting
+(the BCL never invokes observable callbacks on its own and listeners collect independently). For counters and
 histograms, make sure the recorded operation was actually executed.
 
 **`InvalidConfiguration`** - one instrument matched more than one rule. Overlaps such as `ForMeter("M", ...)` plus
@@ -334,9 +345,9 @@ histograms, make sure the recorded operation was actually executed.
 both rules. Make the rules disjoint.
 
 **`ObservationIncomplete`** - a safety bound was reached. The report names the bound, the instrument, and how many
-observations could not be tracked. Raise the per-instrument-identity `MaxTrackedSeries` or
-`MaxTrackedValuesPerTag` when the workload is
-representative, or narrow the workload if the cardinality is the finding you were looking for.
+observations could not be tracked. It also covers unsupported/invalid tag values, oversized tag sets or keys, and
+rejected instrument state. Raise the relevant bound when the workload is representative, or narrow the workload if
+the cardinality is the finding you were looking for. Unsupported values never invoke arbitrary `ToString()`.
 
 **A test fails in parallel CI but passes alone** - another test in the same process publishes instruments with the
 same identity. Metric identity is meter name, meter version, instrument name, and kind, so generic names collide.
@@ -349,8 +360,9 @@ More failure modes, including a tag budget that never triggers and unexplained s
 
 Series identity is deterministic and order-independent: instrument identity (meter name, meter version, instrument
 name, kind) plus a canonical tag-set identity. Tag order never changes identity, duplicate keys are retained as a
-sorted multiset, the CLR type of a value is part of identity, and a value longer than `MaxTagValueLength` is
-replaced by a stable digest. The exact rule is documented at
+sorted multiset, supported values use lossless type-specific representations, malformed UTF-16 is preserved, and a
+value longer than `MaxTagValueLength` is replaced by a stable digest. Unsupported values are rejected as incomplete.
+The exact rule is documented at
 <https://github.com/KeelMatrix/MetricBudget/blob/main/docs/series-identity.md>.
 
 ## Repository

@@ -72,7 +72,7 @@ KeelMatrix.MetricBudget.MetricBudgetReport.ToDiagnosticString() -> string!
 KeelMatrix.MetricBudget.MetricBudgetReport.TotalMeasurementsObserved.get -> long
 KeelMatrix.MetricBudget.MetricBudgetReport.Violations.get -> System.Collections.Generic.IReadOnlyList<KeelMatrix.MetricBudget.MetricBudgetViolation!>!
 KeelMatrix.MetricBudget.MetricBudgetRule
-KeelMatrix.MetricBudget.MetricBudgetRule.Budget.get -> KeelMatrix.MetricBudget.InstrumentBudget!
+KeelMatrix.MetricBudget.MetricBudgetRule.Budget.get -> KeelMatrix.MetricBudget.MetricBudgetBudget!
 KeelMatrix.MetricBudget.MetricBudgetRule.Selector.get -> KeelMatrix.MetricBudget.InstrumentSelector!
 KeelMatrix.MetricBudget.MetricBudgetRuleResult
 KeelMatrix.MetricBudget.MetricBudgetRuleResult.Instruments.get -> System.Collections.Generic.IReadOnlyList<KeelMatrix.MetricBudget.MetricBudgetInstrumentResult!>!
@@ -151,3 +151,52 @@ static KeelMatrix.MetricBudget.InstrumentSelector.Instrument(string! instrumentN
 static KeelMatrix.MetricBudget.InstrumentSelector.InstrumentInMeter(string! meterName, string! instrumentName) -> KeelMatrix.MetricBudget.InstrumentSelector!
 static KeelMatrix.MetricBudget.InstrumentSelector.Meter(string! meterName) -> KeelMatrix.MetricBudget.InstrumentSelector!
 static KeelMatrix.MetricBudget.MetricBudgetSession.Start(KeelMatrix.MetricBudget.MetricBudgetOptions! options) -> KeelMatrix.MetricBudget.MetricBudgetSession!
+const KeelMatrix.MetricBudget.MetricBudgetOptions.DefaultMaxTrackedInstrumentIdentities = 1024 -> int
+const KeelMatrix.MetricBudget.MetricBudgetOptions.DefaultMaxTrackedInstrumentInstances = 2048 -> int
+const KeelMatrix.MetricBudget.MetricBudgetOptions.DefaultMaxTrackedConflicts = 1024 -> int
+const KeelMatrix.MetricBudget.MetricBudgetOptions.DefaultMaxTrackedTagKeysPerInstrument = 256 -> int
+const KeelMatrix.MetricBudget.MetricBudgetOptions.DefaultMaxTagCount = 64 -> int
+const KeelMatrix.MetricBudget.MetricBudgetOptions.DefaultMaxInstrumentIdentityLength = 256 -> int
+const KeelMatrix.MetricBudget.MetricBudgetOptions.DefaultMaxTagKeyLength = 256 -> int
+KeelMatrix.MetricBudget.MetricBudgetBudget
+KeelMatrix.MetricBudget.MetricBudgetBudget.MaxObservedSeries.get -> int?
+KeelMatrix.MetricBudget.MetricBudgetBudget.Tags.get -> System.Collections.Generic.IReadOnlyList<KeelMatrix.MetricBudget.MetricBudgetTagBudget!>!
+KeelMatrix.MetricBudget.MetricBudgetTagBudget
+KeelMatrix.MetricBudget.MetricBudgetTagBudget.Key.get -> string!
+KeelMatrix.MetricBudget.MetricBudgetTagBudget.MaxDistinctValues.get -> int?
+KeelMatrix.MetricBudget.MetricBudgetInstrumentResult.UntrackedTagSetObservations.get -> long
+KeelMatrix.MetricBudget.MetricBudgetInstrumentResult.UntrackedTagKeyObservations.get -> long
+KeelMatrix.MetricBudget.MetricBudgetInstrumentResult.TagSetTrackingIncomplete.get -> bool
+KeelMatrix.MetricBudget.MetricBudgetInstrumentResult.TagKeyTrackingIncomplete.get -> bool
+KeelMatrix.MetricBudget.MetricBudgetOptions.MaxTrackedInstrumentIdentities.get -> int
+KeelMatrix.MetricBudget.MetricBudgetOptions.MaxTrackedInstrumentIdentities.set -> void
+KeelMatrix.MetricBudget.MetricBudgetOptions.MaxTrackedInstrumentInstances.get -> int
+KeelMatrix.MetricBudget.MetricBudgetOptions.MaxTrackedInstrumentInstances.set -> void
+KeelMatrix.MetricBudget.MetricBudgetOptions.MaxTrackedConflicts.get -> int
+KeelMatrix.MetricBudget.MetricBudgetOptions.MaxTrackedConflicts.set -> void
+KeelMatrix.MetricBudget.MetricBudgetOptions.MaxTrackedTagKeysPerInstrument.get -> int
+KeelMatrix.MetricBudget.MetricBudgetOptions.MaxTrackedTagKeysPerInstrument.set -> void
+KeelMatrix.MetricBudget.MetricBudgetOptions.MaxTagCount.get -> int
+KeelMatrix.MetricBudget.MetricBudgetOptions.MaxTagCount.set -> void
+KeelMatrix.MetricBudget.MetricBudgetOptions.MaxInstrumentIdentityLength.get -> int
+KeelMatrix.MetricBudget.MetricBudgetOptions.MaxInstrumentIdentityLength.set -> void
+KeelMatrix.MetricBudget.MetricBudgetOptions.MaxTagKeyLength.get -> int
+KeelMatrix.MetricBudget.MetricBudgetOptions.MaxTagKeyLength.set -> void
+KeelMatrix.MetricBudget.MetricBudgetSafetyReport.MaxTrackedInstrumentIdentities.get -> int
+KeelMatrix.MetricBudget.MetricBudgetSafetyReport.MaxTrackedInstrumentInstances.get -> int
+KeelMatrix.MetricBudget.MetricBudgetSafetyReport.MaxTrackedConflicts.get -> int
+KeelMatrix.MetricBudget.MetricBudgetSafetyReport.MaxTrackedTagKeysPerInstrument.get -> int
+KeelMatrix.MetricBudget.MetricBudgetSafetyReport.MaxTagCount.get -> int
+KeelMatrix.MetricBudget.MetricBudgetSafetyReport.MaxInstrumentIdentityLength.get -> int
+KeelMatrix.MetricBudget.MetricBudgetSafetyReport.MaxTagKeyLength.get -> int
+KeelMatrix.MetricBudget.MetricBudgetSafetyReport.InstrumentTrackingIncomplete.get -> bool
+KeelMatrix.MetricBudget.MetricBudgetSafetyReport.UntrackedInstrumentIdentities.get -> long
+KeelMatrix.MetricBudget.MetricBudgetSafetyReport.UntrackedInstrumentInstances.get -> long
+KeelMatrix.MetricBudget.MetricBudgetSafetyReport.ConflictTrackingIncomplete.get -> bool
+KeelMatrix.MetricBudget.MetricBudgetSafetyReport.UntrackedConflicts.get -> long
+KeelMatrix.MetricBudget.MetricBudgetSafetyReport.TagSetTrackingIncomplete.get -> bool
+KeelMatrix.MetricBudget.MetricBudgetSafetyReport.UntrackedTagSetObservations.get -> long
+KeelMatrix.MetricBudget.MetricBudgetSafetyReport.TagKeyTrackingIncomplete.get -> bool
+KeelMatrix.MetricBudget.MetricBudgetSafetyReport.UntrackedTagKeyObservations.get -> long
+override KeelMatrix.MetricBudget.MetricBudgetBudget.ToString() -> string!
+override KeelMatrix.MetricBudget.MetricBudgetTagBudget.ToString() -> string!

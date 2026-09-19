@@ -1,5 +1,6 @@
 // Copyright (c) KeelMatrix
 
+using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Text;
 
@@ -33,8 +34,8 @@ public sealed class MetricBudgetReport
         bool accountingIsConsistent)
     {
         Outcome = outcome;
-        Rules = rules;
-        Violations = violations;
+        Rules = Snapshot(rules);
+        Violations = Snapshot(violations);
         Safety = safety;
         TotalMeasurementsObserved = totalMeasurementsObserved;
         ObservedInstrumentCount = observedInstrumentCount;
@@ -126,6 +127,17 @@ public sealed class MetricBudgetReport
             + ObservedInstrumentCount.ToString(CultureInfo.InvariantCulture) + " instrument(s) observed, "
             + ObservedSeriesCount.ToString(CultureInfo.InvariantCulture) + " observed series, "
             + TotalMeasurementsObserved.ToString(CultureInfo.InvariantCulture) + " measurements";
+    }
+
+    private static ReadOnlyCollection<T> Snapshot<T>(IReadOnlyList<T> source)
+    {
+        T[] copy = new T[source.Count];
+        for (int i = 0; i < copy.Length; i++)
+        {
+            copy[i] = source[i];
+        }
+
+        return new ReadOnlyCollection<T>(copy);
     }
 
     private string BuildDiagnosticText()
