@@ -102,6 +102,10 @@ KeelMatrix.MetricBudget.MetricBudgetTagResult.Key.get -> string?
 KeelMatrix.MetricBudget.MetricBudgetTagResult.ObservedDistinctValueCount.get -> int
 KeelMatrix.MetricBudget.MetricBudgetTagResult.UntrackedValueObservations.get -> long
 KeelMatrix.MetricBudget.MetricBudgetTagResult.ValueTrackingIncomplete.get -> bool
+KeelMatrix.MetricBudget.MetricBudgetTagResult.SeriesTrackingIncomplete.get -> bool
+KeelMatrix.MetricBudget.MetricBudgetTagResult.TagSetTrackingIncomplete.get -> bool
+KeelMatrix.MetricBudget.MetricBudgetTagResult.TagKeyTrackingIncomplete.get -> bool
+KeelMatrix.MetricBudget.MetricBudgetTagResult.InstrumentTrackingIncomplete.get -> bool
 KeelMatrix.MetricBudget.MetricBudgetTagResult.WasObserved.get -> bool
 KeelMatrix.MetricBudget.MetricBudgetViolation
 KeelMatrix.MetricBudget.MetricBudgetViolation.ConfiguredLimit.get -> int?

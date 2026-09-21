@@ -252,18 +252,36 @@ internal interface IMetricBudgetTelemetrySink
 /// Default sink: the shared KeelMatrix telemetry client.
 /// </summary>
 /// <remarks>
-/// The first completed verification that observed at least one instrument requests an activation event; later
-/// completions request a heartbeat, which the shared client emits at most once per project and ISO week. The
-/// client is created lazily on first use, so installing, restoring, or loading the assembly never reports
-/// anything.
+/// The first completed verification that observed at least one instrument requests activation and heartbeat
+/// eligibility; later completions request heartbeat eligibility. The shared client suppresses a duplicate activation,
+/// suppresses a heartbeat in the activation week, and emits at most one heartbeat per project and ISO week. The
+/// client is created lazily on first use, so installing, restoring, or loading the assembly never reports anything.
 /// </remarks>
 internal sealed class KeelMatrixTelemetrySink : IMetricBudgetTelemetrySink
 {
     internal const string ToolName = "MetricBudget";
 
-    private readonly Lazy<Client> client = new(
-        static () => new Client(ToolName, typeof(MetricBudgetSession)),
-        LazyThreadSafetyMode.ExecutionAndPublication);
+    private readonly Action trackActivation;
+    private readonly Action trackHeartbeat;
+
+    /// <summary>Creates a sink backed by the shared KeelMatrix telemetry client.</summary>
+    internal KeelMatrixTelemetrySink()
+    {
+        Lazy<Client> client = new(
+            static () => new Client(ToolName, typeof(MetricBudgetSession)),
+            LazyThreadSafetyMode.ExecutionAndPublication);
+        trackActivation = () => client.Value.TrackActivation();
+        trackHeartbeat = () => client.Value.TrackHeartbeat();
+    }
+
+    /// <summary>Creates a sink with injectable request actions for isolated behavior tests.</summary>
+    /// <param name="trackActivation">Action that requests activation eligibility.</param>
+    /// <param name="trackHeartbeat">Action that requests heartbeat eligibility.</param>
+    internal KeelMatrixTelemetrySink(Action trackActivation, Action trackHeartbeat)
+    {
+        this.trackActivation = trackActivation ?? throw new ArgumentNullException(nameof(trackActivation));
+        this.trackHeartbeat = trackHeartbeat ?? throw new ArgumentNullException(nameof(trackHeartbeat));
+    }
 
     private int reported;
 
@@ -271,11 +289,12 @@ internal sealed class KeelMatrixTelemetrySink : IMetricBudgetTelemetrySink
     {
         if (Interlocked.CompareExchange(ref reported, 1, 0) == 0)
         {
-            client.Value.TrackActivation();
+            trackActivation();
+            trackHeartbeat();
         }
         else
         {
-            client.Value.TrackHeartbeat();
+            trackHeartbeat();
         }
     }
 }

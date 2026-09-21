@@ -38,6 +38,10 @@ report.AssertWithinBudget();
 A failing run names the instrument, the breached budget, the observed count, the configured limit, and the
 offending tag keys, and never prints tag values.
 
+Per-tag results also expose whether their counts may be incomplete because of series-cap exhaustion, a rejected tag
+set, tag-key-cap exhaustion, instrument admission loss, or the per-key value cap. Such counts are lower bounds and
+`MetricBudgetTagResult.IsWithinBudget` is `false` whenever any of those loss paths could affect the key.
+
 Focused budget assertions fail closed when their target delivered no measurements or when selected physical
 instances or same-name identities were not admitted. A name-only focused assertion does not pass when that loss
 could make the target ambiguous; unrelated instruments' incomplete accounting does not invalidate a fully tracked

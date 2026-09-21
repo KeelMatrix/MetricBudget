@@ -36,9 +36,11 @@ background worker and is off by default in environments that opt out.
 
 KeelMatrix packages use the shared `KeelMatrix.Telemetry` client for a minimal anonymous signal.
 
-**Activation** is one completed budget verification that observed at least one selected instrument. Installing or
-restoring the package, loading the assembly, or constructing a session is not activation. Later completed
-verifications request a low-frequency heartbeat, following the shared package cadence.
+**Activation** is one completed budget verification that observed at least one selected instrument. In a fresh
+process, that completion requests activation and heartbeat eligibility; the shared client suppresses a duplicate
+activation and suppresses a heartbeat in the activation week. Later completed verifications request heartbeat
+eligibility, following the shared package cadence of at most one heartbeat per project and ISO week. Installing or
+restoring the package, loading the assembly, or constructing a session is not activation.
 
 The field allowlist below is the complete set of aggregate fields this product is **permitted to supply**. It is a
 ceiling on what the product could ever attach, not a claim about the payload that is actually transmitted: the

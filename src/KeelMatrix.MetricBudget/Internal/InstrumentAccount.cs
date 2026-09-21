@@ -70,13 +70,6 @@ internal sealed class InstrumentAccount
             UntrackedSeriesObservations++;
         }
 
-        if (series.Count == options.MaxTrackedSeries && SeriesCapExhausted)
-        {
-            // No tag state can be safely inferred after the series bound is exhausted. In particular, do not
-            // admit a new key for every untracked series.
-            return;
-        }
-
         for (int i = 0; i < fields.Length; i++)
         {
             TagField field = fields[i];

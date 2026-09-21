@@ -43,7 +43,9 @@ with a non-positive safety bound throws `MetricBudgetConfigurationException` bef
 ## `ObservationIncomplete`
 
 A safety bound was reached, or a delivered value/tag set could not be admitted under the supported identity policy.
-The report names the bound or incomplete state, and every affected count is a lower bound. See
+The report names the bound or incomplete state, and every affected count is a lower bound. Per-tag results expose
+the specific series, tag-set, tag-key, instrument-admission, and per-key-value completeness flags; any such flag
+makes that tag's `IsWithinBudget` false. See
 [safety-bounds.md](safety-bounds.md). Raise the relevant bound when the workload is representative; narrow the
 workload when the cardinality is the finding you were looking for. Unsupported tag values are rejected without
 calling user-defined `ToString()`.

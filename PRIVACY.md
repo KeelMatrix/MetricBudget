@@ -19,8 +19,10 @@ Those details can change with the telemetry package and are maintained in the te
 ## Product-specific note
 
 The library uses the shared activation and heartbeat events and adds no product-specific fields. A completed budget
-verification that observed at least one selected instrument requests an activation event; installing the package,
-restoring it, loading the assembly, or constructing a session reports nothing.
+verification that observed at least one selected instrument requests activation and heartbeat eligibility in a fresh
+process; the shared client suppresses duplicate activation and same-week heartbeat events. Later completions request
+heartbeat eligibility. Installing the package, restoring it, loading the assembly, or constructing a session reports
+nothing.
 
 The only aggregate values this product models are documented in
 [docs/privacy-and-telemetry.md](docs/privacy-and-telemetry.md): package version, target framework, coarse OS

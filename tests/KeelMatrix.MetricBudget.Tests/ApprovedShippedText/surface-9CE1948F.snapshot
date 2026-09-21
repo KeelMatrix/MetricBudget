@@ -116,6 +116,11 @@ new MetricBudgetOptions()
 Tag budgets are counted per instrument identity. A key that the workload never delivers is reported in the result
 so that a typo in a tag key is visible rather than silent.
 
+Each `MetricBudgetTagResult` reports whether its count may be incomplete because of per-key value tracking,
+series-cap exhaustion, a rejected tag set, tag-key-cap exhaustion, or instrument admission loss. Its
+`ObservedDistinctValueCount` is a lower bound when any of those flags is set, and `IsWithinBudget` is `false` until
+all potentially affecting observation paths are complete.
+
 ### Selecting instruments and meters
 
 ```csharp
@@ -278,8 +283,10 @@ Cardinality is exactly the failure mode this package observes, so its own accoun
 | `MaxTagKeyLength` | 256 | Bounds delivered key length; longer keys are not canonicalized. |
 
 A bounded run is never reported as a pass, and untracked observations are never matched to an existing series, so
-the session cannot silently undercount. The defaults are safety bounds for the verifier, not budgets, and not
-recommended cardinality for any application: raise them deliberately when your workload legitimately observes more.
+the session cannot silently undercount. Series-cap exhaustion still updates already-retained tag keys within their
+own bounds, but every affected per-tag result is marked incomplete because the missing series could have changed
+that key's count. The defaults are safety bounds for the verifier, not budgets, and not recommended cardinality for
+any application: raise them deliberately when your workload legitimately observes more.
 
 The report separates identity admission loss from identity component-length rejection through
 `MetricBudgetSafetyReport.InstrumentTrackingIncomplete`,
@@ -306,9 +313,11 @@ printing values into CI logs.
 
 ## Telemetry
 
-A **completed verification that observed at least one selected instrument** requests one activation event;
-installing, restoring, loading the assembly, or constructing a session reports nothing, and later completions
-request a low-frequency heartbeat. The aggregate fields this product is permitted to supply are package version,
+A **completed verification that observed at least one selected instrument** in a fresh process requests activation
+and heartbeat eligibility; the shared client suppresses a duplicate activation and suppresses a heartbeat in the
+activation week. Later completions request heartbeat eligibility, which the shared client emits at most once per
+project and ISO week. Installing, restoring, loading the assembly, or constructing a session reports nothing. The
+aggregate fields this product is permitted to supply are package version,
 target framework, coarse OS family, a coarse observed-instrument bucket, the configured-rule count, and a coarse
 outcome (pass, fail, invalid configuration); the internal allowlist is enforced by tests. That allowlist is a
 ceiling on the product's own contribution, not a description of the transmitted payload: the shared

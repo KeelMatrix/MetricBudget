@@ -31,16 +31,21 @@ instrument identity's bound is reached - the outcome is not deferred until every
 - The observation is still counted as delivered.
 - The observation is recorded as **untracked**; it is never matched to an existing series, so the session cannot
   silently undercount.
-- A series-cap exhaustion stops admission of tag-key state for later measurements. A tag-key cap stops admission of
-  new keys while preserving already tracked keys. An oversized tag set, unsupported value, oversized key, or
-  rejected instrument identity is not canonicalized or retained.
+- A series-cap exhaustion stops admission of series state but continues bounded updates for already retained tag
+  keys. A tag-key cap stops admission of new keys while preserving already tracked keys. An oversized tag set,
+  unsupported value, oversized key, or rejected instrument identity is not canonicalized or retained.
 - The report names the bound, the instrument that reached it, and how many observations could not be tracked. Once
   any instrument reports an exhausted bound, the whole session outcome is `ObservationIncomplete`.
 - Counts that depend on the exhausted bound become explicit lower bounds:
   `MetricBudgetInstrumentResult.SeriesTrackingIncomplete`,
   `MetricBudgetInstrumentResult.InstrumentTrackingIncomplete`,
-  `MetricBudgetTagResult.ValueTrackingIncomplete`, and `MetricBudgetSafetyReport.IsComplete` state this
-  machine-readably.
+  `MetricBudgetTagResult.ValueTrackingIncomplete`,
+  `MetricBudgetTagResult.SeriesTrackingIncomplete`,
+  `MetricBudgetTagResult.TagSetTrackingIncomplete`,
+  `MetricBudgetTagResult.TagKeyTrackingIncomplete`,
+  `MetricBudgetTagResult.InstrumentTrackingIncomplete`, and `MetricBudgetSafetyReport.IsComplete` state this
+  machine-readably. Every per-tag completeness flag makes that tag's `IsWithinBudget` false; a count with any such
+  flag is a lower bound and must not be read as complete.
 - Identity admission loss is separate from identity component-length rejection. The safety report exposes
   `InstrumentIdentityLengthTrackingIncomplete` and `UntrackedInstrumentIdentityLengths` for the latter, and the
   diagnostic recommends `MaxInstrumentIdentityLength`; it recommends `MaxTrackedInstrumentIdentities` or

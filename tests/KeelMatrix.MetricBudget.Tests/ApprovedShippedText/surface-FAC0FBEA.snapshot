@@ -566,11 +566,19 @@
             Default sink: the shared KeelMatrix telemetry client.
             </summary>
             <remarks>
-            The first completed verification that observed at least one instrument requests an activation event; later
-            completions request a heartbeat, which the shared client emits at most once per project and ISO week. The
-            client is created lazily on first use, so installing, restoring, or loading the assembly never reports
-            anything.
+            The first completed verification that observed at least one instrument requests activation and heartbeat
+            eligibility; later completions request heartbeat eligibility. The shared client suppresses a duplicate activation,
+            suppresses a heartbeat in the activation week, and emits at most one heartbeat per project and ISO week. The
+            client is created lazily on first use, so installing, restoring, or loading the assembly never reports anything.
             </remarks>
+        </member>
+        <member name="M:KeelMatrix.MetricBudget.Internal.KeelMatrixTelemetrySink.#ctor">
+            <summary>Creates a sink backed by the shared KeelMatrix telemetry client.</summary>
+        </member>
+        <member name="M:KeelMatrix.MetricBudget.Internal.KeelMatrixTelemetrySink.#ctor(System.Action,System.Action)">
+            <summary>Creates a sink with injectable request actions for isolated behavior tests.</summary>
+            <param name="trackActivation">Action that requests activation eligibility.</param>
+            <param name="trackHeartbeat">Action that requests heartbeat eligibility.</param>
         </member>
         <member name="T:KeelMatrix.MetricBudget.Internal.MetricBudgetTelemetry">
             <summary>
@@ -1367,6 +1375,12 @@
             <remarks>
             The result contains the tag key and counts only. Tag values are never included, so a report is safe to print in
             shared logs and CI output even when tag values contain identifiers or other sensitive data.
+            <para>
+            <see cref="P:KeelMatrix.MetricBudget.MetricBudgetTagResult.ObservedDistinctValueCount"/> is a lower bound whenever any tracking-completeness property is set.
+            A per-tag within-budget conclusion is therefore available only when all observation paths that could affect this
+            key were retained, including series tracking, tag-set admission, tag-key admission, instrument admission, and
+            per-key value tracking.
+            </para>
             </remarks>
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetTagResult.Key">
@@ -1392,7 +1406,7 @@
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetTagResult.ObservedDistinctValueCount">
             <summary>
-            Distinct values observed for this key. A lower bound when <see cref="P:KeelMatrix.MetricBudget.MetricBudgetTagResult.ValueTrackingIncomplete"/> is
+            Distinct values observed for this key. A lower bound when any tracking-completeness property is
             <see langword="true"/>.
             </summary>
         </member>
@@ -1405,6 +1419,30 @@
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetTagResult.UntrackedValueObservations">
             <summary>
             Measurements whose tag value could not be tracked because the safety bound was already reached.
+            </summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetTagResult.SeriesTrackingIncomplete">
+            <summary>
+            Whether the instrument's series bound was reached. The observed value count may be incomplete because an
+            untracked series could have carried this key.
+            </summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetTagResult.TagSetTrackingIncomplete">
+            <summary>
+            Whether one or more delivered tag sets containing this key could not be canonically tracked because they
+            were oversized or contained an unsupported value.
+            </summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetTagResult.TagKeyTrackingIncomplete">
+            <summary>
+            Whether the instrument's retained tag-key bound was reached. The observed value count may be incomplete
+            because this key could have been among the keys that were not retained.
+            </summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetTagResult.InstrumentTrackingIncomplete">
+            <summary>
+            Whether selected physical instrument instances or same-name identities were not admitted. The observed
+            value count may be incomplete because this key could have been delivered by an untracked source.
             </summary>
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetTagResult.IsWithinBudget">

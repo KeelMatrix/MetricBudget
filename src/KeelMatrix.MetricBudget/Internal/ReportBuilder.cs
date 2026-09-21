@@ -541,6 +541,9 @@ internal static class ReportBuilder
                 tag.ObservedDistinctValueCount,
                 tag.ValueTrackingIncomplete,
                 tag.UntrackedValueObservations,
+                account.SeriesTrackingIncomplete,
+                account.TagSetTrackingIncomplete,
+                account.TagKeyCapExhausted,
                 account.InstrumentTrackingIncomplete));
         }
 
@@ -560,6 +563,9 @@ internal static class ReportBuilder
                 observedDistinctValueCount: 0,
                 valueTrackingIncomplete: false,
                 untrackedValueObservations: 0,
+                seriesTrackingIncomplete: account.SeriesTrackingIncomplete,
+                tagSetTrackingIncomplete: account.TagSetTrackingIncomplete,
+                tagKeyTrackingIncomplete: account.TagKeyCapExhausted,
                 instrumentTrackingIncomplete: account.InstrumentTrackingIncomplete));
         }
 

@@ -82,6 +82,7 @@ internal sealed class MetricBudgetState
 
             if (!identity.HasComponentLengthsAtMost(options.MaxInstrumentIdentityLength))
             {
+                RememberUntrackedName(identity);
                 MarkKnownAccountsWithSameName(identity);
                 instrumentIdentityLengthTrackingIncomplete = true;
                 untrackedInstrumentIdentityLengths++;
@@ -341,10 +342,12 @@ internal sealed class MetricBudgetState
             return;
         }
 
-        // Keep the name-only ambiguity index bounded by the same identity admission budget. If it fills, the
-        // retained results still fail closed for names already indexed; the report-level safety violation explains
-        // that additional selected identities were lost.
-        if (untrackedNameOnlyIdentities.Count < options.MaxTrackedInstrumentIdentities)
+        // Keep the name-only ambiguity index bounded by the same identity admission budget and by the identity
+        // component-length bound. If a meter or instrument name itself is too long, a later same-name identity
+        // cannot be admitted either, so retaining it would add memory without changing any result.
+        if (identity.MeterName.Length <= options.MaxInstrumentIdentityLength
+            && identity.InstrumentName.Length <= options.MaxInstrumentIdentityLength
+            && untrackedNameOnlyIdentities.Count < options.MaxTrackedInstrumentIdentities)
         {
             untrackedNameOnlyIdentities.Add(key);
         }

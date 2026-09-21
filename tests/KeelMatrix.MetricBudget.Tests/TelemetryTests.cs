@@ -175,6 +175,37 @@ public sealed class TelemetryTests
     }
 
     [Fact]
+    public void FreshSinkRequestsHeartbeatOnTheFirstCompletionAfterActivation()
+    {
+        string meterName = TestNames.Meter(nameof(FreshSinkRequestsHeartbeatOnTheFirstCompletionAfterActivation));
+        using Meter meter = new Meter(meterName, "1.0.0");
+        Counter<long> counter = meter.CreateCounter<long>("observed");
+        List<string> requests = new List<string>();
+
+        // A fresh sink represents a later process. The shared client owns the already-activated and ISO-week
+        // deduplication state; this seam verifies that the sink requests both decisions on its first completion.
+        KeelMatrixTelemetrySink sink = new KeelMatrixTelemetrySink(
+            () => requests.Add("activation"),
+            () => requests.Add("heartbeat"));
+        MetricBudgetTelemetry.SetSinkForTests(sink);
+        try
+        {
+            using MetricBudgetSession session = MetricBudgetSession.Start(
+                new MetricBudgetOptions().ForInstrument(meterName, "observed", budget => budget.MaxObservedSeries = 1));
+            counter.Add(1);
+            _ = session.Complete();
+        }
+        finally
+        {
+            MetricBudgetTelemetry.SetSinkForTests(null);
+        }
+
+        Assert.Equal(2, requests.Count);
+        Assert.Equal("activation", requests[0]);
+        Assert.Equal("heartbeat", requests[1]);
+    }
+
+    [Fact]
     public void TelemetryFailureNeverChangesAVerificationResult()
     {
         string meterName = TestNames.Meter(nameof(TelemetryFailureNeverChangesAVerificationResult));

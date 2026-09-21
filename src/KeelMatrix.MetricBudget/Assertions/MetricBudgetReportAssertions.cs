@@ -202,14 +202,14 @@ public static class MetricBudgetReportAssertions
             && tag.WasObserved
             && instrument is not null
             && !InstrumentTrackingIncomplete(instrument)
-            && !tag.ValueTrackingIncomplete
+            && !TagTrackingIncomplete(tag)
             && tag.ObservedDistinctValueCount <= maxDistinctValues)
         {
             return report;
         }
 
         bool trackingIncomplete = instrument is not null
-            && (InstrumentTrackingIncomplete(instrument) || (tag is not null && tag.ValueTrackingIncomplete));
+            && (InstrumentTrackingIncomplete(instrument) || (tag is not null && TagTrackingIncomplete(tag)));
         string observed = tag is null || !tag.WasObserved
             ? "the workload never delivered that tag key"
             : tag.ObservedDistinctValueCount.ToString(CultureInfo.InvariantCulture)
@@ -229,6 +229,15 @@ public static class MetricBudgetReportAssertions
             || instrument.TagSetTrackingIncomplete
             || instrument.TagKeyTrackingIncomplete
             || instrument.InstrumentTrackingIncomplete;
+    }
+
+    private static bool TagTrackingIncomplete(MetricBudgetTagResult tag)
+    {
+        return tag.ValueTrackingIncomplete
+            || tag.SeriesTrackingIncomplete
+            || tag.TagSetTrackingIncomplete
+            || tag.TagKeyTrackingIncomplete
+            || tag.InstrumentTrackingIncomplete;
     }
 
     private static MetricBudgetInstrumentResult? FindInstrument(
