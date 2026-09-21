@@ -38,6 +38,11 @@ report.AssertWithinBudget();
 A failing run names the instrument, the breached budget, the observed count, the configured limit, and the
 offending tag keys, and never prints tag values.
 
+Focused budget assertions fail closed when their target delivered no measurements or when selected physical
+instances or same-name identities were not admitted. A name-only focused assertion does not pass when that loss
+could make the target ambiguous; unrelated instruments' incomplete accounting does not invalidate a fully tracked
+target.
+
 The [package README](src/KeelMatrix.MetricBudget/README.md) is the complete user guide: budgets, outcomes, examples,
 lifecycle, safety bounds, privacy, telemetry, supported targets, and troubleshooting.
 

@@ -30,6 +30,8 @@ public sealed class MetricBudgetSafetyReport
         bool instrumentTrackingIncomplete,
         long untrackedInstrumentIdentities,
         long untrackedInstrumentInstances,
+        bool instrumentIdentityLengthTrackingIncomplete,
+        long untrackedInstrumentIdentityLengths,
         bool conflictTrackingIncomplete,
         long untrackedConflicts,
         bool tagSetTrackingIncomplete,
@@ -54,6 +56,8 @@ public sealed class MetricBudgetSafetyReport
         InstrumentTrackingIncomplete = instrumentTrackingIncomplete;
         UntrackedInstrumentIdentities = untrackedInstrumentIdentities;
         UntrackedInstrumentInstances = untrackedInstrumentInstances;
+        InstrumentIdentityLengthTrackingIncomplete = instrumentIdentityLengthTrackingIncomplete;
+        UntrackedInstrumentIdentityLengths = untrackedInstrumentIdentityLengths;
         ConflictTrackingIncomplete = conflictTrackingIncomplete;
         UntrackedConflicts = untrackedConflicts;
         TagSetTrackingIncomplete = tagSetTrackingIncomplete;
@@ -125,7 +129,9 @@ public sealed class MetricBudgetSafetyReport
     /// <summary>Configured bound on a delivered tag key.</summary>
     public int MaxTagKeyLength { get; }
 
-    /// <summary>Whether an instrument identity or physical instance bound was reached.</summary>
+    /// <summary>
+    /// Whether a selected identity, physical instance, or identity-length bound was reached.
+    /// </summary>
     public bool InstrumentTrackingIncomplete { get; }
 
     /// <summary>Selected published identities not retained after the identity bound was reached.</summary>
@@ -133,6 +139,17 @@ public sealed class MetricBudgetSafetyReport
 
     /// <summary>Physical instrument instances not retained after the instance bound was reached.</summary>
     public long UntrackedInstrumentInstances { get; }
+
+    /// <summary>
+    /// Whether selected instrument identities were rejected because a meter name, meter version, or instrument
+    /// name exceeded <see cref="MaxInstrumentIdentityLength"/>.
+    /// </summary>
+    public bool InstrumentIdentityLengthTrackingIncomplete { get; }
+
+    /// <summary>
+    /// Selected published identities rejected by the instrument identity component-length bound.
+    /// </summary>
+    public long UntrackedInstrumentIdentityLengths { get; }
 
     /// <summary>Whether the conflict-record bound was reached.</summary>
     public bool ConflictTrackingIncomplete { get; }

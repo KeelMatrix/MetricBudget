@@ -52,6 +52,10 @@ internal enum TagIdentityFailure
 /// <para>
 /// The accountant retains only fixed-size digests of these identities, never the canonical text itself.
 /// </para>
+/// <para>
+/// Digest scratch state is reused per thread by <see cref="Sha256TextHash"/> and remains bounded independently of
+/// the number of measurements.
+/// </para>
 /// </remarks>
 internal static class TagIdentity
 {

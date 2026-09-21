@@ -23,14 +23,17 @@ internal sealed class MetricBudgetState
     private readonly Dictionary<Instrument, InstrumentIdentity> identityByInstrument = new();
     private readonly List<Instrument> enabledInstruments = new();
     private readonly Dictionary<InstrumentIdentity, int[]> conflicts = new();
+    private readonly HashSet<InstrumentNameKey> untrackedNameOnlyIdentities = new();
 
     private long measurementsDelivered;
     private long unmatchedMeasurements;
     private long untrackedInstrumentIdentities;
     private long untrackedInstrumentInstances;
+    private long untrackedInstrumentIdentityLengths;
     private long untrackedConflicts;
     private bool instrumentIdentityTrackingIncomplete;
     private bool instrumentInstanceTrackingIncomplete;
+    private bool instrumentIdentityLengthTrackingIncomplete;
     private bool conflictTrackingIncomplete;
     private bool stopped;
     private int activeMeasurements;
@@ -56,13 +59,6 @@ internal sealed class MetricBudgetState
                 return;
             }
 
-            if (!identity.HasComponentLengthsAtMost(options.MaxInstrumentIdentityLength))
-            {
-                instrumentIdentityTrackingIncomplete = true;
-                untrackedInstrumentIdentities++;
-                return;
-            }
-
             int matchCount = 0;
             int firstMatch = -1;
             for (int i = 0; i < options.Rules.Length; i++)
@@ -81,6 +77,14 @@ internal sealed class MetricBudgetState
 
             if (matchCount == 0)
             {
+                return;
+            }
+
+            if (!identity.HasComponentLengthsAtMost(options.MaxInstrumentIdentityLength))
+            {
+                MarkKnownAccountsWithSameName(identity);
+                instrumentIdentityLengthTrackingIncomplete = true;
+                untrackedInstrumentIdentityLengths++;
                 return;
             }
 
@@ -121,6 +125,8 @@ internal sealed class MetricBudgetState
             {
                 instrumentIdentityTrackingIncomplete = true;
                 untrackedInstrumentIdentities++;
+                RememberUntrackedName(identity);
+                MarkKnownAccountsWithSameName(identity);
                 return;
             }
 
@@ -133,12 +139,19 @@ internal sealed class MetricBudgetState
             {
                 instrumentInstanceTrackingIncomplete = true;
                 untrackedInstrumentInstances++;
+                MarkKnownAccountsWithSameName(identity);
                 return;
             }
 
             if (!alreadyKnownIdentity)
             {
-                accounts.Add(identity, new InstrumentAccount(identity, firstMatch));
+                InstrumentAccount account = new InstrumentAccount(identity, firstMatch);
+                if (untrackedNameOnlyIdentities.Contains(new InstrumentNameKey(identity)))
+                {
+                    account.MarkInstrumentTrackingIncomplete();
+                }
+
+                accounts.Add(identity, account);
             }
 
             identityByInstrument.Add(instrument, identity);
@@ -301,9 +314,11 @@ internal sealed class MetricBudgetState
                 unmatchedMeasurements,
                 untrackedInstrumentIdentities,
                 untrackedInstrumentInstances,
+                untrackedInstrumentIdentityLengths,
                 untrackedConflicts,
                 instrumentIdentityTrackingIncomplete,
                 instrumentInstanceTrackingIncomplete,
+                instrumentIdentityLengthTrackingIncomplete,
                 conflictTrackingIncomplete,
                 options.MaxTrackedSeries,
                 options.MaxTrackedValuesPerTag,
@@ -315,6 +330,68 @@ internal sealed class MetricBudgetState
                 options.MaxTagCount,
                 options.MaxInstrumentIdentityLength,
                 options.MaxTagKeyLength);
+        }
+    }
+
+    private void RememberUntrackedName(in InstrumentIdentity identity)
+    {
+        InstrumentNameKey key = new InstrumentNameKey(identity);
+        if (untrackedNameOnlyIdentities.Contains(key))
+        {
+            return;
+        }
+
+        // Keep the name-only ambiguity index bounded by the same identity admission budget. If it fills, the
+        // retained results still fail closed for names already indexed; the report-level safety violation explains
+        // that additional selected identities were lost.
+        if (untrackedNameOnlyIdentities.Count < options.MaxTrackedInstrumentIdentities)
+        {
+            untrackedNameOnlyIdentities.Add(key);
+        }
+    }
+
+    private void MarkKnownAccountsWithSameName(in InstrumentIdentity identity)
+    {
+        foreach (InstrumentAccount account in accounts.Values)
+        {
+            if (string.Equals(account.Identity.MeterName, identity.MeterName, StringComparison.Ordinal)
+                && string.Equals(account.Identity.InstrumentName, identity.InstrumentName, StringComparison.Ordinal))
+            {
+                account.MarkInstrumentTrackingIncomplete();
+            }
+        }
+    }
+
+    private readonly struct InstrumentNameKey : IEquatable<InstrumentNameKey>
+    {
+        internal InstrumentNameKey(InstrumentIdentity identity)
+        {
+            MeterName = identity.MeterName;
+            InstrumentName = identity.InstrumentName;
+        }
+
+        private string MeterName { get; }
+
+        private string InstrumentName { get; }
+
+        public bool Equals(InstrumentNameKey other)
+        {
+            return string.Equals(MeterName, other.MeterName, StringComparison.Ordinal)
+                && string.Equals(InstrumentName, other.InstrumentName, StringComparison.Ordinal);
+        }
+
+        public override bool Equals(object? obj)
+        {
+            return obj is InstrumentNameKey other && Equals(other);
+        }
+
+        public override int GetHashCode()
+        {
+            unchecked
+            {
+                return (StringComparer.Ordinal.GetHashCode(MeterName) * 397)
+                    ^ StringComparer.Ordinal.GetHashCode(InstrumentName);
+            }
         }
     }
 }

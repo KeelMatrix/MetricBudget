@@ -10,7 +10,9 @@ namespace KeelMatrix.MetricBudget;
 /// </summary>
 /// <remarks>
 /// One result covers one combination of meter name, meter version, instrument name, and instrument kind. Counts
-/// describe the exercised workload only.
+/// describe the exercised workload only. If selected physical instances or same-name identities were rejected by
+/// an admission bound, <see cref="InstrumentTrackingIncomplete"/> is set and no within-budget conclusion is drawn
+/// from this result.
 /// </remarks>
 public sealed class MetricBudgetInstrumentResult
 {
@@ -28,6 +30,7 @@ public sealed class MetricBudgetInstrumentResult
         long untrackedTagKeyObservations,
         bool tagSetTrackingIncomplete,
         bool tagKeyTrackingIncomplete,
+        bool instrumentTrackingIncomplete,
         IReadOnlyList<MetricBudgetTagResult> tags)
     {
         MeterName = meterName;
@@ -43,6 +46,7 @@ public sealed class MetricBudgetInstrumentResult
         UntrackedTagKeyObservations = untrackedTagKeyObservations;
         TagSetTrackingIncomplete = tagSetTrackingIncomplete;
         TagKeyTrackingIncomplete = tagKeyTrackingIncomplete;
+        InstrumentTrackingIncomplete = instrumentTrackingIncomplete;
         MetricBudgetTagResult[] copy = new MetricBudgetTagResult[tags.Count];
         for (int i = 0; i < copy.Length; i++)
         {
@@ -114,6 +118,12 @@ public sealed class MetricBudgetInstrumentResult
     public bool TagKeyTrackingIncomplete { get; }
 
     /// <summary>
+    /// Whether one or more selected physical instrument instances or same-name identities could not be admitted,
+    /// so this identity's counts may not represent every selected source.
+    /// </summary>
+    public bool InstrumentTrackingIncomplete { get; }
+
+    /// <summary>
     /// Per-tag results for this instrument identity, ordered by tag key, including configured keys the workload
     /// never delivered.
     /// </summary>
@@ -131,7 +141,11 @@ public sealed class MetricBudgetInstrumentResult
     {
         get
         {
-            if (!WasObserved || SeriesTrackingIncomplete || TagSetTrackingIncomplete || TagKeyTrackingIncomplete)
+            if (!WasObserved
+                || SeriesTrackingIncomplete
+                || TagSetTrackingIncomplete
+                || TagKeyTrackingIncomplete
+                || InstrumentTrackingIncomplete)
             {
                 return false;
             }
@@ -170,6 +184,6 @@ public sealed class MetricBudgetInstrumentResult
             + ": " + MeasurementCount.ToString(CultureInfo.InvariantCulture) + " measurements, "
             + ObservedSeriesCount.ToString(CultureInfo.InvariantCulture) + " observed series, configured max "
             + limit
-            + (SeriesTrackingIncomplete ? ", tracking incomplete" : string.Empty);
+            + (SeriesTrackingIncomplete || InstrumentTrackingIncomplete ? ", tracking incomplete" : string.Empty);
     }
 }

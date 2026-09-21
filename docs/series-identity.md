@@ -57,6 +57,10 @@ Notes that the implementation, the diagnostics, and this document share:
   a counter and a histogram with the same name are separate. `Meter.Scope` is not part of identity, matching the
   instrumentation-scope model the BCL metrics APIs and the OpenTelemetry .NET SDK use, so two `Meter` instances
   that share a name and version share one observed identity.
+- **Selected identity admission is bounded.** Selector matching happens before the identity component-length bound,
+  so oversized unselected instruments do not affect a scoped session. An oversized selected identity is rejected and
+  makes the report incomplete; a selected identity or physical instance rejected by an admission bound also makes
+  any affected retained result incomplete. Focused assertions do not draw a pass conclusion from those results.
 
 The rule is implemented by `TagIdentity` in the library. If the code and this document ever disagree, the code is
 wrong: the product documentation, the printed diagnostics, and the implementation are required to agree.

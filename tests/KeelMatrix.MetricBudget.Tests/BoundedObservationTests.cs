@@ -6,6 +6,9 @@ using KeelMatrix.MetricBudget.Internal;
 
 namespace KeelMatrix.MetricBudget.Tests;
 
+/// <summary>
+/// Bounded admission, identity, lifecycle, and report behavior.
+/// </summary>
 public sealed class BoundedObservationTests
 {
     [Fact]
@@ -97,6 +100,192 @@ public sealed class BoundedObservationTests
     }
 
     [Fact]
+    public void SameIdentityInstanceAdmissionLossFailsClosedForFocusedAssertions()
+    {
+        string meterName = TestNames.Meter(nameof(SameIdentityInstanceAdmissionLossFailsClosedForFocusedAssertions));
+        using Meter firstMeter = new Meter(meterName, "1.0.0");
+        Counter<long> first = firstMeter.CreateCounter<long>("requests");
+        MetricBudgetOptions options = new MetricBudgetOptions
+        {
+            MaxTrackedInstrumentInstances = 1,
+        };
+        options.ForInstrument(meterName, "requests", budget =>
+        {
+            budget.MaxObservedSeries = 1;
+            budget.Tag("tenant").MaxDistinctValues = 1;
+        });
+
+        using MetricBudgetSession session = MetricBudgetSession.Start(options);
+        first.Add(1, new KeyValuePair<string, object?>("tenant", "a"));
+
+        using Meter secondMeter = new Meter(meterName, "1.0.0");
+        Counter<long> second = secondMeter.CreateCounter<long>("requests");
+        second.Add(1, new KeyValuePair<string, object?>("tenant", "b"));
+
+        MetricBudgetReport report = session.Complete();
+        MetricBudgetInstrumentResult instrument = Assert.Single(report.Rules[0].Instruments);
+
+        Assert.Equal(MetricBudgetOutcome.ObservationIncomplete, report.Outcome);
+        Assert.True(report.Safety.InstrumentTrackingIncomplete);
+        Assert.True(instrument.InstrumentTrackingIncomplete);
+        Assert.False(instrument.IsWithinBudget);
+        Assert.False(Assert.Single(instrument.Tags).IsWithinBudget);
+        Assert.Throws<MetricBudgetAssertionException>(
+            () => report.AssertWithinBudget());
+        Assert.Throws<MetricBudgetAssertionException>(
+            () => report.AssertObservedSeriesAtMost(meterName, "requests", 1));
+        Assert.Throws<MetricBudgetAssertionException>(
+            () => report.AssertTagDistinctValuesAtMost(meterName, "requests", "tenant", 1));
+    }
+
+    [Fact]
+    public void IdentityAdmissionLossMakesSameNameFocusedAssertionsAmbiguous()
+    {
+        string meterName = TestNames.Meter(nameof(IdentityAdmissionLossMakesSameNameFocusedAssertionsAmbiguous));
+        using Meter retainedMeter = new Meter(meterName, "1.0.0");
+        Counter<long> retained = retainedMeter.CreateCounter<long>("requests");
+        MetricBudgetOptions options = new MetricBudgetOptions
+        {
+            MaxTrackedInstrumentIdentities = 1,
+        };
+        options.ForInstrument(meterName, "requests", budget =>
+        {
+            budget.MaxObservedSeries = 1;
+            budget.Tag("tenant").MaxDistinctValues = 1;
+        });
+
+        using MetricBudgetSession session = MetricBudgetSession.Start(options);
+        retained.Add(1, new KeyValuePair<string, object?>("tenant", "a"));
+
+        using Meter droppedMeter = new Meter(meterName, "2.0.0");
+        Counter<long> dropped = droppedMeter.CreateCounter<long>("requests");
+        dropped.Add(1, new KeyValuePair<string, object?>("tenant", "b"));
+
+        MetricBudgetReport report = session.Complete();
+
+        Assert.Equal(MetricBudgetOutcome.ObservationIncomplete, report.Outcome);
+        Assert.True(report.Safety.InstrumentTrackingIncomplete);
+        Assert.Throws<MetricBudgetAssertionException>(
+            () => report.AssertObservedSeriesAtMost(meterName, "requests", 1));
+        Assert.Throws<MetricBudgetAssertionException>(
+            () => report.AssertTagDistinctValuesAtMost(meterName, "requests", "tenant", 1));
+    }
+
+    [Fact]
+    public void UnrelatedIdentityAdmissionLossDoesNotInvalidateFocusedTarget()
+    {
+        string meterName = TestNames.Meter(nameof(UnrelatedIdentityAdmissionLossDoesNotInvalidateFocusedTarget));
+        using Meter meter = new Meter(meterName, "1.0.0");
+        Counter<long> target = meter.CreateCounter<long>("target");
+        MetricBudgetOptions options = new MetricBudgetOptions
+        {
+            MaxTrackedInstrumentIdentities = 1,
+        };
+        options.ForInstrument(meterName, "target", budget => budget.MaxObservedSeries = 1);
+        options.ForInstrument(meterName, "unrelated", budget => budget.MaxObservedSeries = 1);
+
+        using MetricBudgetSession session = MetricBudgetSession.Start(options);
+        target.Add(1);
+        Counter<long> unrelated = meter.CreateCounter<long>("unrelated");
+        unrelated.Add(1);
+
+        MetricBudgetReport report = session.Complete();
+
+        Assert.Equal(MetricBudgetOutcome.ObservationIncomplete, report.Outcome);
+        Assert.True(report.Safety.InstrumentTrackingIncomplete);
+        _ = report.AssertObservedSeriesAtMost(meterName, "target", 1);
+    }
+
+    [Fact]
+    public void UnmeasuredSelectedCounterFailsFocusedSeriesAssertion()
+    {
+        string meterName = TestNames.Meter(nameof(UnmeasuredSelectedCounterFailsFocusedSeriesAssertion));
+        using Meter meter = new Meter(meterName, "1.0.0");
+        _ = meter.CreateCounter<long>("requests");
+        MetricBudgetOptions options = new MetricBudgetOptions()
+            .ForInstrument(meterName, "requests", budget => budget.MaxObservedSeries = 1);
+
+        using MetricBudgetSession session = MetricBudgetSession.Start(options);
+        MetricBudgetReport report = session.Complete();
+
+        Assert.Equal(MetricBudgetOutcome.NoMeasurementsObserved, report.Outcome);
+        Assert.False(Assert.Single(report.Rules[0].Instruments).IsWithinBudget);
+        Assert.Throws<MetricBudgetAssertionException>(
+            () => report.AssertObservedSeriesAtMost(meterName, "requests", 1));
+        Assert.Throws<MetricBudgetAssertionException>(
+            () => report.AssertTagDistinctValuesAtMost(meterName, "requests", "tenant", 1));
+    }
+
+    [Fact]
+    public void UncollectedObservableFailsFocusedSeriesAssertion()
+    {
+        string meterName = TestNames.Meter(nameof(UncollectedObservableFailsFocusedSeriesAssertion));
+        using Meter meter = new Meter(meterName, "1.0.0");
+        _ = meter.CreateObservableCounter("requests", () => 1L);
+        MetricBudgetOptions options = new MetricBudgetOptions()
+            .ForInstrument(meterName, "requests", budget => budget.MaxObservedSeries = 1);
+
+        using MetricBudgetSession session = MetricBudgetSession.Start(options);
+        MetricBudgetReport report = session.Complete();
+
+        Assert.Equal(MetricBudgetOutcome.NoMeasurementsObserved, report.Outcome);
+        Assert.False(Assert.Single(report.Rules[0].Instruments).IsWithinBudget);
+        Assert.Throws<MetricBudgetAssertionException>(
+            () => report.AssertObservedSeriesAtMost(meterName, "requests", 1));
+        Assert.Throws<MetricBudgetAssertionException>(
+            () => report.AssertTagDistinctValuesAtMost(meterName, "requests", "tenant", 1));
+    }
+
+    [Fact]
+    public void UnselectedOversizedInstrumentsDoNotInvalidateSelectedSession()
+    {
+        string oversizedName = new string('o', 65);
+        using Meter oversizedBefore = new Meter(oversizedName, "1.0.0");
+        _ = oversizedBefore.CreateCounter<long>("unselected-before");
+
+        string meterName = "metricbudget-selected";
+        using Meter meter = new Meter(meterName, "1.0.0");
+        Counter<long> counter = meter.CreateCounter<long>("requests");
+        MetricBudgetOptions options = new MetricBudgetOptions
+        {
+            MaxInstrumentIdentityLength = 64,
+        };
+        options.ForInstrument(meterName, "requests", budget => budget.MaxObservedSeries = 1);
+
+        using MetricBudgetSession session = MetricBudgetSession.Start(options);
+        counter.Add(1);
+
+        using Meter oversizedAfter = new Meter(new string('p', 65), "1.0.0");
+        _ = oversizedAfter.CreateCounter<long>("unselected-after");
+
+        MetricBudgetReport report = session.Complete();
+
+        Assert.Equal(MetricBudgetOutcome.Passed, report.Outcome);
+        _ = report.AssertWithinBudget();
+    }
+
+    [Fact]
+    public void OversizedSelectedInstrumentFailsWithIdentityLengthDiagnostic()
+    {
+        string meterName = new string('s', 65);
+        using Meter meter = new Meter(meterName, "1.0.0");
+        Counter<long> counter = meter.CreateCounter<long>("requests");
+        MetricBudgetOptions options = new MetricBudgetOptions
+        {
+            MaxInstrumentIdentityLength = 64,
+        };
+        options.ForInstrument(meterName, "requests", budget => budget.MaxObservedSeries = 1);
+
+        using MetricBudgetSession session = MetricBudgetSession.Start(options);
+        counter.Add(1);
+        MetricBudgetReport report = session.Complete();
+
+        Assert.Equal(MetricBudgetOutcome.ObservationIncomplete, report.Outcome);
+        Assert.Contains("instrument identity length safety bound", report.ToDiagnosticString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("MaxTrackedInstrumentIdentities", report.ToDiagnosticString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void OversizedKeysAndTagSetsAreRejectedWithoutRetainedValues()
     {
         string meterName = TestNames.Meter(nameof(OversizedKeysAndTagSetsAreRejectedWithoutRetainedValues));
@@ -151,6 +340,10 @@ public sealed class BoundedObservationTests
         Assert.Equal(MetricBudgetOutcome.ObservationIncomplete, report.Outcome);
         Assert.Empty(report.Rules[0].Instruments);
         Assert.True(report.Safety.InstrumentTrackingIncomplete);
+        Assert.True(report.Safety.InstrumentIdentityLengthTrackingIncomplete);
+        Assert.Equal(1, report.Safety.UntrackedInstrumentIdentityLengths);
+        Assert.Contains("instrument identity length safety bound", report.ToDiagnosticString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("MaxTrackedInstrumentIdentities", report.ToDiagnosticString(), StringComparison.Ordinal);
     }
 
     [Fact]

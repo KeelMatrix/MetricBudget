@@ -26,9 +26,11 @@ internal sealed class SessionSnapshot
             unmatchedMeasurements,
             untrackedInstrumentIdentities: 0,
             untrackedInstrumentInstances: 0,
+            untrackedInstrumentIdentityLengths: 0,
             untrackedConflicts: 0,
             instrumentIdentityTrackingIncomplete: false,
             instrumentInstanceTrackingIncomplete: false,
+            instrumentIdentityLengthTrackingIncomplete: false,
             conflictTrackingIncomplete: false,
             maxTrackedSeries,
             maxTrackedValuesPerTag,
@@ -50,9 +52,11 @@ internal sealed class SessionSnapshot
         long unmatchedMeasurements,
         long untrackedInstrumentIdentities,
         long untrackedInstrumentInstances,
+        long untrackedInstrumentIdentityLengths,
         long untrackedConflicts,
         bool instrumentIdentityTrackingIncomplete,
         bool instrumentInstanceTrackingIncomplete,
+        bool instrumentIdentityLengthTrackingIncomplete,
         bool conflictTrackingIncomplete,
         int maxTrackedSeries,
         int maxTrackedValuesPerTag,
@@ -71,9 +75,11 @@ internal sealed class SessionSnapshot
         UnmatchedMeasurements = unmatchedMeasurements;
         UntrackedInstrumentIdentities = untrackedInstrumentIdentities;
         UntrackedInstrumentInstances = untrackedInstrumentInstances;
+        UntrackedInstrumentIdentityLengths = untrackedInstrumentIdentityLengths;
         UntrackedConflicts = untrackedConflicts;
         InstrumentIdentityTrackingIncomplete = instrumentIdentityTrackingIncomplete;
         InstrumentInstanceTrackingIncomplete = instrumentInstanceTrackingIncomplete;
+        InstrumentIdentityLengthTrackingIncomplete = instrumentIdentityLengthTrackingIncomplete;
         ConflictTrackingIncomplete = conflictTrackingIncomplete;
         MaxTrackedSeries = maxTrackedSeries;
         MaxTrackedValuesPerTag = maxTrackedValuesPerTag;
@@ -101,11 +107,15 @@ internal sealed class SessionSnapshot
 
     internal long UntrackedInstrumentInstances { get; }
 
+    internal long UntrackedInstrumentIdentityLengths { get; }
+
     internal long UntrackedConflicts { get; }
 
     internal bool InstrumentIdentityTrackingIncomplete { get; }
 
     internal bool InstrumentInstanceTrackingIncomplete { get; }
+
+    internal bool InstrumentIdentityLengthTrackingIncomplete { get; }
 
     internal bool ConflictTrackingIncomplete { get; }
 
@@ -183,6 +193,7 @@ internal sealed class SessionSnapshot
     internal bool StateTrackingIncomplete =>
         InstrumentIdentityTrackingIncomplete
         || InstrumentInstanceTrackingIncomplete
+        || InstrumentIdentityLengthTrackingIncomplete
         || ConflictTrackingIncomplete;
 }
 
@@ -216,6 +227,7 @@ internal sealed class InstrumentAccountSnapshot
             tagValueCapExhausted,
             tagKeyCapExhausted: false,
             tagSetTrackingIncomplete: false,
+            instrumentTrackingIncomplete: false,
             tags)
     {
     }
@@ -234,6 +246,7 @@ internal sealed class InstrumentAccountSnapshot
         bool tagValueCapExhausted,
         bool tagKeyCapExhausted,
         bool tagSetTrackingIncomplete,
+        bool instrumentTrackingIncomplete,
         TagValueSnapshot[] tags)
     {
         Identity = identity;
@@ -249,6 +262,7 @@ internal sealed class InstrumentAccountSnapshot
         TagValueCapExhausted = tagValueCapExhausted;
         TagKeyCapExhausted = tagKeyCapExhausted;
         TagSetTrackingIncomplete = tagSetTrackingIncomplete;
+        InstrumentTrackingIncomplete = instrumentTrackingIncomplete;
         Tags = tags;
     }
 
@@ -281,6 +295,8 @@ internal sealed class InstrumentAccountSnapshot
     internal bool TagKeyCapExhausted { get; }
 
     internal bool TagSetTrackingIncomplete { get; }
+
+    internal bool InstrumentTrackingIncomplete { get; }
 
     internal TagValueSnapshot[] Tags { get; }
 

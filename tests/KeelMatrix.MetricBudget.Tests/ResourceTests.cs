@@ -103,6 +103,7 @@ public sealed class ResourceTests
 
         const int distinctSeries = 20_000;
         const int measurements = 100_000;
+        const long allocationBoundBytes = 512L * 1024 * 1024;
 
         MetricBudgetOptions options = new MetricBudgetOptions
         {
@@ -129,6 +130,7 @@ public sealed class ResourceTests
                 new KeyValuePair<string, object?>("http.response.status_code", series % 2 == 0 ? 200 : 503));
         }
 
+        long allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
         Stopwatch stopwatch = Stopwatch.StartNew();
         for (int i = 0; i < measurements; i++)
         {
@@ -140,20 +142,33 @@ public sealed class ResourceTests
         }
 
         stopwatch.Stop();
+        long allocatedAfter = GC.GetAllocatedBytesForCurrentThread();
         MetricBudgetReport report = session.Complete();
 
         double microsecondsPerMeasurement = stopwatch.Elapsed.TotalMilliseconds * 1_000 / measurements;
         output.WriteLine(
-            "canonicalization: measurements={0}; distinctSeriesGenerated={1}; elapsedMs={2}; microsecondsPerMeasurement={3}; observedSeries={4}",
+            "canonicalization: measurements={0}; distinctSeriesGenerated={1}; elapsedMs={2}; microsecondsPerMeasurement={3}; allocatedBytes={4}; allocationBoundBytes={5}; observedSeries={6}",
             measurements.ToString(CultureInfo.InvariantCulture),
             distinctSeries.ToString(CultureInfo.InvariantCulture),
             stopwatch.ElapsedMilliseconds.ToString(CultureInfo.InvariantCulture),
             microsecondsPerMeasurement.ToString("F2", CultureInfo.InvariantCulture),
+            (allocatedAfter - allocatedBefore).ToString(CultureInfo.InvariantCulture),
+            allocationBoundBytes.ToString(CultureInfo.InvariantCulture),
             report.ObservedSeriesCount.ToString(CultureInfo.InvariantCulture));
 
         Assert.Equal(MetricBudgetOutcome.Passed, report.Outcome);
         Assert.Equal(distinctSeries, report.ObservedSeriesCount);
         Assert.True(report.AccountingIsConsistent);
+
+        // The pre-optimization shipping path allocated 2,745,842,840 bytes for this same window, including a new
+        // 8,192-byte SHA-256 scratch buffer for each of three digests per measurement. This bound leaves generous
+        // room for runtime/listener allocation while keeping that regression well outside the acceptable range.
+        Assert.True(
+            allocatedAfter - allocatedBefore < allocationBoundBytes,
+            "Shipping canonicalization allocated "
+                + (allocatedAfter - allocatedBefore).ToString(CultureInfo.InvariantCulture)
+                + " bytes, above the bound of "
+                + allocationBoundBytes.ToString(CultureInfo.InvariantCulture));
 
         // A generous ceiling: it catches an order-of-magnitude regression without turning a shared build agent into
         // a timing lottery.

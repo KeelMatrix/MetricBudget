@@ -71,7 +71,8 @@ internal readonly struct Sha256Digest : IEquatable<Sha256Digest>
 /// <remarks>
 /// A hasher is cached per thread because one measurement computes one digest per delivered tag plus one digest for
 /// the whole tag set. Long values are hashed in fixed-size chunks so a single pathological value cannot cause a
-/// proportional transient allocation.
+/// proportional transient allocation. The hasher and its fixed-size chunk buffer are reused per thread, so normal
+/// measurements do not allocate a new scratch buffer for each digest.
 /// </remarks>
 internal static class Sha256TextHash
 {
@@ -79,6 +80,9 @@ internal static class Sha256TextHash
 
     [ThreadStatic]
     private static SHA256? hasher;
+
+    [ThreadStatic]
+    private static byte[]? chunkBytes;
 
     internal static Sha256Digest Digest(string text)
     {
@@ -105,7 +109,7 @@ internal static class Sha256TextHash
         SHA256 sha = hasher ??= SHA256.Create();
         sha.Initialize();
 
-        byte[] chunkBytes = new byte[ChunkChars * 2];
+        byte[] bytes = chunkBytes ??= new byte[ChunkChars * 2];
         int offset = 0;
         while (offset < text.Length)
         {
@@ -114,16 +118,16 @@ internal static class Sha256TextHash
             for (int i = 0; i < length; i++)
             {
                 char character = text[offset + i];
-                chunkBytes[byteCount++] = (byte)character;
-                chunkBytes[byteCount++] = (byte)(character >> 8);
+                bytes[byteCount++] = (byte)character;
+                bytes[byteCount++] = (byte)(character >> 8);
             }
 
             if (offset == 0 && length == text.Length)
             {
-                return sha.ComputeHash(chunkBytes, 0, byteCount);
+                return sha.ComputeHash(bytes, 0, byteCount);
             }
 
-            sha.TransformBlock(chunkBytes, 0, byteCount, outputBuffer: null, outputOffset: 0);
+            sha.TransformBlock(bytes, 0, byteCount, outputBuffer: null, outputOffset: 0);
             offset += length;
         }
 

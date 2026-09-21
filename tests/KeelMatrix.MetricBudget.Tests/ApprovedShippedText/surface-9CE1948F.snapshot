@@ -172,6 +172,11 @@ Prefer `AssertWithinBudget` in normal tests. The narrower helpers are useful whe
 such as asserting only a per-instrument-identity tag budget while another test owns the per-instrument-identity
 series budget.
 
+Focused budget helpers fail closed when their target delivered no measurements or its accounting was incomplete.
+That includes selected physical instances or same-name identities rejected by an admission bound. A name-only
+focused check does not pass when such loss could make the target ambiguous, while incomplete tracking for unrelated
+instruments does not invalidate a target that was fully tracked.
+
 ## Example: an in-process custom meter
 
 ```csharp
@@ -264,17 +269,23 @@ Cardinality is exactly the failure mode this package observes, so its own accoun
 | `MaxTrackedSeries` (per instrument identity) | 100,000 | Applies per instrument identity. Further distinct series of an instrument at its bound are counted as untracked observations, the report says series tracking is incomplete, and the outcome becomes `ObservationIncomplete`. |
 | `MaxTrackedValuesPerTag` (per instrument identity) | 5,000 | Applies per instrument identity and tag key. Further distinct values for that tag key are counted as untracked, the report names the key, and the outcome becomes `ObservationIncomplete`. |
 | `MaxTagValueLength` | 256 | A longer tag value is replaced by a stable digest in the identity, so one pathological value cannot inflate the session. |
-| `MaxTrackedInstrumentIdentities` | 1,024 | Bounds selected identities retained by a session; later identities are not enabled and the result is incomplete. |
-| `MaxTrackedInstrumentInstances` | 2,048 | Bounds physical instances retained and enabled, including repeated instances with one logical identity. |
+| `MaxTrackedInstrumentIdentities` | 1,024 | Bounds selected identities retained by a session; later identities are not enabled, same-name retained results are marked incomplete when affected, and the result is incomplete. |
+| `MaxTrackedInstrumentInstances` | 2,048 | Bounds physical instances retained and enabled, including repeated instances with one logical identity; an affected retained result is marked incomplete. |
 | `MaxTrackedConflicts` | 1,024 | Bounds retained ambiguous identities and rule indexes per conflict. |
 | `MaxTrackedTagKeysPerInstrument` | 256 | Bounds retained delivered keys for one instrument; later keys are not retained. |
 | `MaxTagCount` | 64 | Bounds tags admitted from one measurement; larger sets are not canonicalized. |
-| `MaxInstrumentIdentityLength` | 256 | Bounds meter name, meter version, and instrument name components retained in identity state. |
+| `MaxInstrumentIdentityLength` | 256 | Applies after selector matching. An oversized unselected identity is ignored; an oversized selected identity is rejected, counted separately, and makes the report incomplete. |
 | `MaxTagKeyLength` | 256 | Bounds delivered key length; longer keys are not canonicalized. |
 
 A bounded run is never reported as a pass, and untracked observations are never matched to an existing series, so
 the session cannot silently undercount. The defaults are safety bounds for the verifier, not budgets, and not
 recommended cardinality for any application: raise them deliberately when your workload legitimately observes more.
+
+The report separates identity admission loss from identity component-length rejection through
+`MetricBudgetSafetyReport.InstrumentTrackingIncomplete`,
+`MetricBudgetSafetyReport.InstrumentIdentityLengthTrackingIncomplete`, and
+`MetricBudgetSafetyReport.UntrackedInstrumentIdentityLengths`. The runtime diagnostic names the corresponding
+bound so the corrective option is clear.
 
 `MaxTrackedSeries` and `MaxTrackedValuesPerTag` both apply per instrument identity rather than once per session, so
 the whole session retains up to *(number of matched instrument identities) x `MaxTrackedSeries`* series

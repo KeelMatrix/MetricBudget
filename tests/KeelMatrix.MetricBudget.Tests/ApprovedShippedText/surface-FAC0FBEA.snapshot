@@ -44,6 +44,11 @@
             without printing tag values.
             </para>
             <para>
+            Focused budget helpers fail closed when their target delivered no measurements or its accounting was incomplete.
+            A name-only focused check also fails when selected identity admission loss makes that name ambiguous, while
+            unrelated instruments' incomplete accounting does not invalidate a target that was fully tracked.
+            </para>
+            <para>
             This namespace is separate from the core API so the core surface stays about observation and budgeting rather
             than assertion style.
             </para>
@@ -93,7 +98,7 @@
             <returns>The same report, for chaining.</returns>
             <exception cref="T:System.ArgumentNullException">A parameter is null.</exception>
             <exception cref="T:System.ArgumentOutOfRangeException"><paramref name="maxObservedSeries"/> is negative.</exception>
-            <exception cref="T:KeelMatrix.MetricBudget.Assertions.MetricBudgetAssertionException">The observed count exceeds the limit or tracking was incomplete.</exception>
+            <exception cref="T:KeelMatrix.MetricBudget.Assertions.MetricBudgetAssertionException">The instrument delivered no measurements, the observed count exceeds the limit, or tracking was incomplete.</exception>
         </member>
         <member name="M:KeelMatrix.MetricBudget.Assertions.MetricBudgetReportAssertions.AssertTagDistinctValuesAtMost(KeelMatrix.MetricBudget.MetricBudgetReport,System.String,System.String,System.String,System.Int32)">
             <summary>
@@ -415,7 +420,8 @@
             <remarks>
             A hasher is cached per thread because one measurement computes one digest per delivered tag plus one digest for
             the whole tag set. Long values are hashed in fixed-size chunks so a single pathological value cannot cause a
-            proportional transient allocation.
+            proportional transient allocation. The hasher and its fixed-size chunk buffer are reused per thread, so normal
+            measurements do not allocate a new scratch buffer for each digest.
             </remarks>
         </member>
         <member name="M:KeelMatrix.MetricBudget.Internal.Sha256TextHash.HexDigest(System.String)">
@@ -457,6 +463,10 @@
             </list>
             <para>
             The accountant retains only fixed-size digests of these identities, never the canonical text itself.
+            </para>
+            <para>
+            Digest scratch state is reused per thread by <see cref="T:KeelMatrix.MetricBudget.Internal.Sha256TextHash"/> and remains bounded independently of
+            the number of measurements.
             </para>
             </remarks>
         </member>
@@ -642,7 +652,9 @@
             </summary>
             <remarks>
             One result covers one combination of meter name, meter version, instrument name, and instrument kind. Counts
-            describe the exercised workload only.
+            describe the exercised workload only. If selected physical instances or same-name identities were rejected by
+            an admission bound, <see cref="P:KeelMatrix.MetricBudget.MetricBudgetInstrumentResult.InstrumentTrackingIncomplete"/> is set and no within-budget conclusion is drawn
+            from this result.
             </remarks>
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetInstrumentResult.MeterName">
@@ -705,6 +717,12 @@
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetInstrumentResult.TagKeyTrackingIncomplete">
             <summary>Whether the per-instrument retained tag-key bound was reached.</summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetInstrumentResult.InstrumentTrackingIncomplete">
+            <summary>
+            Whether one or more selected physical instrument instances or same-name identities could not be admitted,
+            so this identity's counts may not represent every selected source.
+            </summary>
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetInstrumentResult.Tags">
             <summary>
@@ -1210,13 +1228,26 @@
             <summary>Configured bound on a delivered tag key.</summary>
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.InstrumentTrackingIncomplete">
-            <summary>Whether an instrument identity or physical instance bound was reached.</summary>
+            <summary>
+            Whether a selected identity, physical instance, or identity-length bound was reached.
+            </summary>
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.UntrackedInstrumentIdentities">
             <summary>Selected published identities not retained after the identity bound was reached.</summary>
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.UntrackedInstrumentInstances">
             <summary>Physical instrument instances not retained after the instance bound was reached.</summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.InstrumentIdentityLengthTrackingIncomplete">
+            <summary>
+            Whether selected instrument identities were rejected because a meter name, meter version, or instrument
+            name exceeded <see cref="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.MaxInstrumentIdentityLength"/>.
+            </summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.UntrackedInstrumentIdentityLengths">
+            <summary>
+            Selected published identities rejected by the instrument identity component-length bound.
+            </summary>
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.ConflictTrackingIncomplete">
             <summary>Whether the conflict-record bound was reached.</summary>
@@ -1378,7 +1409,7 @@
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetTagResult.IsWithinBudget">
             <summary>
-            Whether this key stayed within its budget and was tracked completely.
+            Whether this key and its instrument accounting stayed within budget and were tracked completely.
             </summary>
         </member>
         <member name="M:KeelMatrix.MetricBudget.MetricBudgetTagResult.ToString">

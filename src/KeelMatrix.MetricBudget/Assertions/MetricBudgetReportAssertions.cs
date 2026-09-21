@@ -15,6 +15,11 @@ namespace KeelMatrix.MetricBudget.Assertions;
 /// without printing tag values.
 /// </para>
 /// <para>
+/// Focused budget helpers fail closed when their target delivered no measurements or its accounting was incomplete.
+/// A name-only focused check also fails when selected identity admission loss makes that name ambiguous, while
+/// unrelated instruments' incomplete accounting does not invalidate a target that was fully tracked.
+/// </para>
+/// <para>
 /// This namespace is separate from the core API so the core surface stays about observation and budgeting rather
 /// than assertion style.
 /// </para>
@@ -117,7 +122,7 @@ public static class MetricBudgetReportAssertions
     /// <returns>The same report, for chaining.</returns>
     /// <exception cref="ArgumentNullException">A parameter is null.</exception>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="maxObservedSeries"/> is negative.</exception>
-    /// <exception cref="MetricBudgetAssertionException">The observed count exceeds the limit or tracking was incomplete.</exception>
+    /// <exception cref="MetricBudgetAssertionException">The instrument delivered no measurements, the observed count exceeds the limit, or tracking was incomplete.</exception>
     public static MetricBudgetReport AssertObservedSeriesAtMost(
         this MetricBudgetReport report,
         string meterName,
@@ -136,6 +141,7 @@ public static class MetricBudgetReportAssertions
 
         MetricBudgetInstrumentResult? instrument = FindInstrument(report, meterName, instrumentName);
         if (instrument is not null
+            && instrument.WasObserved
             && !InstrumentTrackingIncomplete(instrument)
             && instrument.ObservedSeriesCount <= maxObservedSeries)
         {
@@ -147,6 +153,8 @@ public static class MetricBudgetReportAssertions
             + maxObservedSeries.ToString(CultureInfo.InvariantCulture) + " observed series, but "
             + (instrument is null
                 ? "it was not selected."
+                : !instrument.WasObserved
+                    ? "it delivered no measurements."
                 : instrument.ObservedSeriesCount.ToString(CultureInfo.InvariantCulture)
                     + " were observed"
                     + (InstrumentTrackingIncomplete(instrument) ? " and tracking was incomplete." : "."))
@@ -219,7 +227,8 @@ public static class MetricBudgetReportAssertions
     {
         return instrument.SeriesTrackingIncomplete
             || instrument.TagSetTrackingIncomplete
-            || instrument.TagKeyTrackingIncomplete;
+            || instrument.TagKeyTrackingIncomplete
+            || instrument.InstrumentTrackingIncomplete;
     }
 
     private static MetricBudgetInstrumentResult? FindInstrument(

@@ -18,7 +18,8 @@ public sealed class MetricBudgetTagResult
         int? configuredMaxDistinctValues,
         int observedDistinctValueCount,
         bool valueTrackingIncomplete,
-        long untrackedValueObservations)
+        long untrackedValueObservations,
+        bool instrumentTrackingIncomplete)
     {
         Key = key;
         IsConfigured = isConfigured;
@@ -27,7 +28,10 @@ public sealed class MetricBudgetTagResult
         ObservedDistinctValueCount = observedDistinctValueCount;
         ValueTrackingIncomplete = valueTrackingIncomplete;
         UntrackedValueObservations = untrackedValueObservations;
+        this.instrumentTrackingIncomplete = instrumentTrackingIncomplete;
     }
+
+    private readonly bool instrumentTrackingIncomplete;
 
     /// <summary>
     /// The delivered tag key, or <see langword="null"/> when the workload delivered a <see langword="null"/> tag
@@ -68,10 +72,11 @@ public sealed class MetricBudgetTagResult
     public long UntrackedValueObservations { get; }
 
     /// <summary>
-    /// Whether this key stayed within its budget and was tracked completely.
+    /// Whether this key and its instrument accounting stayed within budget and were tracked completely.
     /// </summary>
     public bool IsWithinBudget =>
-        !ValueTrackingIncomplete
+        !instrumentTrackingIncomplete
+        && !ValueTrackingIncomplete
         && (!ConfiguredMaxDistinctValues.HasValue || ObservedDistinctValueCount <= ConfiguredMaxDistinctValues.Value);
 
     /// <summary>

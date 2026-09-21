@@ -71,6 +71,7 @@ internal static class ReportBuilder
                     account.UntrackedTagKeyObservations,
                     account.TagSetTrackingIncomplete,
                     account.TagKeyCapExhausted,
+                    account.InstrumentTrackingIncomplete,
                     tags);
 
                 instruments.Add(instrument);
@@ -266,6 +267,24 @@ internal static class ReportBuilder
                 configuredLimit: snapshot.MaxTrackedInstrumentInstances));
         }
 
+        if (snapshot.InstrumentIdentityLengthTrackingIncomplete)
+        {
+            violations.Add(new MetricBudgetViolation(
+                MetricBudgetViolationKind.SafetyLimitReached,
+                "the instrument identity length safety bound was reached; "
+                + snapshot.UntrackedInstrumentIdentityLengths.ToString(CultureInfo.InvariantCulture)
+                + " selected published identity(ies) were not retained or enabled because a meter name, meter version, "
+                + "or instrument name exceeded MaxInstrumentIdentityLength. The report is incomplete; raise "
+                + "MaxInstrumentIdentityLength or narrow the workload.",
+                meterName: null,
+                meterVersion: null,
+                instrumentName: null,
+                instrumentKind: MetricInstrumentKind.Unknown,
+                tagKey: null,
+                observedCount: null,
+                configuredLimit: snapshot.MaxInstrumentIdentityLength));
+        }
+
         if (snapshot.ConflictTrackingIncomplete)
         {
             violations.Add(new MetricBudgetViolation(
@@ -364,9 +383,13 @@ internal static class ReportBuilder
             snapshot.MaxTagCount,
             snapshot.MaxInstrumentIdentityLength,
             snapshot.MaxTagKeyLength,
-            snapshot.InstrumentIdentityTrackingIncomplete || snapshot.InstrumentInstanceTrackingIncomplete,
+            snapshot.InstrumentIdentityTrackingIncomplete
+                || snapshot.InstrumentInstanceTrackingIncomplete
+                || snapshot.InstrumentIdentityLengthTrackingIncomplete,
             snapshot.UntrackedInstrumentIdentities,
             snapshot.UntrackedInstrumentInstances,
+            snapshot.InstrumentIdentityLengthTrackingIncomplete,
+            snapshot.UntrackedInstrumentIdentityLengths,
             snapshot.ConflictTrackingIncomplete,
             snapshot.UntrackedConflicts,
             TagSetTrackingIncomplete(snapshot),
@@ -517,7 +540,8 @@ internal static class ReportBuilder
                 configuredLimit,
                 tag.ObservedDistinctValueCount,
                 tag.ValueTrackingIncomplete,
-                tag.UntrackedValueObservations));
+                tag.UntrackedValueObservations,
+                account.InstrumentTrackingIncomplete));
         }
 
         for (int i = 0; i < rule.OrderedTagBudgets.Length; i++)
@@ -535,7 +559,8 @@ internal static class ReportBuilder
                 declared.MaxDistinctValues,
                 observedDistinctValueCount: 0,
                 valueTrackingIncomplete: false,
-                untrackedValueObservations: 0));
+                untrackedValueObservations: 0,
+                instrumentTrackingIncomplete: account.InstrumentTrackingIncomplete));
         }
 
         results.Sort(static (left, right) =>

@@ -8,12 +8,12 @@ has to be bounded and honest. Every session applies explicit bounds to every ret
 | `MaxTrackedSeries` (per instrument identity) | 100,000 | Distinct observed series retained for one instrument identity. |
 | `MaxTrackedValuesPerTag` (per instrument identity) | 5,000 | Distinct values retained per tag key and instrument identity. |
 | `MaxTagValueLength` | 256 | Length of a tag value's invariant text before it is replaced by a stable digest in the identity. |
-| `MaxTrackedInstrumentIdentities` | 1,024 | Selected instrument identities retained by one session. |
-| `MaxTrackedInstrumentInstances` | 2,048 | Physical instrument instances retained and enabled by one session. |
+| `MaxTrackedInstrumentIdentities` | 1,024 | Selected instrument identities retained by one session. Later identities are not enabled; an affected retained same-name result is marked incomplete. |
+| `MaxTrackedInstrumentInstances` | 2,048 | Physical instrument instances retained and enabled by one session. A retained identity affected by a rejected instance is marked incomplete. |
 | `MaxTrackedConflicts` | 1,024 | Ambiguous identity records retained; a conflict requiring more rule indexes than this is also dropped. |
 | `MaxTrackedTagKeysPerInstrument` | 256 | Distinct delivered tag keys retained per instrument identity. |
 | `MaxTagCount` | 64 | Delivered tags admitted from one measurement. |
-| `MaxInstrumentIdentityLength` | 256 | Length of each meter name, meter version, and instrument name retained in identity state. |
+| `MaxInstrumentIdentityLength` | 256 | Length of each meter name, meter version, and instrument name admitted after selector matching. Oversized unselected identities are ignored; oversized selected identities are rejected and counted separately. |
 | `MaxTagKeyLength` | 256 | Length of a delivered tag key admitted to identity construction. |
 
 The defaults exist so an accidentally explosive workload cannot make the verifier unbounded. They are not budgets,
@@ -38,8 +38,13 @@ instrument identity's bound is reached - the outcome is not deferred until every
   any instrument reports an exhausted bound, the whole session outcome is `ObservationIncomplete`.
 - Counts that depend on the exhausted bound become explicit lower bounds:
   `MetricBudgetInstrumentResult.SeriesTrackingIncomplete`,
+  `MetricBudgetInstrumentResult.InstrumentTrackingIncomplete`,
   `MetricBudgetTagResult.ValueTrackingIncomplete`, and `MetricBudgetSafetyReport.IsComplete` state this
   machine-readably.
+- Identity admission loss is separate from identity component-length rejection. The safety report exposes
+  `InstrumentIdentityLengthTrackingIncomplete` and `UntrackedInstrumentIdentityLengths` for the latter, and the
+  diagnostic recommends `MaxInstrumentIdentityLength`; it recommends `MaxTrackedInstrumentIdentities` or
+  `MaxTrackedInstrumentInstances` for the corresponding admission bound.
 - The session outcome becomes `ObservationIncomplete`, which is not a pass, and
   `AssertWithinBudget()` fails with the bounded-state diagnostics.
 

@@ -48,6 +48,14 @@ The report names the bound or incomplete state, and every affected count is a lo
 workload when the cardinality is the finding you were looking for. Unsupported tag values are rejected without
 calling user-defined `ToString()`.
 
+Instrument identity admission and identity component length are distinct cases. An oversized instrument that no
+rule selects is ignored and does not invalidate the session. An oversized selected instrument is rejected and the
+diagnostic names `MaxInstrumentIdentityLength`; a selected identity or physical instance rejected by an admission
+bound names `MaxTrackedInstrumentIdentities` or `MaxTrackedInstrumentInstances` instead. A retained result affected
+by a rejected same-name identity or physical instance has `InstrumentTrackingIncomplete = true`, so focused budget
+assertions fail closed for that target. Unrelated instruments' incomplete tracking does not invalidate a fully
+tracked target.
+
 ## A tag budget never triggers
 
 - Tag budgets are matched against exact tag keys. Compare the key in your budget with the keys in the report.

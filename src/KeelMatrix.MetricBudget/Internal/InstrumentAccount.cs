@@ -46,6 +46,8 @@ internal sealed class InstrumentAccount
 
     internal bool TagSetTrackingIncomplete { get; private set; }
 
+    internal bool InstrumentTrackingIncomplete { get; private set; }
+
     internal int ObservedSeriesCount => series.Count;
 
     internal void Record(TagField[] fields, Sha256Digest seriesDigest, FrozenOptions options)
@@ -103,6 +105,11 @@ internal sealed class InstrumentAccount
         UntrackedTagSetObservations++;
     }
 
+    internal void MarkInstrumentTrackingIncomplete()
+    {
+        InstrumentTrackingIncomplete = true;
+    }
+
     internal InstrumentAccountSnapshot CreateSnapshot()
     {
         TagValueSnapshot[] tags = new TagValueSnapshot[tagValues.Count];
@@ -129,6 +136,7 @@ internal sealed class InstrumentAccount
             TagValueCapExhausted,
             TagKeyCapExhausted,
             TagSetTrackingIncomplete,
+            InstrumentTrackingIncomplete,
             tags);
     }
 

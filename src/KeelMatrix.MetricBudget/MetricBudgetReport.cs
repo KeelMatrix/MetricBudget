@@ -183,6 +183,12 @@ public sealed class MetricBudgetReport
                         + " measurement(s) could not be tracked because the series safety bound for the instrument identity was reached");
                 }
 
+                if (instrument.InstrumentTrackingIncomplete)
+                {
+                    builder.AppendLine(
+                        "      instrument tracking incomplete: one or more selected physical instances or same-name identities were not admitted");
+                }
+
                 // Tag keys are ordered by observed fan-out so the largest contributor to series growth is first.
                 List<MetricBudgetTagResult> tags = new List<MetricBudgetTagResult>(instrument.Tags);
                 tags.Sort(static (left, right) =>
