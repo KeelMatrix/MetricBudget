@@ -43,9 +43,10 @@ set, tag-key-cap exhaustion, instrument admission loss, or the per-key value cap
 `MetricBudgetTagResult.IsWithinBudget` is `false` whenever any of those loss paths could affect the key.
 
 Focused budget assertions fail closed when their target delivered no measurements or when selected physical
-instances or same-name identities were not admitted. A name-only focused assertion does not pass when that loss
-could make the target ambiguous; unrelated instruments' incomplete accounting does not invalidate a fully tracked
-target.
+instances or same-name identities were not admitted. The bounded name-only rejection index records overflow
+uncertainty: every identity admitted after that overflow is marked incomplete. A name-only focused assertion does not
+pass when that loss could make the target ambiguous; unrelated instruments' incomplete accounting does not invalidate
+a fully tracked target when the index did not overflow.
 
 The [package README](src/KeelMatrix.MetricBudget/README.md) is the complete user guide: budgets, outcomes, examples,
 lifecycle, safety bounds, privacy, telemetry, supported targets, and troubleshooting.

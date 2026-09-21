@@ -71,15 +71,17 @@ or fail a verification.
 ## Opting out
 
 Set `KEELMATRIX_NO_TELEMETRY=1`. The shared opt-out set also honors `DOTNET_CLI_TELEMETRY_OPTOUT` and
-`DO_NOT_TRACK`, plus repository-local opt-out files.
+`DO_NOT_TRACK`, plus repository-local opt-out files. This repository does not track a local telemetry configuration;
+an ignored `keelmatrix.telemetry.json` may exist on a developer machine, but it is not part of the repository contract.
 
 This repository opts every local run path out mechanically, so local development, the sample, and the
 package-consumer smoke test cannot enter production demand data:
 
 - `tests/KeelMatrix.MetricBudget.Tests/tests.runsettings` sets `KEELMATRIX_NO_TELEMETRY=1` for the test host, and a
   test asserts it, so a missing opt-out fails the suite instead of silently emitting;
-- the committed `keelmatrix.telemetry.json` at the repository root disables telemetry for every other process that
-  resolves this repository - `dotnet run` for the sample and the package-consumer smoke test included - because
-  the shared client resolves repository-local opt-out before it does any telemetry work.
+- the sample and package-consumer programs set `KEELMATRIX_NO_TELEMETRY=1` before starting a session;
+- `scripts/verify-package.ps1` sets the variable for its package, consumer, and sample validation processes;
+- `docs/DEV.md` requires the variable for contributor-run development commands, and CI asserts the same setting.
 
-KeelMatrix CI runs the same repository, so it inherits the same repository-local opt-out.
+KeelMatrix CI sets and asserts the same variable. The repository ignores local telemetry configuration files and the
+pack guard fails closed if one is ever present in a package file list.

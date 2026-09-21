@@ -8,7 +8,7 @@ has to be bounded and honest. Every session applies explicit bounds to every ret
 | `MaxTrackedSeries` (per instrument identity) | 100,000 | Distinct observed series retained for one instrument identity. |
 | `MaxTrackedValuesPerTag` (per instrument identity) | 5,000 | Distinct values retained per tag key and instrument identity. |
 | `MaxTagValueLength` | 256 | Length of a tag value's invariant text before it is replaced by a stable digest in the identity. |
-| `MaxTrackedInstrumentIdentities` | 1,024 | Selected instrument identities retained by one session. Later identities are not enabled; an affected retained same-name result is marked incomplete. |
+| `MaxTrackedInstrumentIdentities` | 1,024 | Selected instrument identities retained by one session. Later identities are not enabled; an affected retained same-name result is marked incomplete. The bounded rejected-name index records overflow uncertainty, so every identity admitted after that overflow is also marked incomplete. |
 | `MaxTrackedInstrumentInstances` | 2,048 | Physical instrument instances retained and enabled by one session. A retained identity affected by a rejected instance is marked incomplete. |
 | `MaxTrackedConflicts` | 1,024 | Ambiguous identity records retained; a conflict requiring more rule indexes than this is also dropped. |
 | `MaxTrackedTagKeysPerInstrument` | 256 | Distinct delivered tag keys retained per instrument identity. |
@@ -46,6 +46,10 @@ instrument identity's bound is reached - the outcome is not deferred until every
   `MetricBudgetTagResult.InstrumentTrackingIncomplete`, and `MetricBudgetSafetyReport.IsComplete` state this
   machine-readably. Every per-tag completeness flag makes that tag's `IsWithinBudget` false; a count with any such
   flag is a lower bound and must not be read as complete.
+- The rejected-name index is bounded by `MaxTrackedInstrumentIdentities`. When it is full, the session remembers the
+  overflow without retaining another name. Every later newly admitted identity is marked incomplete because its
+  name may be one of the forgotten rejected names; a rejected name that fits in the index remains scoped to its own
+  same-name identity.
 - Identity admission loss is separate from identity component-length rejection. The safety report exposes
   `InstrumentIdentityLengthTrackingIncomplete` and `UntrackedInstrumentIdentityLengths` for the latter, and the
   diagnostic recommends `MaxInstrumentIdentityLength`; it recommends `MaxTrackedInstrumentIdentities` or

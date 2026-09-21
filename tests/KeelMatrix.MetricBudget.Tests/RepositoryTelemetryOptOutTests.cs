@@ -1,60 +1,66 @@
 // Copyright (c) KeelMatrix
 
+using System.Diagnostics;
 using System.IO;
-using System.Text.Json;
 
 namespace KeelMatrix.MetricBudget.Tests;
 
 /// <summary>
 /// Guards the mechanical opt-out that keeps this repository's own development, sample, and package-consumer runs
-/// out of production demand data. The test host is covered by tests.runsettings; every other run path resolves the
-/// committed repository configuration below, because git discovery finds the repository root from the running
-/// process and the shared telemetry client honors that file.
+/// out of production demand data. The test host is covered by tests.runsettings; the other repository-owned entry
+/// points set the supported process-level opt-out explicitly.
 /// </summary>
 public sealed class RepositoryTelemetryOptOutTests
 {
-    private const string OptOutConfigurationFileName = "keelmatrix.telemetry.json";
-
     [Fact]
-    public void RepositoryOptsEveryRunPathOutOfProductionTelemetry()
+    public void RepositoryTelemetryConfigurationIsIgnoredAndUntracked()
     {
-        string configurationPath = Path.Combine(RepositoryRoot(), OptOutConfigurationFileName);
+        string root = RepositoryRoot();
+        string ignorePath = Path.Combine(root, ".gitignore");
 
-        Assert.True(
-            File.Exists(configurationPath),
-            "The repository-level telemetry opt-out is missing at " + configurationPath
-                + ", so sample and package-consumer runs could enter production demand data.");
+        Assert.Contains("keelmatrix.telemetry.json", File.ReadAllText(ignorePath), StringComparison.Ordinal);
 
-        using JsonDocument configuration = JsonDocument.Parse(File.ReadAllText(configurationPath));
+        ProcessStartInfo startInfo = new ProcessStartInfo
+        {
+            FileName = "git",
+            WorkingDirectory = root,
+            Arguments = "ls-files -- keelmatrix.telemetry.json",
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        };
 
-        Assert.Equal(JsonValueKind.Object, configuration.RootElement.ValueKind);
-        Assert.True(
-            configuration.RootElement.TryGetProperty("disabled", out JsonElement disabled),
-            "The repository telemetry configuration must set \"disabled\".");
-        Assert.Equal(JsonValueKind.True, disabled.ValueKind);
+        using Process process = Process.Start(startInfo)
+            ?? throw new InvalidOperationException("Could not start git to verify telemetry configuration tracking.");
+        string output = process.StandardOutput.ReadToEnd();
+        string error = process.StandardError.ReadToEnd();
+        process.WaitForExit();
+
+        Assert.True(process.ExitCode == 0, "git ls-files failed: " + error);
+        Assert.Equal(string.Empty, output.Trim());
     }
 
     [Fact]
-    public void TelemetryDocumentationNamesTheMechanismThatCoversSampleAndConsumerRuns()
+    public void RepositoryOwnedEntryPointsSetTheSupportedOptOut()
     {
-        string documentationPath = Path.Combine(
-            RepositoryRoot(),
-            "docs",
-            "privacy-and-telemetry.md");
+        string root = RepositoryRoot();
+        string runSettings = File.ReadAllText(Path.Combine(root, "tests", "KeelMatrix.MetricBudget.Tests", "tests.runsettings"));
+        string development = File.ReadAllText(Path.Combine(root, "docs", "DEV.md"));
+        string sample = File.ReadAllText(Path.Combine(root, "samples", "KeelMatrix.MetricBudget.Sample", "Program.cs"));
+        string consumer = File.ReadAllText(Path.Combine(root, "tests", "KeelMatrix.MetricBudget.PackageConsumer", "Program.cs"));
+        string packageGate = File.ReadAllText(Path.Combine(root, "scripts", "verify-package.ps1"));
 
-        Assert.True(File.Exists(documentationPath), "Missing telemetry documentation at " + documentationPath + ".");
-
-        string documentation = File.ReadAllText(documentationPath);
-
-        Assert.Contains(OptOutConfigurationFileName, documentation, StringComparison.Ordinal);
-        Assert.Contains("package-consumer", documentation, StringComparison.Ordinal);
-        Assert.Contains("sample", documentation, StringComparison.Ordinal);
+        Assert.Contains("<KEELMATRIX_NO_TELEMETRY>1</KEELMATRIX_NO_TELEMETRY>", runSettings, StringComparison.Ordinal);
+        Assert.Contains("$env:KEELMATRIX_NO_TELEMETRY = \"1\"", development, StringComparison.Ordinal);
+        Assert.Contains("Environment.SetEnvironmentVariable(\"KEELMATRIX_NO_TELEMETRY\", \"1\")", sample, StringComparison.Ordinal);
+        Assert.Contains("Environment.SetEnvironmentVariable(\"KEELMATRIX_NO_TELEMETRY\", \"1\")", consumer, StringComparison.Ordinal);
+        Assert.Contains("$env:KEELMATRIX_NO_TELEMETRY = \"1\"", packageGate, StringComparison.Ordinal);
     }
 
     /// <summary>
-    /// Walks up from the test host's base directory to the repository root, which is the directory that holds the
-    /// committed telemetry configuration and the documented opt-out contract. The base directory is used instead of
-    /// the assembly location because the .NET Framework host shadow-copies the test assembly before running it.
+    /// Walks up from the test host's base directory to the repository root. The base directory is used instead of the
+    /// assembly location because the .NET Framework host shadow-copies the test assembly before running it.
     /// </summary>
     private static string RepositoryRoot()
     {

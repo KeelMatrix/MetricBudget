@@ -7,6 +7,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
+$env:KEELMATRIX_NO_TELEMETRY = "1"
 
 $repositoryRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
 $projectPath = Join-Path $repositoryRoot "src/KeelMatrix.MetricBudget/KeelMatrix.MetricBudget.csproj"

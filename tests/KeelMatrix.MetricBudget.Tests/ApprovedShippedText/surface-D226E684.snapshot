@@ -25,3 +25,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Preserve lossless supported tag identity semantics, reject unsupported values without invoking user formatting, and
   close session shutdown races, report mutability, ambiguous focused assertions, observable-listener coexistence, and
   duplicate symbols publication paths.
+- Propagate bounded rejected-name index overflow uncertainty to later admitted instrument and tag results so focused
+  assertions fail closed, and make repository-owned development and validation entry points explicitly opt out of
+  production telemetry without tracking a local configuration file.

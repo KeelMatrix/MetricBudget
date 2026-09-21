@@ -100,8 +100,9 @@ public sealed class MetricBudgetTagResult
     public bool TagKeyTrackingIncomplete { get; }
 
     /// <summary>
-    /// Whether selected physical instrument instances or same-name identities were not admitted. The observed
-    /// value count may be incomplete because this key could have been delivered by an untracked source.
+    /// Whether selected physical instrument instances or same-name identities were not admitted, or a bounded
+    /// name-only rejection index overflowed before the instrument was admitted. The observed value count may be
+    /// incomplete because this key could have been delivered by an untracked source.
     /// </summary>
     public bool InstrumentTrackingIncomplete { get; }
 

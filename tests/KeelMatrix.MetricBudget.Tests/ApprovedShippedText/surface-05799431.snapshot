@@ -8,6 +8,7 @@ package documentation.
 Restore and build the solution before package-backed consumers:
 
 ```powershell
+$env:KEELMATRIX_NO_TELEMETRY = "1"
 dotnet restore KeelMatrix.MetricBudget.sln --configfile NuGet.config --force-evaluate --no-cache
 dotnet build KeelMatrix.MetricBudget.sln -c Release --no-restore
 dotnet test tests/KeelMatrix.MetricBudget.Tests/KeelMatrix.MetricBudget.Tests.csproj -c Release --framework net8.0 --no-build --no-restore
@@ -24,6 +25,9 @@ pwsh -NoProfile -File scripts/verify-package.ps1
 The solution intentionally excludes those two projects because their `NuGet.config` files map the package under test
 to `artifacts/packages`. The package gate performs deterministic archive inspection, clean-cache consumer and sample
 proof, and the transitive vulnerability audit.
+
+The environment assignment above is required for repository-owned development and validation runs. Keep it in the
+shell that invokes `dotnet`, or use the equivalent process-environment setting on another platform.
 
 ## GitHub Actions CI
 

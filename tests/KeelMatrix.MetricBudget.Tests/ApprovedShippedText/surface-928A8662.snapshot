@@ -36,4 +36,5 @@ change, delay, or fail a verification.
 ## Opting out
 
 Set `KEELMATRIX_NO_TELEMETRY=1`. The shared opt-out set also honors `DOTNET_CLI_TELEMETRY_OPTOUT` and
-`DO_NOT_TRACK`, plus repo-local opt-out configuration files.
+`DO_NOT_TRACK`, plus repo-local opt-out configuration files. Repository-owned development entry points set this
+variable explicitly; local telemetry configuration files are ignored and are not tracked.

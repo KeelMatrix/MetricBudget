@@ -7,6 +7,8 @@ using KeelMatrix.MetricBudget.Assertions;
 // A small application that emits a handful of metric series and verifies the observed cardinality of the workload
 // it just ran. Run it with: dotnet run --project samples/KeelMatrix.MetricBudget.Sample -c Release
 
+Environment.SetEnvironmentVariable("KEELMATRIX_NO_TELEMETRY", "1");
+
 using Meter meter = new Meter("Sample.Service", "1.0.0");
 
 Counter<long> requests = meter.CreateCounter<long>("http.client.request.duration.count");

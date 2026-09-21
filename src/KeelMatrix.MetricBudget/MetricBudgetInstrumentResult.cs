@@ -11,8 +11,8 @@ namespace KeelMatrix.MetricBudget;
 /// <remarks>
 /// One result covers one combination of meter name, meter version, instrument name, and instrument kind. Counts
 /// describe the exercised workload only. If selected physical instances or same-name identities were rejected by
-/// an admission bound, <see cref="InstrumentTrackingIncomplete"/> is set and no within-budget conclusion is drawn
-/// from this result.
+/// an admission bound, or a bounded name-only rejection index overflowed before this identity was admitted,
+/// <see cref="InstrumentTrackingIncomplete"/> is set and no within-budget conclusion is drawn from this result.
 /// </remarks>
 public sealed class MetricBudgetInstrumentResult
 {
@@ -119,7 +119,8 @@ public sealed class MetricBudgetInstrumentResult
 
     /// <summary>
     /// Whether one or more selected physical instrument instances or same-name identities could not be admitted,
-    /// so this identity's counts may not represent every selected source.
+    /// or a bounded name-only rejection index overflowed before this identity was admitted, so this identity's
+    /// counts may not represent every selected source.
     /// </summary>
     public bool InstrumentTrackingIncomplete { get; }
 

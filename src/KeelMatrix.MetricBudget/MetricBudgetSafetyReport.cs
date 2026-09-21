@@ -130,7 +130,8 @@ public sealed class MetricBudgetSafetyReport
     public int MaxTagKeyLength { get; }
 
     /// <summary>
-    /// Whether a selected identity, physical instance, or identity-length bound was reached.
+    /// Whether a selected identity, physical instance, or identity-length bound was reached, or a bounded
+    /// name-only rejection index overflowed before a later identity was admitted.
     /// </summary>
     public bool InstrumentTrackingIncomplete { get; }
 

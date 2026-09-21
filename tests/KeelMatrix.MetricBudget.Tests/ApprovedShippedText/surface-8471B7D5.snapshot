@@ -10,6 +10,8 @@ using KeelMatrix.MetricBudget.Assertions;
 // instruments, runs one workload that must stay within budget, and one workload that must exceed it. Both the
 // passing and the failing path have to behave as documented for the smoke test to succeed.
 
+Environment.SetEnvironmentVariable("KEELMATRIX_NO_TELEMETRY", "1");
+
 int exitCode = 0;
 
 exitCode += RunPassingBudget();

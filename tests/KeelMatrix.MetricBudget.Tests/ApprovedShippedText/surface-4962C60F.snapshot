@@ -45,8 +45,9 @@
             </para>
             <para>
             Focused budget helpers fail closed when their target delivered no measurements or its accounting was incomplete.
-            A name-only focused check also fails when selected identity admission loss makes that name ambiguous, while
-            unrelated instruments' incomplete accounting does not invalidate a target that was fully tracked.
+            A name-only focused check also fails when selected identity admission loss makes that name ambiguous or when the
+            bounded rejected-name index overflowed before the target was admitted, while unrelated instruments' incomplete
+            accounting does not invalidate a target that was fully tracked when the index did not overflow.
             </para>
             <para>
             This namespace is separate from the core API so the core surface stays about observation and budgeting rather
@@ -661,8 +662,8 @@
             <remarks>
             One result covers one combination of meter name, meter version, instrument name, and instrument kind. Counts
             describe the exercised workload only. If selected physical instances or same-name identities were rejected by
-            an admission bound, <see cref="P:KeelMatrix.MetricBudget.MetricBudgetInstrumentResult.InstrumentTrackingIncomplete"/> is set and no within-budget conclusion is drawn
-            from this result.
+            an admission bound, or a bounded name-only rejection index overflowed before this identity was admitted,
+            <see cref="P:KeelMatrix.MetricBudget.MetricBudgetInstrumentResult.InstrumentTrackingIncomplete"/> is set and no within-budget conclusion is drawn from this result.
             </remarks>
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetInstrumentResult.MeterName">
@@ -729,7 +730,8 @@
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetInstrumentResult.InstrumentTrackingIncomplete">
             <summary>
             Whether one or more selected physical instrument instances or same-name identities could not be admitted,
-            so this identity's counts may not represent every selected source.
+            or a bounded name-only rejection index overflowed before this identity was admitted, so this identity's
+            counts may not represent every selected source.
             </summary>
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetInstrumentResult.Tags">
@@ -1237,7 +1239,8 @@
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.InstrumentTrackingIncomplete">
             <summary>
-            Whether a selected identity, physical instance, or identity-length bound was reached.
+            Whether a selected identity, physical instance, or identity-length bound was reached, or a bounded
+            name-only rejection index overflowed before a later identity was admitted.
             </summary>
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.UntrackedInstrumentIdentities">
@@ -1441,8 +1444,9 @@
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetTagResult.InstrumentTrackingIncomplete">
             <summary>
-            Whether selected physical instrument instances or same-name identities were not admitted. The observed
-            value count may be incomplete because this key could have been delivered by an untracked source.
+            Whether selected physical instrument instances or same-name identities were not admitted, or a bounded
+            name-only rejection index overflowed before the instrument was admitted. The observed value count may be
+            incomplete because this key could have been delivered by an untracked source.
             </summary>
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetTagResult.IsWithinBudget">

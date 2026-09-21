@@ -32,15 +32,17 @@
           Condition="Exists('$(MSBuildThisFileDirectory)icon.png') and '$(PackageIcon)' != ''" />
   </ItemGroup>
 
-  <!-- Keep local telemetry and environment files out of every package. -->
+  <!-- Keep local telemetry and environment files out of every package, including an ignored repository-root override. -->
   <Target Name="ExcludeLocalFilesFromPack"
           BeforeTargets="_GetPackageFiles"
           Condition="'$(IsPackable)' == 'true'">
     <ItemGroup>
       <None Remove="keelmatrix.telemetry.json" />
+      <None Remove="$(MSBuildThisFileDirectory)keelmatrix.telemetry.json" />
       <None Remove=".env" />
       <None Remove=".env.local" />
       <Content Remove="keelmatrix.telemetry.json" />
+      <Content Remove="$(MSBuildThisFileDirectory)keelmatrix.telemetry.json" />
       <Content Remove=".env" />
       <Content Remove=".env.local" />
     </ItemGroup>

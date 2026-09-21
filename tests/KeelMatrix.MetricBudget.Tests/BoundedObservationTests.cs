@@ -244,6 +244,51 @@ public sealed class BoundedObservationTests
     }
 
     [Fact]
+    public void RejectedNameIndexOverflowFailsClosedForLaterIdentityAdmission()
+    {
+        const string meterName = "M";
+        const string instrumentName = "target";
+        MetricBudgetOptions options = new MetricBudgetOptions
+        {
+            MaxTrackedInstrumentIdentities = 1,
+            MaxInstrumentIdentityLength = 8,
+        };
+        options.ForMeter(meterName, budget =>
+        {
+            budget.MaxObservedSeries = 1;
+            budget.Tag("tenant").MaxDistinctValues = 1;
+        });
+
+        using MetricBudgetSession session = MetricBudgetSession.Start(options);
+        using (Meter rejectedMeter = new Meter(meterName, "123456789"))
+        {
+            _ = rejectedMeter.CreateCounter<long>("filler");
+            _ = rejectedMeter.CreateCounter<long>(instrumentName);
+        }
+
+        using Meter admittedMeter = new Meter(meterName, "1");
+        Counter<long> admitted = admittedMeter.CreateCounter<long>(instrumentName);
+        admitted.Add(1, new KeyValuePair<string, object?>("tenant", "a"));
+
+        MetricBudgetReport report = session.Complete();
+        MetricBudgetInstrumentResult instrument = Assert.Single(report.Rules[0].Instruments);
+        MetricBudgetTagResult tag = Assert.Single(instrument.Tags);
+
+        Assert.Equal(MetricBudgetOutcome.ObservationIncomplete, report.Outcome);
+        Assert.True(report.Safety.InstrumentTrackingIncomplete);
+        Assert.False(report.Safety.IsComplete);
+        Assert.True(instrument.InstrumentTrackingIncomplete);
+        Assert.False(instrument.IsWithinBudget);
+        Assert.True(tag.InstrumentTrackingIncomplete);
+        Assert.False(tag.IsWithinBudget);
+        Assert.False(report.IsWithinBudget);
+        Assert.Throws<MetricBudgetAssertionException>(
+            () => report.AssertObservedSeriesAtMost(meterName, instrumentName, 1));
+        Assert.Throws<MetricBudgetAssertionException>(
+            () => report.AssertTagDistinctValuesAtMost(meterName, instrumentName, "tenant", 1));
+    }
+
+    [Fact]
     public void IdentityLengthRejectionAfterAdmissionFailsClosedForFocusedAssertions()
     {
         const string meterName = "M";
@@ -303,6 +348,10 @@ public sealed class BoundedObservationTests
 
         Assert.Equal(MetricBudgetOutcome.ObservationIncomplete, report.Outcome);
         Assert.True(report.Safety.InstrumentTrackingIncomplete);
+        MetricBudgetInstrumentResult targetResult = Assert.Single(report.Rules[0].Instruments);
+        Assert.False(targetResult.InstrumentTrackingIncomplete);
+        Assert.True(targetResult.IsWithinBudget);
+        Assert.False(Assert.Single(targetResult.Tags).InstrumentTrackingIncomplete);
         _ = report.AssertObservedSeriesAtMost(meterName, "target", 1);
         _ = report.AssertTagDistinctValuesAtMost(meterName, "target", "tenant", 1);
     }

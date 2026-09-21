@@ -34,6 +34,7 @@ internal sealed class MetricBudgetState
     private bool instrumentIdentityTrackingIncomplete;
     private bool instrumentInstanceTrackingIncomplete;
     private bool instrumentIdentityLengthTrackingIncomplete;
+    private bool untrackedNameOnlyIdentityIndexOverflowed;
     private bool conflictTrackingIncomplete;
     private bool stopped;
     private int activeMeasurements;
@@ -147,7 +148,8 @@ internal sealed class MetricBudgetState
             if (!alreadyKnownIdentity)
             {
                 InstrumentAccount account = new InstrumentAccount(identity, firstMatch);
-                if (untrackedNameOnlyIdentities.Contains(new InstrumentNameKey(identity)))
+                if (untrackedNameOnlyIdentityIndexOverflowed
+                    || untrackedNameOnlyIdentities.Contains(new InstrumentNameKey(identity)))
                 {
                     account.MarkInstrumentTrackingIncomplete();
                 }
@@ -346,10 +348,19 @@ internal sealed class MetricBudgetState
         // component-length bound. If a meter or instrument name itself is too long, a later same-name identity
         // cannot be admitted either, so retaining it would add memory without changing any result.
         if (identity.MeterName.Length <= options.MaxInstrumentIdentityLength
-            && identity.InstrumentName.Length <= options.MaxInstrumentIdentityLength
-            && untrackedNameOnlyIdentities.Count < options.MaxTrackedInstrumentIdentities)
+            && identity.InstrumentName.Length <= options.MaxInstrumentIdentityLength)
         {
-            untrackedNameOnlyIdentities.Add(key);
+            if (untrackedNameOnlyIdentities.Count < options.MaxTrackedInstrumentIdentities)
+            {
+                untrackedNameOnlyIdentities.Add(key);
+            }
+            else
+            {
+                // Keep the index bounded, but remember that a name-only identity was rejected after the index
+                // reached its bound. Any later identity admission is then uncertain because it may share that
+                // forgotten name.
+                untrackedNameOnlyIdentityIndexOverflowed = true;
+            }
         }
     }
 

@@ -55,8 +55,9 @@ rule selects is ignored and does not invalidate the session. An oversized select
 diagnostic names `MaxInstrumentIdentityLength`; a selected identity or physical instance rejected by an admission
 bound names `MaxTrackedInstrumentIdentities` or `MaxTrackedInstrumentInstances` instead. A retained result affected
 by a rejected same-name identity or physical instance has `InstrumentTrackingIncomplete = true`, so focused budget
-assertions fail closed for that target. Unrelated instruments' incomplete tracking does not invalidate a fully
-tracked target.
+assertions fail closed for that target. The bounded rejected-name index records overflow uncertainty; every identity
+admitted after that overflow is marked incomplete and focused assertions fail closed for it. Unrelated instruments'
+incomplete tracking does not invalidate a fully tracked target when the index did not overflow.
 
 ## A tag budget never triggers
 

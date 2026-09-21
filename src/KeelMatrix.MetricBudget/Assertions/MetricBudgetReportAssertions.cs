@@ -16,8 +16,9 @@ namespace KeelMatrix.MetricBudget.Assertions;
 /// </para>
 /// <para>
 /// Focused budget helpers fail closed when their target delivered no measurements or its accounting was incomplete.
-/// A name-only focused check also fails when selected identity admission loss makes that name ambiguous, while
-/// unrelated instruments' incomplete accounting does not invalidate a target that was fully tracked.
+/// A name-only focused check also fails when selected identity admission loss makes that name ambiguous or when the
+/// bounded rejected-name index overflowed before the target was admitted, while unrelated instruments' incomplete
+/// accounting does not invalidate a target that was fully tracked when the index did not overflow.
 /// </para>
 /// <para>
 /// This namespace is separate from the core API so the core surface stays about observation and budgeting rather
