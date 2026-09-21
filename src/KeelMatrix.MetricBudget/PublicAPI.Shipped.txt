@@ -200,3 +200,6 @@ KeelMatrix.MetricBudget.MetricBudgetSafetyReport.TagKeyTrackingIncomplete.get ->
 KeelMatrix.MetricBudget.MetricBudgetSafetyReport.UntrackedTagKeyObservations.get -> long
 override KeelMatrix.MetricBudget.MetricBudgetBudget.ToString() -> string!
 override KeelMatrix.MetricBudget.MetricBudgetTagBudget.ToString() -> string!
+KeelMatrix.MetricBudget.MetricBudgetInstrumentResult.InstrumentTrackingIncomplete.get -> bool
+KeelMatrix.MetricBudget.MetricBudgetSafetyReport.InstrumentIdentityLengthTrackingIncomplete.get -> bool
+KeelMatrix.MetricBudget.MetricBudgetSafetyReport.UntrackedInstrumentIdentityLengths.get -> long

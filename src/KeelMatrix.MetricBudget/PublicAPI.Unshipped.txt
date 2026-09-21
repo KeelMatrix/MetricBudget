@@ -1,4 +1,1 @@
 #nullable enable
-KeelMatrix.MetricBudget.MetricBudgetInstrumentResult.InstrumentTrackingIncomplete.get -> bool
-KeelMatrix.MetricBudget.MetricBudgetSafetyReport.InstrumentIdentityLengthTrackingIncomplete.get -> bool
-KeelMatrix.MetricBudget.MetricBudgetSafetyReport.UntrackedInstrumentIdentityLengths.get -> long
