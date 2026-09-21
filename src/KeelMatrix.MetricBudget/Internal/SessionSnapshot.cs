@@ -41,7 +41,8 @@ internal sealed class SessionSnapshot
             MetricBudgetOptions.DefaultMaxTrackedTagKeysPerInstrument,
             MetricBudgetOptions.DefaultMaxTagCount,
             MetricBudgetOptions.DefaultMaxInstrumentIdentityLength,
-            MetricBudgetOptions.DefaultMaxTagKeyLength)
+            MetricBudgetOptions.DefaultMaxTagKeyLength,
+            Array.Empty<bool>())
     {
     }
 
@@ -67,7 +68,8 @@ internal sealed class SessionSnapshot
         int maxTrackedTagKeysPerInstrument,
         int maxTagCount,
         int maxInstrumentIdentityLength,
-        int maxTagKeyLength)
+        int maxTagKeyLength,
+        bool[] ruleTrackingIncomplete)
     {
         Instruments = instruments;
         Conflicts = conflicts;
@@ -91,6 +93,7 @@ internal sealed class SessionSnapshot
         MaxTagCount = maxTagCount;
         MaxInstrumentIdentityLength = maxInstrumentIdentityLength;
         MaxTagKeyLength = maxTagKeyLength;
+        RuleTrackingIncomplete = ruleTrackingIncomplete;
     }
 
     internal InstrumentAccountSnapshot[] Instruments { get; }
@@ -138,6 +141,9 @@ internal sealed class SessionSnapshot
     internal int MaxInstrumentIdentityLength { get; }
 
     internal int MaxTagKeyLength { get; }
+
+    /// <summary>Whether admission or selector ambiguity made accounting incomplete for each configured rule.</summary>
+    internal bool[] RuleTrackingIncomplete { get; }
 
     internal long AccountedMeasurements
     {

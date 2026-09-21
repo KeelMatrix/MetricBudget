@@ -16,6 +16,7 @@ int exitCode = 0;
 
 exitCode += RunPassingBudget();
 exitCode += RunFailingBudget();
+exitCode += RunRuleLevelIncompleteAdmission();
 
 Console.WriteLine(exitCode == 0
     ? "PACKAGE CONSUMER SMOKE: PASS"
@@ -108,5 +109,42 @@ static int RunFailingBudget()
         Console.WriteLine("first line: " + exception.Message.Split('\n')[0]);
     }
 
+    return 0;
+}
+
+static int RunRuleLevelIncompleteAdmission()
+{
+    Console.WriteLine("--- rule-level incomplete admission ---");
+
+    using Meter meter = new Meter("Smoke.Consumer.RuleAdmission", "1.0.0");
+    MetricBudgetOptions options = new MetricBudgetOptions
+    {
+        MaxTrackedInstrumentIdentities = 1,
+    };
+    options.ForMeter("Smoke.Consumer.RuleAdmission", budget => budget.MaxObservedSeries = 1);
+
+    using MetricBudgetSession session = MetricBudgetSession.Start(options);
+    Counter<long> first = meter.CreateCounter<long>("first");
+    first.Add(1);
+    Counter<long> second = meter.CreateCounter<long>("second");
+    second.Add(1, new KeyValuePair<string, object?>("tenant", "tenant-a"));
+    second.Add(1, new KeyValuePair<string, object?>("tenant", "tenant-b"));
+
+    MetricBudgetReport report = session.Complete();
+    Console.WriteLine(report.ToDiagnosticString());
+
+    bool expected = report.Outcome == MetricBudgetOutcome.ObservationIncomplete
+        && report.Rules.Count == 1
+        && report.Rules[0].Instruments.Count == 1
+        && report.Rules[0].Instruments[0].InstrumentName == "first"
+        && !report.Rules[0].IsWithinBudget;
+
+    if (!expected)
+    {
+        Console.WriteLine("UNEXPECTED: rule-level admission loss was not surfaced: " + report);
+        return 1;
+    }
+
+    Console.WriteLine("rule-level admission loss failed the rule result as expected.");
     return 0;
 }

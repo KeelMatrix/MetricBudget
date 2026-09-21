@@ -148,12 +148,12 @@ least one limit: starting a session with a rule that declares nothing throws
 
 | Outcome | Meaning |
 | --- | --- |
-| `Passed` | Every configured rule selected an instrument, every selected instrument delivered measurements, accounting was complete, and no budget was exceeded. |
+| `Passed` | Every configured rule selected an instrument, every selected instrument was retained and enabled, every selected instrument delivered measurements, accounting was complete, and no budget was exceeded. |
 | `Violation` | The observed workload exceeded a configured budget. |
 | `InvalidConfiguration` | Configuration could not be applied - for example one instrument matched two rules, so no budget is unambiguous. Ambiguous instruments are not observed. |
 | `NoMatchingInstrument` | A configured rule matched no published instrument: a misspelled name, a scenario the workload never exercises, or an instrument created after the session completed. |
 | `NoMeasurementsObserved` | A selected instrument was published but delivered no measurements. |
-| `ObservationIncomplete` | A safety bound was reached, so counts are lower bounds, or the session detected an impossible accounting state. |
+| `ObservationIncomplete` | A safety bound was reached, so counts are lower bounds, a selected instrument was rejected and omitted from a rule's retained inventory, or the session detected an impossible accounting state. Affected rule results report `IsWithinBudget = false`. |
 
 Only `Passed` means the workload stayed within budget. A session that observed nothing never passes, which is what
 keeps this verifier from silently verifying nothing.
@@ -306,7 +306,9 @@ the whole session retains up to *(number of matched instrument identities) x `Ma
 descriptions plus the per-tag value sets. Size memory from that product, and note that `ObservationIncomplete` is
 reported as soon as any single instrument reaches its bound.
 
-The session stores only fixed-size digests of series and tag values. It never retains the tag values themselves.
+Bounded accounting stores only fixed-size digests of series and tag values. Canonical strings and reusable UTF-16 byte
+scratch can briefly contain tag-derived data during hashing; that scratch is cleared after each digest, but ordinary
+managed process memory is not a secure-erasure boundary and the package makes no such promise.
 The full bounded-memory contract is documented at
 <https://github.com/KeelMatrix/MetricBudget/blob/main/docs/safety-bounds.md>.
 
@@ -315,8 +317,9 @@ The full bounded-memory contract is documented at
 Reports and assertion messages contain meter names, instrument names, tag **keys**, counts, limits, and safety
 state. Tag **values** are never printed, logged, or sent anywhere, and metric values are never read. The report is
 generated locally and needs no network access. Only fixed-size digests of series and tag values are retained in
-memory. If you need to know which value produced a breach, reproduce it locally with a debugger rather than
-printing values into CI logs.
+bounded accounting state. Transient managed data may briefly contain tag-derived text or bytes during hashing, so
+this package does not promise secure erasure from process memory. If you need to know which value produced a breach,
+reproduce it locally with a debugger rather than printing values into CI logs.
 
 ## Telemetry
 

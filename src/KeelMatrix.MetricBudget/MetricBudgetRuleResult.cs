@@ -5,7 +5,7 @@ using System.Collections.ObjectModel;
 namespace KeelMatrix.MetricBudget;
 
 /// <summary>
-/// Whether a configured rule was matched, measured, and accounted.
+/// Whether a configured rule was matched, measured, and accounted without rejected selected identities.
 /// </summary>
 public enum InstrumentObservationState
 {
@@ -24,15 +24,19 @@ public enum InstrumentObservationState
 /// </summary>
 public sealed class MetricBudgetRuleResult
 {
+    private readonly bool selectionTrackingIncomplete;
+
     internal MetricBudgetRuleResult(
         MetricBudgetRule rule,
         int ruleIndex,
         InstrumentObservationState state,
+        bool selectionTrackingIncomplete,
         IReadOnlyList<MetricBudgetInstrumentResult> instruments)
     {
         Rule = rule;
         RuleIndex = ruleIndex;
         State = state;
+        this.selectionTrackingIncomplete = selectionTrackingIncomplete;
         MetricBudgetInstrumentResult[] copy = new MetricBudgetInstrumentResult[instruments.Count];
         for (int i = 0; i < copy.Length; i++)
         {
@@ -58,20 +62,28 @@ public sealed class MetricBudgetRuleResult
     public InstrumentObservationState State { get; }
 
     /// <summary>
-    /// Results for every instrument identity this rule selected, ordered by identity. Empty when the rule matched no
-    /// published instrument.
+    /// Results for every selected instrument identity that was retained and enabled, ordered by identity. Rejected
+    /// identities are omitted when admission was limited; inspect <see cref="MetricBudgetReport.Outcome"/> and
+    /// <see cref="IsWithinBudget"/> for the resulting incomplete verification. Empty when the rule matched no
+    /// published instrument or every matching identity was rejected.
     /// </summary>
     public IReadOnlyList<MetricBudgetInstrumentResult> Instruments { get; }
 
     /// <summary>
-    /// Whether the rule selected an instrument, that instrument delivered measurements, and every budget was
-    /// respected with complete tracking.
+    /// Whether the rule selected an instrument population, every selected identity was retained and enabled without
+    /// admission loss or selector ambiguity, the retained instruments delivered measurements, every budget was
+    /// respected, and tracking was complete.
     /// </summary>
     public bool IsWithinBudget
     {
         get
         {
             if (State != InstrumentObservationState.Observed)
+            {
+                return false;
+            }
+
+            if (selectionTrackingIncomplete)
             {
                 return false;
             }

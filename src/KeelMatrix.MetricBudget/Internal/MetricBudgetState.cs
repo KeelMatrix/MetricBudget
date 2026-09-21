@@ -24,6 +24,7 @@ internal sealed class MetricBudgetState
     private readonly List<Instrument> enabledInstruments = new();
     private readonly Dictionary<InstrumentIdentity, int[]> conflicts = new();
     private readonly HashSet<InstrumentNameKey> untrackedNameOnlyIdentities = new();
+    private readonly bool[] ruleTrackingIncomplete;
 
     private long measurementsDelivered;
     private long unmatchedMeasurements;
@@ -42,6 +43,7 @@ internal sealed class MetricBudgetState
     internal MetricBudgetState(FrozenOptions options)
     {
         this.options = options;
+        ruleTrackingIncomplete = new bool[options.Rules.Length];
     }
 
     internal FrozenOptions Options => options;
@@ -85,6 +87,7 @@ internal sealed class MetricBudgetState
             {
                 RememberUntrackedName(identity);
                 MarkKnownAccountsWithSameName(identity);
+                MarkMatchingRulesIncomplete(identity);
                 instrumentIdentityLengthTrackingIncomplete = true;
                 untrackedInstrumentIdentityLengths++;
                 return;
@@ -92,6 +95,7 @@ internal sealed class MetricBudgetState
 
             if (matchCount > 1)
             {
+                MarkMatchingRulesIncomplete(identity);
                 if (!conflicts.ContainsKey(identity))
                 {
                     // A conflict record retains every matching rule index. Use the conflict bound as the
@@ -125,6 +129,7 @@ internal sealed class MetricBudgetState
             bool alreadyKnownIdentity = accounts.ContainsKey(identity);
             if (!alreadyKnownIdentity && accounts.Count >= options.MaxTrackedInstrumentIdentities)
             {
+                ruleTrackingIncomplete[firstMatch] = true;
                 instrumentIdentityTrackingIncomplete = true;
                 untrackedInstrumentIdentities++;
                 RememberUntrackedName(identity);
@@ -139,6 +144,7 @@ internal sealed class MetricBudgetState
 
             if (identityByInstrument.Count >= options.MaxTrackedInstrumentInstances)
             {
+                ruleTrackingIncomplete[firstMatch] = true;
                 instrumentInstanceTrackingIncomplete = true;
                 untrackedInstrumentInstances++;
                 MarkKnownAccountsWithSameName(identity);
@@ -332,7 +338,19 @@ internal sealed class MetricBudgetState
                 options.MaxTrackedTagKeysPerInstrument,
                 options.MaxTagCount,
                 options.MaxInstrumentIdentityLength,
-                options.MaxTagKeyLength);
+                options.MaxTagKeyLength,
+                (bool[])ruleTrackingIncomplete.Clone());
+        }
+    }
+
+    private void MarkMatchingRulesIncomplete(in InstrumentIdentity identity)
+    {
+        for (int i = 0; i < options.Rules.Length; i++)
+        {
+            if (options.Rules[i].Matches(identity))
+            {
+                ruleTrackingIncomplete[i] = true;
+            }
         }
     }
 

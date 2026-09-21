@@ -48,6 +48,10 @@ uncertainty: every identity admitted after that overflow is marked incomplete. A
 pass when that loss could make the target ambiguous; unrelated instruments' incomplete accounting does not invalidate
 a fully tracked target when the index did not overflow.
 
+Rule results list only selected instrument identities that were retained and enabled. If an admission or selector
+bound rejects part of a rule's selected population, those identities are omitted and the affected rule's
+`IsWithinBudget` is false; the report outcome is incomplete or invalid rather than a false pass.
+
 The [package README](src/KeelMatrix.MetricBudget/README.md) is the complete user guide: budgets, outcomes, examples,
 lifecycle, safety bounds, privacy, telemetry, supported targets, and troubleshooting.
 

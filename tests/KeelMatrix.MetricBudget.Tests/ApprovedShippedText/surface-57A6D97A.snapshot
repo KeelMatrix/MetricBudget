@@ -46,6 +46,10 @@ A safety bound was reached, or a delivered value/tag set could not be admitted u
 The report names the bound or incomplete state, and every affected count is a lower bound. Per-tag results expose
 the specific series, tag-set, tag-key, instrument-admission, and per-key-value completeness flags; any such flag
 makes that tag's `IsWithinBudget` false. See
+
+The report names the bound or incomplete state, and every affected count is a lower bound. A selected instrument
+identity rejected by an admission bound is omitted from the affected rule's `Instruments` collection, and that
+rule's `IsWithinBudget` is false; a genuinely unaffected disjoint rule can still pass. See
 [safety-bounds.md](safety-bounds.md). Raise the relevant bound when the workload is representative; narrow the
 workload when the cardinality is the finding you were looking for. Unsupported tag values are rejected without
 calling user-defined `ToString()`.

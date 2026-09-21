@@ -50,8 +50,10 @@ Notes that the implementation, the diagnostics, and this document share:
 - **Oversized values are digested.** When a value's invariant text is longer than `MaxTagValueLength`, the
   descriptor becomes a stable hash of the exact supported representation, so one pathological value cannot inflate
   an identity while different values stay distinct.
-- **Values are never retained.** The session stores only a fixed-size SHA-256 digest of each series key and of each
-  tag-value descriptor. Raw tag values never persist in the verifier's memory, reports, or telemetry.
+- **Retained accounting uses digests.** The session stores only a fixed-size SHA-256 digest of each series key and
+  tag-value descriptor in its bounded accounting state. Canonical strings and reusable UTF-16 byte scratch can
+  briefly exist during hashing; the scratch is cleared after each digest, but ordinary managed process memory is
+  not a secure-erasure boundary. Raw tag values never appear in reports or telemetry.
 - **Instrument identity is part of the series key.** Two instruments with the same name in different meters, or in
   different versions of one meter name, never share accounting. Instrument *kind* is part of identity as well, so
   a counter and a histogram with the same name are separate. `Meter.Scope` is not part of identity, matching the

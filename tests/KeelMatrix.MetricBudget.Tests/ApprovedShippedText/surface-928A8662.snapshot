@@ -31,7 +31,10 @@ instrument names, tag keys, tag values, metric values, URLs, application or repo
 and file paths are never emitted.
 
 Verification results are produced locally and never depend on telemetry. A telemetry or network failure cannot
-change, delay, or fail a verification.
+change, delay, or fail a verification. Bounded accounting retains only fixed-size digests of series and tag values;
+transient managed strings and byte buffers can briefly contain tag-derived data during hashing. Reusable hash scratch
+is cleared after each digest, including short, multi-chunk, and empty inputs, but ordinary managed process memory is
+not a secure-erasure boundary and the package makes no such promise.
 
 ## Opting out
 

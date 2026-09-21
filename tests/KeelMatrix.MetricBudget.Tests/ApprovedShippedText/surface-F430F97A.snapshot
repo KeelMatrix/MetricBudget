@@ -56,8 +56,10 @@ either package-backed consumer. A plain solution build therefore never depends o
 
 - **Observed cardinality only.** Diagnostics say "observed series" or "observed cardinality". Never imply static
   proof of production maximums, and never present a default budget as universally safe.
-- **Privacy.** Reports, diagnostics, assertion messages, and telemetry contain tag keys and counts, never tag
-  values, metric values, or workload samples. Only fixed-size digests of series and tag values are retained.
+- **Privacy.** Reports, diagnostics, and assertion messages contain tag keys and counts, never tag values, metric
+  values, or workload samples. Bounded accounting retains only fixed-size digests of series and tag values. Hashing
+  can still create ordinary transient managed strings and byte buffers; reusable scratch is cleared after each
+  digest, but the package does not promise secure erasure from process memory.
 - **Bounded accounting.** Series and per-tag distinct-value accounting stay inside explicit safety bounds. A
   bounded run is reported as incomplete, counts become documented lower bounds, and an untracked observation is
   never matched to an existing series.
@@ -75,6 +77,8 @@ either package-backed consumer. A plain solution build therefore never depends o
   `KEELMATRIX_NO_TELEMETRY=1`; `tests.runsettings`, the two program entry points, `docs/DEV.md`, and the package gate
   enforce the setting. The local `keelmatrix.telemetry.json` override is ignored and untracked; root `.env` files are
   also not tracked.
+  Telemetry must not contain meter names, instrument names, tag keys, tag values, metric values, URLs, application
+  or repository names, budget text, exception messages, stack traces, or file paths.
 - **Packaging.** The package ships only the library assembly, XML docs, README, icon, license, symbols, and
   SourceLink. No probe, test, sample, generated report, or local-only file may be packed.
 

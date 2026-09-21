@@ -227,6 +227,7 @@ internal static class ReportBuilder
                 new MetricBudgetRule(rule.Selector, OriginalBudget(rule)),
                 i,
                 state,
+                snapshot.RuleTrackingIncomplete[i],
                 instruments));
         }
 

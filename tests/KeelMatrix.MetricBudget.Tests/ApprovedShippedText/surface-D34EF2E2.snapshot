@@ -22,9 +22,11 @@ CI output.
 
 ## Memory
 
-Series and tag-value identity are retained as fixed-size SHA-256 digests, inside the safety bounds documented in
-[safety-bounds.md](safety-bounds.md). The canonical identity text that contains values is transient: it is built
-during the measurement callback, hashed, and released.
+Series and tag-value identity retained by bounded accounting consists of fixed-size SHA-256 digests, inside the
+safety bounds documented in [safety-bounds.md](safety-bounds.md). During a measurement callback, ordinary managed
+strings and reusable byte scratch can briefly contain tag-derived identity text. The reusable scratch is cleared on
+every digest exit, including short, multi-chunk, empty, and exceptional paths, but ordinary managed process memory
+is not a secure-erasure boundary and the package does not promise that transient data is unrecoverable.
 
 ## Network
 

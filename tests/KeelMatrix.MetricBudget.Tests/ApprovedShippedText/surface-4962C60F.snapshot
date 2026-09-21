@@ -378,6 +378,9 @@
         <member name="P:KeelMatrix.MetricBudget.Internal.SessionSnapshot.UnmatchedMeasurements">
             <summary>Delivery callbacks that could not be attributed to a selected instrument.</summary>
         </member>
+        <member name="P:KeelMatrix.MetricBudget.Internal.SessionSnapshot.RuleTrackingIncomplete">
+            <summary>Whether admission or selector ambiguity made accounting incomplete for each configured rule.</summary>
+        </member>
         <member name="T:KeelMatrix.MetricBudget.Internal.InstrumentAccountSnapshot">
             <summary>
             Consistent point-in-time view of one instrument identity.
@@ -421,8 +424,8 @@
             <remarks>
             A hasher is cached per thread because one measurement computes one digest per delivered tag plus one digest for
             the whole tag set. Long values are hashed in fixed-size chunks so a single pathological value cannot cause a
-            proportional transient allocation. The hasher and its fixed-size chunk buffer are reused per thread, so normal
-            measurements do not allocate a new scratch buffer for each digest.
+            proportional transient allocation. The reusable byte scratch is cleared on every digest exit, including early
+            returns and exceptions, so thread-local storage is not treated as retained accounting state.
             </remarks>
         </member>
         <member name="M:KeelMatrix.MetricBudget.Internal.Sha256TextHash.HexDigest(System.String)">
@@ -1114,7 +1117,7 @@
         </member>
         <member name="T:KeelMatrix.MetricBudget.InstrumentObservationState">
             <summary>
-            Whether a configured rule was matched, measured, and accounted.
+            Whether a configured rule was matched, measured, and accounted without rejected selected identities.
             </summary>
         </member>
         <member name="F:KeelMatrix.MetricBudget.InstrumentObservationState.NotObserved">
@@ -1148,14 +1151,17 @@
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetRuleResult.Instruments">
             <summary>
-            Results for every instrument identity this rule selected, ordered by identity. Empty when the rule matched no
-            published instrument.
+            Results for every selected instrument identity that was retained and enabled, ordered by identity. Rejected
+            identities are omitted when admission was limited; inspect <see cref="P:KeelMatrix.MetricBudget.MetricBudgetReport.Outcome"/> and
+            <see cref="P:KeelMatrix.MetricBudget.MetricBudgetRuleResult.IsWithinBudget"/> for the resulting incomplete verification. Empty when the rule matched no
+            published instrument or every matching identity was rejected.
             </summary>
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetRuleResult.IsWithinBudget">
             <summary>
-            Whether the rule selected an instrument, that instrument delivered measurements, and every budget was
-            respected with complete tracking.
+            Whether the rule selected an instrument population, every selected identity was retained and enabled without
+            admission loss or selector ambiguity, the retained instruments delivered measurements, every budget was
+            respected, and tracking was complete.
             </summary>
         </member>
         <member name="M:KeelMatrix.MetricBudget.MetricBudgetRuleResult.ToString">

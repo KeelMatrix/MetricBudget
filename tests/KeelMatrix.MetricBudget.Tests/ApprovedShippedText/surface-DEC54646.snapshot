@@ -22,8 +22,11 @@ maintained release line.
 ## Scope notes
 
 The package observes `System.Diagnostics.Metrics` measurements from code running in the same process. It does not
-read metric values, it does not retain tag values, and it opens no network connections except the anonymous
-telemetry signal described in [PRIVACY.md](PRIVACY.md). A report or assertion message never contains tag values.
+read metric values, and its bounded accounting state retains only fixed-size digests rather than raw tag values.
+Transient managed strings and byte buffers can briefly contain tag-derived data while a callback builds and hashes
+an identity; reusable hash scratch is cleared after each digest, but ordinary process memory is not a secure-erasure
+boundary. It opens no network connections except the anonymous telemetry signal described in
+[PRIVACY.md](PRIVACY.md). A report or assertion message never contains tag values.
 
 ## Supported Versions
 

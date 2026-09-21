@@ -110,6 +110,110 @@ public sealed class BoundedObservationTests
     }
 
     [Fact]
+    public void RuleResultCannotPassWhenAnAdmittedInstrumentIdentityIsRejected()
+    {
+        string meterName = TestNames.Meter(nameof(RuleResultCannotPassWhenAnAdmittedInstrumentIdentityIsRejected));
+        using Meter meter = new Meter(meterName, "1.0.0");
+        MetricBudgetOptions options = new MetricBudgetOptions
+        {
+            MaxTrackedInstrumentIdentities = 1,
+        };
+        options.ForMeter(meterName, budget => budget.MaxObservedSeries = 1);
+
+        using MetricBudgetSession session = MetricBudgetSession.Start(options);
+        Counter<long> first = meter.CreateCounter<long>("first");
+        first.Add(1);
+        Counter<long> second = meter.CreateCounter<long>("second");
+        second.Add(1, new KeyValuePair<string, object?>("tenant", "tenant-a"));
+        second.Add(1, new KeyValuePair<string, object?>("tenant", "tenant-b"));
+
+        MetricBudgetReport report = session.Complete();
+
+        Assert.Equal(MetricBudgetOutcome.ObservationIncomplete, report.Outcome);
+        Assert.Single(report.Rules[0].Instruments);
+        Assert.Equal("first", report.Rules[0].Instruments[0].InstrumentName);
+        Assert.False(report.Rules[0].IsWithinBudget);
+    }
+
+    [Fact]
+    public void RuleResultCannotPassWhenAPhysicalInstrumentInstanceIsRejected()
+    {
+        string meterName = TestNames.Meter(nameof(RuleResultCannotPassWhenAPhysicalInstrumentInstanceIsRejected));
+        using Meter firstMeter = new Meter(meterName, "1.0.0");
+        using Meter secondMeter = new Meter(meterName, "1.0.0");
+        Counter<long> first = firstMeter.CreateCounter<long>("requests");
+        Counter<long> second = secondMeter.CreateCounter<long>("requests");
+        MetricBudgetOptions options = new MetricBudgetOptions
+        {
+            MaxTrackedInstrumentInstances = 1,
+        };
+        options.ForMeter(meterName, budget => budget.MaxObservedSeries = 1);
+
+        using MetricBudgetSession session = MetricBudgetSession.Start(options);
+        first.Add(1);
+        second.Add(1);
+
+        MetricBudgetReport report = session.Complete();
+
+        Assert.Equal(MetricBudgetOutcome.ObservationIncomplete, report.Outcome);
+        Assert.Single(report.Rules[0].Instruments);
+        Assert.False(report.Rules[0].IsWithinBudget);
+    }
+
+    [Fact]
+    public void RuleResultCannotPassWhenAnOverlongInstrumentIdentityIsRejected()
+    {
+        const string meterName = "m";
+        using Meter meter = new Meter(meterName);
+        Counter<long> first = meter.CreateCounter<long>("a");
+        Counter<long> second = meter.CreateCounter<long>("long");
+        MetricBudgetOptions options = new MetricBudgetOptions
+        {
+            MaxInstrumentIdentityLength = 3,
+        };
+        options.ForMeter(meterName, budget => budget.MaxObservedSeries = 1);
+
+        using MetricBudgetSession session = MetricBudgetSession.Start(options);
+        first.Add(1);
+        second.Add(1);
+
+        MetricBudgetReport report = session.Complete();
+
+        Assert.Equal(MetricBudgetOutcome.ObservationIncomplete, report.Outcome);
+        Assert.Single(report.Rules[0].Instruments);
+        Assert.Equal("a", report.Rules[0].Instruments[0].InstrumentName);
+        Assert.False(report.Rules[0].IsWithinBudget);
+    }
+
+    [Fact]
+    public void RuleResultCannotPassWhenAnOverlappingSelectorRejectsAnInstrument()
+    {
+        string firstMeterName = TestNames.Meter(nameof(RuleResultCannotPassWhenAnOverlappingSelectorRejectsAnInstrument) + ".first");
+        string secondMeterName = TestNames.Meter(nameof(RuleResultCannotPassWhenAnOverlappingSelectorRejectsAnInstrument) + ".second");
+        using Meter firstMeter = new Meter(firstMeterName, "1.0.0");
+        using Meter secondMeter = new Meter(secondMeterName, "1.0.0");
+        Counter<long> unaffected = firstMeter.CreateCounter<long>("unaffected");
+        Counter<long> retained = secondMeter.CreateCounter<long>("retained");
+        Counter<long> ambiguous = secondMeter.CreateCounter<long>("ambiguous");
+        MetricBudgetOptions options = new MetricBudgetOptions();
+        options.ForInstrument(firstMeterName, "unaffected", budget => budget.MaxObservedSeries = 1);
+        options.ForMeter(secondMeterName, budget => budget.MaxObservedSeries = 1);
+        options.ForInstrument(secondMeterName, "ambiguous", budget => budget.MaxObservedSeries = 1);
+
+        using MetricBudgetSession session = MetricBudgetSession.Start(options);
+        unaffected.Add(1);
+        retained.Add(1);
+        ambiguous.Add(1);
+
+        MetricBudgetReport report = session.Complete();
+
+        Assert.Equal(MetricBudgetOutcome.InvalidConfiguration, report.Outcome);
+        Assert.True(report.Rules[0].IsWithinBudget);
+        Assert.False(report.Rules[1].IsWithinBudget);
+        Assert.False(report.Rules[2].IsWithinBudget);
+    }
+
+    [Fact]
     public void RepeatedSameIdentityInstancesAreBounded()
     {
         string meterName = TestNames.Meter(nameof(RepeatedSameIdentityInstancesAreBounded));

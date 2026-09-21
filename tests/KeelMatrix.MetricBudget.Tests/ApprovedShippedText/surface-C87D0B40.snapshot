@@ -61,8 +61,9 @@ A definite budget breach that is already proven is reported as `Violation`; reac
 
 ## Memory characteristics
 
-- Series identity and tag-value identity are held as fixed-size SHA-256 digests, not as the canonical text, so no
-  raw tag value is retained.
+- Series identity and tag-value identity retained by accounting are fixed-size SHA-256 digests, not the canonical
+  text. Canonical strings and reusable UTF-16 byte scratch can briefly exist in ordinary managed process memory
+  during hashing; the scratch is cleared after each digest, but this is not a secure-erasure guarantee.
 - Retained memory grows with tracked identities, physical instances, conflicts, series, tag keys, and distinct tag
   values only up to their corresponding bounds. Because the series bound applies per instrument identity, the
   retained series ceiling grows with the number of admitted identities: *(matched instrument identities) x

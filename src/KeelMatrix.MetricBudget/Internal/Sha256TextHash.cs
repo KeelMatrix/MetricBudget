@@ -71,8 +71,8 @@ internal readonly struct Sha256Digest : IEquatable<Sha256Digest>
 /// <remarks>
 /// A hasher is cached per thread because one measurement computes one digest per delivered tag plus one digest for
 /// the whole tag set. Long values are hashed in fixed-size chunks so a single pathological value cannot cause a
-/// proportional transient allocation. The hasher and its fixed-size chunk buffer are reused per thread, so normal
-/// measurements do not allocate a new scratch buffer for each digest.
+/// proportional transient allocation. The reusable byte scratch is cleared on every digest exit, including early
+/// returns and exceptions, so thread-local storage is not treated as retained accounting state.
 /// </remarks>
 internal static class Sha256TextHash
 {
@@ -109,29 +109,36 @@ internal static class Sha256TextHash
         SHA256 sha = hasher ??= SHA256.Create();
         sha.Initialize();
 
-        byte[] bytes = chunkBytes ??= new byte[ChunkChars * 2];
-        int offset = 0;
-        while (offset < text.Length)
+        byte[] scratch = chunkBytes ??= new byte[ChunkChars * 2];
+        try
         {
-            int length = Math.Min(ChunkChars, text.Length - offset);
-            int byteCount = 0;
-            for (int i = 0; i < length; i++)
+            int offset = 0;
+            while (offset < text.Length)
             {
-                char character = text[offset + i];
-                bytes[byteCount++] = (byte)character;
-                bytes[byteCount++] = (byte)(character >> 8);
+                int length = Math.Min(ChunkChars, text.Length - offset);
+                int byteCount = 0;
+                for (int i = 0; i < length; i++)
+                {
+                    char character = text[offset + i];
+                    scratch[byteCount++] = (byte)character;
+                    scratch[byteCount++] = (byte)(character >> 8);
+                }
+
+                if (offset == 0 && length == text.Length)
+                {
+                    return sha.ComputeHash(scratch, 0, byteCount);
+                }
+
+                sha.TransformBlock(scratch, 0, byteCount, outputBuffer: null, outputOffset: 0);
+                offset += length;
             }
 
-            if (offset == 0 && length == text.Length)
-            {
-                return sha.ComputeHash(bytes, 0, byteCount);
-            }
-
-            sha.TransformBlock(bytes, 0, byteCount, outputBuffer: null, outputOffset: 0);
-            offset += length;
+            sha.TransformFinalBlock(Array.Empty<byte>(), 0, 0);
+            return sha.Hash ?? Array.Empty<byte>();
         }
-
-        sha.TransformFinalBlock(Array.Empty<byte>(), 0, 0);
-        return sha.Hash ?? Array.Empty<byte>();
+        finally
+        {
+            Array.Clear(scratch, 0, scratch.Length);
+        }
     }
 }
