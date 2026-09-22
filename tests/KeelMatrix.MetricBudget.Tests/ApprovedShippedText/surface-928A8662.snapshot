@@ -36,6 +36,10 @@ transient managed strings and byte buffers can briefly contain tag-derived data 
 is cleared after each digest, including short, multi-chunk, and empty inputs, but ordinary managed process memory is
 not a secure-erasure boundary and the package makes no such promise.
 
+Reports and assertion messages exclude tag values, metric values, and workload samples, but retain application-supplied
+meter names, meter versions, instrument names, and tag keys. Those identifiers can themselves be confidential; review
+them before sharing output outside its intended audience.
+
 ## Opting out
 
 Set `KEELMATRIX_NO_TELEMETRY=1`. The shared opt-out set also honors `DOTNET_CLI_TELEMETRY_OPTOUT` and

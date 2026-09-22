@@ -13,7 +13,7 @@ namespace KeelMatrix.MetricBudget.Internal;
 /// <list type="number">
 /// <item>invalid configuration, when an instrument identity matched more than one rule;</item>
 /// <item>violation, when a tracked budget was exceeded;</item>
-/// <item>observation incomplete, when a safety bound was reached or accounting was inconsistent;</item>
+/// <item>observation incomplete, when additional observation or state could not be retained, or accounting was inconsistent;</item>
 /// <item>no matching instrument, when a rule selected nothing;</item>
 /// <item>no measurements observed, when a selected instrument delivered nothing;</item>
 /// <item>pass.</item>

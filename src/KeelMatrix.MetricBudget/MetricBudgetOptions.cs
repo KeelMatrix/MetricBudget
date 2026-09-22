@@ -17,21 +17,24 @@ namespace KeelMatrix.MetricBudget;
 /// </para>
 /// <para>
 /// The configured tracking limits are safety bounds, not budgets. They exist so that an unexpectedly explosive
-/// workload cannot make the verifier itself unbounded, and they are reported explicitly whenever they are reached.
+/// workload cannot make the verifier itself unbounded, and they are reported explicitly when they prevent additional
+/// observation or state from being retained.
 /// They are deliberately not described as safe values for any particular application.
 /// </para>
 /// </remarks>
 public sealed class MetricBudgetOptions
 {
     /// <summary>
-    /// Default number of distinct observed series retained per instrument identity before it reports that series
-    /// tracking is incomplete. This is a safety bound, not a budget or a safe cardinality for any application.
+    /// Default number of distinct observed series retained per instrument identity before an additional series is
+    /// rejected and it reports that series tracking is incomplete. This is a safety bound, not a budget or a safe
+    /// cardinality for any application.
     /// </summary>
     public const int DefaultMaxTrackedSeries = 100_000;
 
     /// <summary>
-    /// Default number of distinct values retained per tag key and instrument identity before it reports that tag
-    /// value tracking is incomplete. This is a safety bound, not a budget or a safe cardinality for any application.
+    /// Default number of distinct values retained per tag key and instrument identity before an additional distinct
+    /// value is rejected and it reports that tag value tracking is incomplete. This is a safety bound, not a budget
+    /// or a safe cardinality for any application.
     /// </summary>
     public const int DefaultMaxTrackedValuesPerTag = 5_000;
 
@@ -78,14 +81,15 @@ public sealed class MetricBudgetOptions
     /// </summary>
     /// <remarks>
     /// The bound applies per instrument identity, exactly like <see cref="MaxTrackedValuesPerTag"/>. When one
-    /// instrument reaches it, further distinct series of that instrument are counted as untracked observations,
-    /// the report says tracking is incomplete, and the session never presents that state as a pass.
+    /// instrument is full, a later distinct series is counted as an untracked observation, the report says tracking is
+    /// incomplete, and the session never presents that state as a pass. Filling the bound with a retained series does
+    /// not by itself make accounting incomplete.
     /// <para>
     /// The session does not share one series bound across selected instruments. Its ceiling is the number of
     /// matched instrument identities multiplied by this value, plus the per-tag value sets, so a workload spread
     /// over several instruments retains more series than a single instrument does. Size memory from that product,
-    /// and expect <see cref="MetricBudgetOutcome.ObservationIncomplete"/> as soon as any single instrument's bound
-    /// is reached.
+    /// and expect <see cref="MetricBudgetOutcome.ObservationIncomplete"/> when any single instrument rejects
+    /// additional series because its bound is full.
     /// </para>
     /// <para>
     /// The value must be greater than zero.
@@ -97,9 +101,9 @@ public sealed class MetricBudgetOptions
     /// Maximum number of distinct values retained per tag key and instrument identity.
     /// </summary>
     /// <remarks>
-    /// The value must be greater than zero. When the bound is reached, further distinct values are counted as
+    /// The value must be greater than zero. Once the retained set is full, further distinct values are counted as
     /// untracked observations for that tag key, the report says tracking is incomplete, and the session never
-    /// presents that state as a pass.
+    /// presents that state as a pass. Filling the bound does not by itself make accounting incomplete.
     /// </remarks>
     public int MaxTrackedValuesPerTag { get; set; } = DefaultMaxTrackedValuesPerTag;
 
@@ -116,7 +120,7 @@ public sealed class MetricBudgetOptions
     /// Maximum number of distinct instrument identities retained by one session.
     /// </summary>
     /// <remarks>
-    /// When this bound is reached, newly published selected identities are not enabled or retained. The report is
+    /// Once this bound is full, newly published selected identities are not enabled or retained. The report is
     /// explicitly incomplete and cannot pass.
     /// </remarks>
     public int MaxTrackedInstrumentIdentities { get; set; } = DefaultMaxTrackedInstrumentIdentities;
@@ -126,7 +130,7 @@ public sealed class MetricBudgetOptions
     /// </summary>
     /// <remarks>
     /// This is separate from the identity bound because several physical instruments can share one meter name,
-    /// version, instrument name, and kind. When it is reached, later instances are not enabled or retained.
+    /// version, instrument name, and kind. Once it is full, later instances are not enabled or retained.
     /// </remarks>
     public int MaxTrackedInstrumentInstances { get; set; } = DefaultMaxTrackedInstrumentInstances;
 

@@ -16,9 +16,10 @@ identifiers, tenant names, URLs, resource names, and tokens. This page states ex
 - metric values - the session does not read them;
 - samples of the observed workload.
 
-Reports and assertion messages are therefore safe to paste into an issue or leave in CI logs. If you need to know
-which value produced a breach, reproduce it locally with a debugger rather than printing values into persistent
-CI output.
+Reports and assertion messages exclude tag and metric values, but they retain application-supplied meter names, meter
+versions, instrument names, and tag keys. Those identifiers can themselves be confidential, so review them before
+sharing output outside its intended audience. If you need to know which value produced a breach, reproduce it locally
+with a debugger rather than printing values into persistent CI output.
 
 ## Memory
 

@@ -127,6 +127,37 @@ public sealed class SeriesBudgetTests
         // The first two deliveries are one series; the third repeats a key and is therefore a different series.
         Assert.Equal(2, report.ObservedSeriesCount);
         Assert.Equal(3, report.TotalMeasurementsObserved);
+        Assert.True(report.AccountingIsConsistent);
+    }
+
+    [Fact]
+    public void DifferentValuesUnderOneDuplicateKeyStayConsistent()
+    {
+        string meterName = TestNames.Meter(nameof(DifferentValuesUnderOneDuplicateKeyStayConsistent));
+        using Meter meter = new Meter(meterName, "1.0.0");
+        Counter<long> counter = meter.CreateCounter<long>("requests");
+
+        MetricBudgetOptions options = new MetricBudgetOptions()
+            .ForInstrument(meterName, "requests", budget =>
+            {
+                budget.MaxObservedSeries = 1;
+                budget.Tag("k").MaxDistinctValues = 2;
+            });
+
+        using MetricBudgetSession session = MetricBudgetSession.Start(options);
+        counter.Add(
+            1,
+            new KeyValuePair<string, object?>("k", "a"),
+            new KeyValuePair<string, object?>("k", "b"));
+
+        MetricBudgetReport report = session.Complete();
+        MetricBudgetTagResult tag = Assert.Single(report.Rules[0].Instruments[0].Tags);
+
+        Assert.Equal(MetricBudgetOutcome.Passed, report.Outcome);
+        Assert.Equal(1, report.TotalMeasurementsObserved);
+        Assert.Equal(1, report.ObservedSeriesCount);
+        Assert.Equal(2, tag.ObservedDistinctValueCount);
+        Assert.True(report.AccountingIsConsistent);
     }
 
     [Fact]

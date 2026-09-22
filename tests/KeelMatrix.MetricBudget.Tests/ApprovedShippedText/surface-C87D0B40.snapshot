@@ -17,25 +17,27 @@ has to be bounded and honest. Every session applies explicit bounds to every ret
 | `MaxTagKeyLength` | 256 | Length of a delivered tag key admitted to identity construction. |
 
 The defaults exist so an accidentally explosive workload cannot make the verifier unbounded. They are not budgets,
-they are not recommendations for an application, and reaching one never turns a failing workload into a passing
-report.
+they are not recommendations for an application, and a full retained set never turns a failing workload into a
+passing report. Filling a bound is not itself incomplete; incompleteness begins when a later observation or state
+entry cannot be retained.
 
 The series bound is **per instrument identity**, not one shared pool for the session. A session that matches several
 instrument identities can therefore retain up to *(number of matched instrument identities) x `MaxTrackedSeries`*
 series descriptions, plus the per-tag value sets described below. Size CI memory from that product rather than from
-a single per-instrument-identity `MaxTrackedSeries` value, and expect `ObservationIncomplete` as soon as **any**
-instrument identity's bound is reached - the outcome is not deferred until every instrument is full.
+a single per-instrument-identity `MaxTrackedSeries` value. A full bound still allows existing series or retained
+values to be recognized; only a later distinct entry that cannot be retained makes accounting incomplete.
 
-## What happens when a bound is reached
+## What happens when a bound is full
 
-- The observation is still counted as delivered.
-- The observation is recorded as **untracked**; it is never matched to an existing series, so the session cannot
-  silently undercount.
+- Filling a retained set is not an incomplete state. An observation that maps to an existing retained series or tag
+  value remains tracked, and the delivered measurement is counted normally.
+- When a new series, distinct tag value, tag key, identity, instance, or conflict record cannot be retained, the
+  observation or state entry is recorded as **untracked**. An untracked series is never matched to an existing series,
+  so the session cannot silently undercount.
 - A series-cap exhaustion stops admission of series state but continues bounded updates for already retained tag
   keys. A tag-key cap stops admission of new keys while preserving already tracked keys. An oversized tag set,
   unsupported value, oversized key, or rejected instrument identity is not canonicalized or retained.
-- The report names the bound, the instrument that reached it, and how many observations could not be tracked. Once
-  any instrument reports an exhausted bound, the whole session outcome is `ObservationIncomplete`.
+- The report names the rejected state, the bound, and how many observations or entries could not be tracked.
 - Counts that depend on the exhausted bound become explicit lower bounds:
   `MetricBudgetInstrumentResult.SeriesTrackingIncomplete`,
   `MetricBudgetInstrumentResult.InstrumentTrackingIncomplete`,
@@ -54,10 +56,11 @@ instrument identity's bound is reached - the outcome is not deferred until every
   `InstrumentIdentityLengthTrackingIncomplete` and `UntrackedInstrumentIdentityLengths` for the latter, and the
   diagnostic recommends `MaxInstrumentIdentityLength`; it recommends `MaxTrackedInstrumentIdentities` or
   `MaxTrackedInstrumentInstances` for the corresponding admission bound.
-- The session outcome becomes `ObservationIncomplete`, which is not a pass, and
-  `AssertWithinBudget()` fails with the bounded-state diagnostics.
-
-A definite budget breach that is already proven is reported as `Violation`; reaching a bound never hides it.
+- The outcome ladder is the order implemented by `ReportBuilder`: `InvalidConfiguration` for a selector conflict,
+  then `Violation` for a proven budget breach, then `ObservationIncomplete` for rejected state or inconsistent
+  accounting, then `NoMatchingInstrument`, `NoMeasurementsObserved`, and finally `Passed`. A conflict or proven
+  budget breach can therefore coexist with incomplete flags without producing `ObservationIncomplete`; consumers must
+  inspect `MetricBudgetReport.Safety`, per-result completeness flags, and `AccountingIsConsistent` in every outcome.
 
 ## Memory characteristics
 

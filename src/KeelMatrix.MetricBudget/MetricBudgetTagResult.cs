@@ -6,8 +6,9 @@ namespace KeelMatrix.MetricBudget;
 /// Observed distinct values for one tag key on one instrument, and the budget that applied to it.
 /// </summary>
 /// <remarks>
-/// The result contains the tag key and counts only. Tag values are never included, so a report is safe to print in
-/// shared logs and CI output even when tag values contain identifiers or other sensitive data.
+/// The result contains the tag key and counts only; tag values are never included. Reports still retain
+/// application-supplied meter names, meter versions, instrument names, and tag keys, so review those identifiers
+/// before sharing output outside its intended audience.
 /// <para>
 /// <see cref="ObservedDistinctValueCount"/> is a lower bound whenever any tracking-completeness property is set.
 /// A per-tag within-budget conclusion is therefore available only when all observation paths that could affect this
@@ -71,19 +72,19 @@ public sealed class MetricBudgetTagResult
     public int ObservedDistinctValueCount { get; }
 
     /// <summary>
-    /// Whether the per-tag value bound for this instrument identity was reached for this key, which means the
-    /// observed count is a lower bound and no within-budget conclusion can be drawn from it.
+    /// Whether the per-tag value bound for this instrument identity was full and rejected an additional distinct value
+    /// for this key, which means the observed count is a lower bound and no within-budget conclusion can be drawn.
     /// </summary>
     public bool ValueTrackingIncomplete { get; }
 
     /// <summary>
-    /// Measurements whose tag value could not be tracked because the safety bound was already reached.
+    /// Tag-value occurrences whose distinct value could not be tracked because the safety bound was already full.
     /// </summary>
     public long UntrackedValueObservations { get; }
 
     /// <summary>
-    /// Whether the instrument's series bound was reached. The observed value count may be incomplete because an
-    /// untracked series could have carried this key.
+    /// Whether the instrument's series bound was full and rejected an additional series. The observed value count may
+    /// be incomplete because the untracked series could have carried this key.
     /// </summary>
     public bool SeriesTrackingIncomplete { get; }
 
@@ -94,8 +95,8 @@ public sealed class MetricBudgetTagResult
     public bool TagSetTrackingIncomplete { get; }
 
     /// <summary>
-    /// Whether the instrument's retained tag-key bound was reached. The observed value count may be incomplete
-    /// because this key could have been among the keys that were not retained.
+    /// Whether the instrument's retained tag-key bound was full and rejected an additional key. The observed value
+    /// count may be incomplete because this key could have been among the keys that were not retained.
     /// </summary>
     public bool TagKeyTrackingIncomplete { get; }
 

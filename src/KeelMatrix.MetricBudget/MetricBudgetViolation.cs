@@ -19,7 +19,7 @@ public enum MetricBudgetViolationKind
     /// <summary>A selected instrument was published but delivered no measurements.</summary>
     InstrumentProducedNoMeasurements = 3,
 
-    /// <summary>A safety bound for an instrument identity was reached, so the observed counts are lower bounds.</summary>
+    /// <summary>A safety bound rejected additional observation or state, so affected observed counts are lower bounds.</summary>
     SafetyLimitReached = 4,
 
     /// <summary>One instrument identity matched more than one rule, so no budget can be applied.</summary>
@@ -69,7 +69,8 @@ public sealed class MetricBudgetViolation
     public MetricBudgetViolationKind Kind { get; }
 
     /// <summary>
-    /// Actionable, privacy-safe description of the problem.
+    /// Actionable description of the problem. It excludes tag values and metric values but can contain application-
+    /// supplied identity and tag keys.
     /// </summary>
     public string Description { get; }
 

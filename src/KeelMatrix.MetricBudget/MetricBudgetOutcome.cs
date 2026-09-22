@@ -43,8 +43,9 @@ public enum MetricBudgetOutcome
     NoMeasurementsObserved = 4,
 
     /// <summary>
-    /// Accounting could not be completed within the configured safety bounds, or the session detected an impossible
-    /// accounting state. The report names the bound that was reached; the observed counts are lower bounds.
+    /// Accounting could not retain all observations or state within the configured safety bounds, or the session
+    /// detected an impossible accounting state. A selector conflict or proven budget breach takes precedence over
+    /// this outcome; inspect the report's completeness properties and accounting flag as well.
     /// </summary>
     ObservationIncomplete = 5,
 }

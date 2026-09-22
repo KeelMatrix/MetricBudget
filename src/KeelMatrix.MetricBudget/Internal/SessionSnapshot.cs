@@ -338,11 +338,13 @@ internal sealed class TagValueSnapshot
     internal TagValueSnapshot(
         string keyField,
         int observedDistinctValueCount,
+        long observedValueOccurrenceCount,
         bool valueTrackingIncomplete,
         long untrackedValueObservations)
     {
         KeyField = keyField;
         ObservedDistinctValueCount = observedDistinctValueCount;
+        ObservedValueOccurrenceCount = observedValueOccurrenceCount;
         ValueTrackingIncomplete = valueTrackingIncomplete;
         UntrackedValueObservations = untrackedValueObservations;
     }
@@ -354,6 +356,9 @@ internal sealed class TagValueSnapshot
     /// <see langword="true"/>.
     /// </summary>
     internal int ObservedDistinctValueCount { get; }
+
+    /// <summary>All retained occurrences of this tag key, including repeated keys in one measurement.</summary>
+    internal long ObservedValueOccurrenceCount { get; }
 
     internal bool ValueTrackingIncomplete { get; }
 

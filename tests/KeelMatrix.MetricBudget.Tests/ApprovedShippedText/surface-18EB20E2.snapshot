@@ -35,8 +35,9 @@ MetricBudgetReport report = session.Complete();
 report.AssertWithinBudget();
 ```
 
-A failing run names the instrument, the breached budget, the observed count, the configured limit, and the
-offending tag keys, and never prints tag values.
+A failing run names the instrument, the breached budget, the observed count, the configured limit, and the offending
+tag keys, and never prints tag values. Reports still retain application-supplied meter names, versions, instrument
+names, and tag keys; review those identifiers before sharing output outside its intended audience.
 
 Per-tag results also expose whether their counts may be incomplete because of series-cap exhaustion, a rejected tag
 set, tag-key-cap exhaustion, instrument admission loss, or the per-key value cap. Such counts are lower bounds and
@@ -50,10 +51,12 @@ a fully tracked target when the index did not overflow.
 
 Rule results list only selected instrument identities that were retained and enabled. If an admission or selector
 bound rejects part of a rule's selected population, those identities are omitted and the affected rule's
-`IsWithinBudget` is false; the report outcome is incomplete or invalid rather than a false pass.
+`IsWithinBudget` is false; the top-level outcome follows the documented precedence and may be incomplete, a proven
+violation, or invalid rather than a false pass.
 
-The [package README](src/KeelMatrix.MetricBudget/README.md) is the complete user guide: budgets, outcomes, examples,
-lifecycle, safety bounds, privacy, telemetry, supported targets, and troubleshooting.
+The [package README](src/KeelMatrix.MetricBudget/README.md) contains the package introduction, installation, quick
+start, and important limitations. The maintained detail is in the dedicated guides below: budgets and lifecycle in
+the API and safety docs, privacy and telemetry in the privacy guide, and recurring failures in troubleshooting.
 
 ## What is verified
 

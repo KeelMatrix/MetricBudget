@@ -76,6 +76,40 @@ public sealed class TagBudgetTests
         Assert.Equal("server.address", violation.TagKey);
         Assert.Equal(5, violation.ObservedCount);
         Assert.Equal(2, violation.ConfiguredLimit);
+        Assert.True(report.AccountingIsConsistent);
+    }
+
+    [Fact]
+    public void DuplicateKeyValuesCanExhaustValueTrackingWithoutInconsistentAccounting()
+    {
+        string meterName = TestNames.Meter(nameof(DuplicateKeyValuesCanExhaustValueTrackingWithoutInconsistentAccounting));
+        using Meter meter = new Meter(meterName, "1.0.0");
+        Counter<long> counter = meter.CreateCounter<long>("requests");
+
+        MetricBudgetOptions options = new MetricBudgetOptions
+        {
+            MaxTrackedValuesPerTag = 2,
+        };
+        options.ForInstrument(meterName, "requests", budget =>
+        {
+            budget.MaxObservedSeries = 1;
+            budget.Tag("k").MaxDistinctValues = 3;
+        });
+
+        using MetricBudgetSession session = MetricBudgetSession.Start(options);
+        counter.Add(
+            1,
+            new KeyValuePair<string, object?>("k", "a"),
+            new KeyValuePair<string, object?>("k", "b"),
+            new KeyValuePair<string, object?>("k", "c"));
+
+        MetricBudgetReport report = session.Complete();
+        MetricBudgetTagResult tag = Assert.Single(report.Rules[0].Instruments[0].Tags);
+
+        Assert.Equal(MetricBudgetOutcome.ObservationIncomplete, report.Outcome);
+        Assert.Equal(2, tag.ObservedDistinctValueCount);
+        Assert.True(tag.ValueTrackingIncomplete);
+        Assert.True(report.AccountingIsConsistent);
     }
 
     [Fact]

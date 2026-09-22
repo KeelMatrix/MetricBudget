@@ -10,6 +10,34 @@ namespace KeelMatrix.MetricBudget.Tests;
 public sealed class SafetyBoundTests
 {
     [Fact]
+    public void FillingSafetyBoundsWithoutRejectingStateRemainsComplete()
+    {
+        string meterName = TestNames.Meter(nameof(FillingSafetyBoundsWithoutRejectingStateRemainsComplete));
+        using Meter meter = new Meter(meterName, "1.0.0");
+        Counter<long> counter = meter.CreateCounter<long>("requests");
+
+        MetricBudgetOptions options = new MetricBudgetOptions
+        {
+            MaxTrackedSeries = 1,
+            MaxTrackedValuesPerTag = 1,
+        };
+        options.ForInstrument(meterName, "requests", budget =>
+        {
+            budget.MaxObservedSeries = 1;
+            budget.Tag("tenant").MaxDistinctValues = 1;
+        });
+
+        using MetricBudgetSession session = MetricBudgetSession.Start(options);
+        counter.Add(1, new KeyValuePair<string, object?>("tenant", "acme"));
+
+        MetricBudgetReport report = session.Complete();
+
+        Assert.Equal(MetricBudgetOutcome.Passed, report.Outcome);
+        Assert.True(report.Safety.IsComplete);
+        Assert.True(report.AccountingIsConsistent);
+    }
+
+    [Fact]
     public void SeriesSafetyBoundIsExplicitAndNeverReportsAPass()
     {
         string meterName = TestNames.Meter(nameof(SeriesSafetyBoundIsExplicitAndNeverReportsAPass));

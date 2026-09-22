@@ -2,7 +2,9 @@
 
 Every report starts with the outcome and lists the configured rules, the instruments each rule selected, the
 observed counts, the configured limits, and the tag keys involved. Start there: the diagnostic is written to be
-read from a failing test log without any extra tooling.
+read from a failing test log without any extra tooling. It excludes tag and metric values but retains application-
+supplied meter and instrument identifiers and tag keys; review those identifiers before sharing it outside its
+intended audience.
 
 ## `NoMatchingInstrument`
 
@@ -42,17 +44,23 @@ with a non-positive safety bound throws `MetricBudgetConfigurationException` bef
 
 ## `ObservationIncomplete`
 
-A safety bound was reached, or a delivered value/tag set could not be admitted under the supported identity policy.
-The report names the bound or incomplete state, and every affected count is a lower bound. Per-tag results expose
-the specific series, tag-set, tag-key, instrument-admission, and per-key-value completeness flags; any such flag
-makes that tag's `IsWithinBudget` false. See
+A later observation or state entry could not be retained within a safety bound, a delivered value/tag set could not
+be admitted under the supported identity policy, or the session detected inconsistent accounting. Filling a bound is
+not enough by itself: existing retained series and values continue to be recognized. The report names the bound or
+incomplete state, and every affected count is a lower bound. Per-tag results expose the specific series, tag-set,
+tag-key, instrument-admission, and per-key-value completeness flags; any such flag makes that tag's `IsWithinBudget`
+false. See [safety-bounds.md](safety-bounds.md).
 
-The report names the bound or incomplete state, and every affected count is a lower bound. A selected instrument
-identity rejected by an admission bound is omitted from the affected rule's `Instruments` collection, and that
-rule's `IsWithinBudget` is false; a genuinely unaffected disjoint rule can still pass. See
-[safety-bounds.md](safety-bounds.md). Raise the relevant bound when the workload is representative; narrow the
+A selector conflict produces `InvalidConfiguration`, and a proven budget breach produces `Violation`, even when
+incomplete flags are also present. A genuinely unaffected disjoint rule can still pass its own budget check. A selected
+instrument identity rejected by an admission bound is omitted from the affected rule's `Instruments` collection, and that
+rule's `IsWithinBudget` is false. Raise the relevant bound when the workload is representative; narrow the
 workload when the cardinality is the finding you were looking for. Unsupported tag values are rejected without
 calling user-defined `ToString()`.
+
+Reports exclude tag and metric values but retain application-supplied meter names, versions, instrument names, and tag
+keys. Review those identifiers before sharing diagnostics outside their intended audience; see
+[privacy-and-telemetry.md](privacy-and-telemetry.md).
 
 Instrument identity admission and identity component length are distinct cases. An oversized instrument that no
 rule selects is ignored and does not invalidate the session. An oversized selected instrument is rejected and the

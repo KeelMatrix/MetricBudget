@@ -39,9 +39,10 @@
             <remarks>
             <para>
             The helpers take no dependency on a test framework. They throw
-            <see cref="T:KeelMatrix.MetricBudget.Assertions.MetricBudgetAssertionException"/>, whose message is the privacy-safe diagnostic report, so a failure
-            in any framework names the instrument, the breached budget, the observed count, and the configured limit
-            without printing tag values.
+            <see cref="T:KeelMatrix.MetricBudget.Assertions.MetricBudgetAssertionException"/>, whose message is a diagnostic report, so a failure in any
+            framework names the instrument, the breached budget, the observed count, and the configured limit without
+            printing tag values. The report can still contain application-supplied identity and tag keys; review those
+            identifiers before sharing an assertion message outside its intended audience.
             </para>
             <para>
             Focused budget helpers fail closed when their target delivered no measurements or its accounting was incomplete.
@@ -64,7 +65,7 @@
             <exception cref="T:System.ArgumentNullException"><paramref name="report"/> is null.</exception>
             <exception cref="T:KeelMatrix.MetricBudget.Assertions.MetricBudgetAssertionException">
             The outcome is not <see cref="F:KeelMatrix.MetricBudget.MetricBudgetOutcome.Passed"/>, including when nothing was observed, the
-            configuration was rejected, or a safety bound was reached.
+            configuration was rejected, or a safety bound rejected additional state.
             </exception>
         </member>
         <member name="M:KeelMatrix.MetricBudget.Assertions.MetricBudgetReportAssertions.AssertOutcome(KeelMatrix.MetricBudget.MetricBudgetReport,KeelMatrix.MetricBudget.MetricBudgetOutcome)">
@@ -350,7 +351,7 @@
             <list type="number">
             <item>invalid configuration, when an instrument identity matched more than one rule;</item>
             <item>violation, when a tracked budget was exceeded;</item>
-            <item>observation incomplete, when a safety bound was reached or accounting was inconsistent;</item>
+            <item>observation incomplete, when additional observation or state could not be retained, or accounting was inconsistent;</item>
             <item>no matching instrument, when a rule selected nothing;</item>
             <item>no measurements observed, when a selected instrument delivered nothing;</item>
             <item>pass.</item>
@@ -402,6 +403,9 @@
             Distinct values tracked for this tag key. A lower bound when <see cref="P:KeelMatrix.MetricBudget.Internal.TagValueSnapshot.ValueTrackingIncomplete"/> is
             <see langword="true"/>.
             </summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.Internal.TagValueSnapshot.ObservedValueOccurrenceCount">
+            <summary>All retained occurrences of this tag key, including repeated keys in one measurement.</summary>
         </member>
         <member name="T:KeelMatrix.MetricBudget.Internal.ConfigurationConflictSnapshot">
             <summary>
@@ -708,27 +712,27 @@
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetInstrumentResult.UntrackedSeriesObservations">
             <summary>
-            Measurements whose series could not be tracked because the series safety bound for this instrument identity
-            was already reached.
+            Measurements whose new series could not be tracked because the series safety bound for this instrument identity
+            was already full.
             </summary>
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetInstrumentResult.SeriesTrackingIncomplete">
             <summary>
-            Whether the series safety bound for this instrument identity was reached, which means
-            <see cref="P:KeelMatrix.MetricBudget.MetricBudgetInstrumentResult.ObservedSeriesCount"/> is a lower bound.
+            Whether an additional distinct series was rejected because the series safety bound for this instrument identity
+            was full, which means <see cref="P:KeelMatrix.MetricBudget.MetricBudgetInstrumentResult.ObservedSeriesCount"/> is a lower bound.
             </summary>
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetInstrumentResult.UntrackedTagSetObservations">
             <summary>Measurements whose tag set could not be canonically tracked.</summary>
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetInstrumentResult.UntrackedTagKeyObservations">
-            <summary>Delivered tag keys that could not be retained after the per-instrument key bound was reached.</summary>
+            <summary>Delivered tag keys that could not be retained after the per-instrument key bound was full.</summary>
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetInstrumentResult.TagSetTrackingIncomplete">
             <summary>Whether a tag set was rejected because it was oversized or contained an unsupported value.</summary>
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetInstrumentResult.TagKeyTrackingIncomplete">
-            <summary>Whether the per-instrument retained tag-key bound was reached.</summary>
+            <summary>Whether the per-instrument retained tag-key bound was full and rejected an additional key.</summary>
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetInstrumentResult.InstrumentTrackingIncomplete">
             <summary>
@@ -771,21 +775,24 @@
             </para>
             <para>
             The configured tracking limits are safety bounds, not budgets. They exist so that an unexpectedly explosive
-            workload cannot make the verifier itself unbounded, and they are reported explicitly whenever they are reached.
+            workload cannot make the verifier itself unbounded, and they are reported explicitly when they prevent additional
+            observation or state from being retained.
             They are deliberately not described as safe values for any particular application.
             </para>
             </remarks>
         </member>
         <member name="F:KeelMatrix.MetricBudget.MetricBudgetOptions.DefaultMaxTrackedSeries">
             <summary>
-            Default number of distinct observed series retained per instrument identity before it reports that series
-            tracking is incomplete. This is a safety bound, not a budget or a safe cardinality for any application.
+            Default number of distinct observed series retained per instrument identity before an additional series is
+            rejected and it reports that series tracking is incomplete. This is a safety bound, not a budget or a safe
+            cardinality for any application.
             </summary>
         </member>
         <member name="F:KeelMatrix.MetricBudget.MetricBudgetOptions.DefaultMaxTrackedValuesPerTag">
             <summary>
-            Default number of distinct values retained per tag key and instrument identity before it reports that tag
-            value tracking is incomplete. This is a safety bound, not a budget or a safe cardinality for any application.
+            Default number of distinct values retained per tag key and instrument identity before an additional distinct
+            value is rejected and it reports that tag value tracking is incomplete. This is a safety bound, not a budget
+            or a safe cardinality for any application.
             </summary>
         </member>
         <member name="F:KeelMatrix.MetricBudget.MetricBudgetOptions.DefaultMaxTagValueLength">
@@ -826,14 +833,15 @@
             </summary>
             <remarks>
             The bound applies per instrument identity, exactly like <see cref="P:KeelMatrix.MetricBudget.MetricBudgetOptions.MaxTrackedValuesPerTag"/>. When one
-            instrument reaches it, further distinct series of that instrument are counted as untracked observations,
-            the report says tracking is incomplete, and the session never presents that state as a pass.
+            instrument is full, a later distinct series is counted as an untracked observation, the report says tracking is
+            incomplete, and the session never presents that state as a pass. Filling the bound with a retained series does
+            not by itself make accounting incomplete.
             <para>
             The session does not share one series bound across selected instruments. Its ceiling is the number of
             matched instrument identities multiplied by this value, plus the per-tag value sets, so a workload spread
             over several instruments retains more series than a single instrument does. Size memory from that product,
-            and expect <see cref="F:KeelMatrix.MetricBudget.MetricBudgetOutcome.ObservationIncomplete"/> as soon as any single instrument's bound
-            is reached.
+            and expect <see cref="F:KeelMatrix.MetricBudget.MetricBudgetOutcome.ObservationIncomplete"/> when any single instrument rejects
+            additional series because its bound is full.
             </para>
             <para>
             The value must be greater than zero.
@@ -845,9 +853,9 @@
             Maximum number of distinct values retained per tag key and instrument identity.
             </summary>
             <remarks>
-            The value must be greater than zero. When the bound is reached, further distinct values are counted as
+            The value must be greater than zero. Once the retained set is full, further distinct values are counted as
             untracked observations for that tag key, the report says tracking is incomplete, and the session never
-            presents that state as a pass.
+            presents that state as a pass. Filling the bound does not by itself make accounting incomplete.
             </remarks>
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetOptions.MaxTagValueLength">
@@ -864,7 +872,7 @@
             Maximum number of distinct instrument identities retained by one session.
             </summary>
             <remarks>
-            When this bound is reached, newly published selected identities are not enabled or retained. The report is
+            Once this bound is full, newly published selected identities are not enabled or retained. The report is
             explicitly incomplete and cannot pass.
             </remarks>
         </member>
@@ -874,7 +882,7 @@
             </summary>
             <remarks>
             This is separate from the identity bound because several physical instruments can share one meter name,
-            version, instrument name, and kind. When it is reached, later instances are not enabled or retained.
+            version, instrument name, and kind. Once it is full, later instances are not enabled or retained.
             </remarks>
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetOptions.MaxTrackedConflicts">
@@ -995,8 +1003,9 @@
         </member>
         <member name="F:KeelMatrix.MetricBudget.MetricBudgetOutcome.ObservationIncomplete">
             <summary>
-            Accounting could not be completed within the configured safety bounds, or the session detected an impossible
-            accounting state. The report names the bound that was reached; the observed counts are lower bounds.
+            Accounting could not retain all observations or state within the configured safety bounds, or the session
+            detected an impossible accounting state. A selector conflict or proven budget breach takes precedence over
+            this outcome; inspect the report's completeness properties and accounting flag as well.
             </summary>
         </member>
         <member name="T:KeelMatrix.MetricBudget.MetricBudgetReport">
@@ -1009,8 +1018,9 @@
             cardinality production will produce and it is not a cost estimate.
             </para>
             <para>
-            The report contains instrument identity, limits, counts, and tag keys. It never enumerates tag values, so
-            printing it in test output or CI logs does not disclose the data those tags carried.
+            The report contains application-supplied instrument identity, limits, counts, and tag keys. It never enumerates
+            tag values or metric values, but those identifiers can themselves be confidential; review them before sharing
+            output outside its intended audience.
             </para>
             </remarks>
         </member>
@@ -1048,7 +1058,7 @@
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetReport.Safety">
             <summary>
-            Safety bounds that applied to this session and whether any of them was reached.
+            Safety bounds that applied to this session and whether any rejected additional observation or state.
             </summary>
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetReport.ConfiguredRuleCount">
@@ -1074,12 +1084,13 @@
         </member>
         <member name="M:KeelMatrix.MetricBudget.MetricBudgetReport.ToDiagnosticString">
             <summary>
-            Returns an actionable, privacy-safe multi-line report.
+            Returns an actionable multi-line report without tag or metric values.
             </summary>
             <remarks>
             The text contains meter and instrument identity, configured limits, counts, tag keys, and safety-bound
-            state. It never contains tag values, metric values, or samples of measured data, which makes it safe to
-            print from a failing test.
+            state. It never contains tag values, metric values, or samples of measured data. It does contain
+            application-supplied meter names, meter versions, instrument names, and tag keys; review those identifiers
+            before sharing the text outside its intended audience.
             </remarks>
             <returns>The diagnostic report text.</returns>
         </member>
@@ -1172,12 +1183,13 @@
         </member>
         <member name="T:KeelMatrix.MetricBudget.MetricBudgetSafetyReport">
             <summary>
-            Safety bounds that applied to one session and whether any of them was reached.
+            Safety bounds that applied to one session and whether any rejected additional observation or state.
             </summary>
             <remarks>
-            These bounds keep the verifier itself bounded under explosive cardinality. They are not budgets: reaching one
-            never turns a failing workload into a passing report, it only marks the observed counts as lower bounds and
-            moves the session outcome to <see cref="F:KeelMatrix.MetricBudget.MetricBudgetOutcome.ObservationIncomplete"/>.
+            These bounds keep the verifier itself bounded under explosive cardinality. They are not budgets: rejecting
+            additional observation or state marks affected counts as lower bounds and normally moves the session outcome to
+            <see cref="F:KeelMatrix.MetricBudget.MetricBudgetOutcome.ObservationIncomplete"/>. A selector conflict or proven budget breach has higher
+            outcome precedence, so inspect the completeness properties even when the top-level outcome differs.
             </remarks>
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.MaxTrackedSeries">
@@ -1201,25 +1213,26 @@
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.SeriesTrackingIncomplete">
             <summary>
-            Whether the series safety bound for an instrument identity was reached, which makes every observed series
-            count a lower bound.
+            Whether an additional distinct series could not be retained after the series safety bound for an instrument
+            identity was full, which makes the observed series count a lower bound.
             </summary>
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.UntrackedSeriesObservations">
             <summary>
-            Measurements whose series could not be tracked because the series bound for an instrument identity was already
-            reached.
+            Measurements whose new series could not be tracked because the series bound for an instrument identity was
+            already full.
             </summary>
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.TagValueTrackingIncomplete">
             <summary>
-            Whether the per-tag value safety bound for an instrument identity was reached for at least one tag key, which
-            makes those observed distinct-value counts lower bounds.
+            Whether an additional distinct value could not be retained after the per-tag value safety bound for an
+            instrument identity was full for at least one tag key, which makes those observed distinct-value counts lower
+            bounds.
             </summary>
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.UntrackedTagValueObservations">
             <summary>
-            Measurements whose tag value could not be tracked because a per-tag bound was already reached.
+            Tag-value occurrences whose distinct value could not be tracked because a per-tag bound was already full.
             </summary>
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.MaxTrackedInstrumentIdentities">
@@ -1245,15 +1258,15 @@
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.InstrumentTrackingIncomplete">
             <summary>
-            Whether a selected identity, physical instance, or identity-length bound was reached, or a bounded
+            Whether a selected identity, physical instance, or identity-length bound rejected state, or a bounded
             name-only rejection index overflowed before a later identity was admitted.
             </summary>
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.UntrackedInstrumentIdentities">
-            <summary>Selected published identities not retained after the identity bound was reached.</summary>
+            <summary>Selected published identities not retained after the identity bound was full.</summary>
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.UntrackedInstrumentInstances">
-            <summary>Physical instrument instances not retained after the instance bound was reached.</summary>
+            <summary>Physical instrument instances not retained after the instance bound was full.</summary>
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.InstrumentIdentityLengthTrackingIncomplete">
             <summary>
@@ -1267,7 +1280,7 @@
             </summary>
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.ConflictTrackingIncomplete">
-            <summary>Whether the conflict-record bound was reached.</summary>
+            <summary>Whether the conflict-record bound was full and rejected an additional conflict record.</summary>
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.UntrackedConflicts">
             <summary>Ambiguous identities whose conflict record was not retained.</summary>
@@ -1279,10 +1292,10 @@
             <summary>Measurements whose tag set could not be canonicalized.</summary>
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.TagKeyTrackingIncomplete">
-            <summary>Whether the retained tag-key bound was reached.</summary>
+            <summary>Whether the retained tag-key bound was full and rejected an additional key.</summary>
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.UntrackedTagKeyObservations">
-            <summary>Delivered tag keys that were not retained after the key bound was reached.</summary>
+            <summary>Delivered tag keys that were not retained after the key bound was full.</summary>
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.IsComplete">
             <summary>
@@ -1314,9 +1327,10 @@
             completed session stops delivery for everything it enabled.
             </para>
             <para>
-            <b>Bounded memory.</b> A session keeps fixed-size digests under explicit safety bounds. When a bound is
-            reached, the report says tracking was incomplete and the outcome becomes
-            <see cref="F:KeelMatrix.MetricBudget.MetricBudgetOutcome.ObservationIncomplete"/> rather than a pass.
+            <b>Bounded memory.</b> A session keeps fixed-size digests under explicit safety bounds. Filling a bound does not
+            itself make tracking incomplete; when an additional observation or state entry is rejected, the report says
+            tracking was incomplete. A proven budget breach or selector conflict has higher outcome precedence, so consumers
+            must inspect the completeness flags as well as <see cref="P:KeelMatrix.MetricBudget.MetricBudgetReport.Outcome"/>.
             </para>
             </remarks>
         </member>
@@ -1382,8 +1396,9 @@
             Observed distinct values for one tag key on one instrument, and the budget that applied to it.
             </summary>
             <remarks>
-            The result contains the tag key and counts only. Tag values are never included, so a report is safe to print in
-            shared logs and CI output even when tag values contain identifiers or other sensitive data.
+            The result contains the tag key and counts only; tag values are never included. Reports still retain
+            application-supplied meter names, meter versions, instrument names, and tag keys, so review those identifiers
+            before sharing output outside its intended audience.
             <para>
             <see cref="P:KeelMatrix.MetricBudget.MetricBudgetTagResult.ObservedDistinctValueCount"/> is a lower bound whenever any tracking-completeness property is set.
             A per-tag within-budget conclusion is therefore available only when all observation paths that could affect this
@@ -1421,19 +1436,19 @@
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetTagResult.ValueTrackingIncomplete">
             <summary>
-            Whether the per-tag value bound for this instrument identity was reached for this key, which means the
-            observed count is a lower bound and no within-budget conclusion can be drawn from it.
+            Whether the per-tag value bound for this instrument identity was full and rejected an additional distinct value
+            for this key, which means the observed count is a lower bound and no within-budget conclusion can be drawn.
             </summary>
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetTagResult.UntrackedValueObservations">
             <summary>
-            Measurements whose tag value could not be tracked because the safety bound was already reached.
+            Tag-value occurrences whose distinct value could not be tracked because the safety bound was already full.
             </summary>
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetTagResult.SeriesTrackingIncomplete">
             <summary>
-            Whether the instrument's series bound was reached. The observed value count may be incomplete because an
-            untracked series could have carried this key.
+            Whether the instrument's series bound was full and rejected an additional series. The observed value count may
+            be incomplete because the untracked series could have carried this key.
             </summary>
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetTagResult.TagSetTrackingIncomplete">
@@ -1444,8 +1459,8 @@
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetTagResult.TagKeyTrackingIncomplete">
             <summary>
-            Whether the instrument's retained tag-key bound was reached. The observed value count may be incomplete
-            because this key could have been among the keys that were not retained.
+            Whether the instrument's retained tag-key bound was full and rejected an additional key. The observed value
+            count may be incomplete because this key could have been among the keys that were not retained.
             </summary>
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetTagResult.InstrumentTrackingIncomplete">
@@ -1484,7 +1499,7 @@
             <summary>A selected instrument was published but delivered no measurements.</summary>
         </member>
         <member name="F:KeelMatrix.MetricBudget.MetricBudgetViolationKind.SafetyLimitReached">
-            <summary>A safety bound for an instrument identity was reached, so the observed counts are lower bounds.</summary>
+            <summary>A safety bound rejected additional observation or state, so affected observed counts are lower bounds.</summary>
         </member>
         <member name="F:KeelMatrix.MetricBudget.MetricBudgetViolationKind.ConfigurationInvalid">
             <summary>One instrument identity matched more than one rule, so no budget can be applied.</summary>
@@ -1511,7 +1526,8 @@
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetViolation.Description">
             <summary>
-            Actionable, privacy-safe description of the problem.
+            Actionable description of the problem. It excludes tag values and metric values but can contain application-
+            supplied identity and tag keys.
             </summary>
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetViolation.MeterName">

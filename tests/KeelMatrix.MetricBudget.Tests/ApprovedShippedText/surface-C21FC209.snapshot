@@ -15,8 +15,10 @@ It cannot answer a different question:
   exercised, not from a static analysis of the source.
 - Series identity is deterministic and order-independent, so the count reflects distinct tag combinations rather
   than traffic volume.
-- Counts are exact while the safety bounds hold; when a bound is reached the report says so and the outcome is
-  `ObservationIncomplete` instead of a pass.
+- Counts are exact while the safety bounds hold. Filling a bound is not itself incomplete: existing retained state is
+  still recognized. If an additional observation or state entry is rejected, the affected counts become lower bounds
+  and completeness flags are set. A proven budget breach or selector conflict has higher outcome precedence, so
+  consumers must inspect the flags as well as the top-level outcome.
 
 ## What it does not mean
 
@@ -35,5 +37,6 @@ It cannot answer a different question:
   threshold, because no default is universally safe.
 - Treat a rising observed-series count as a design signal about tag fan-out, and re-run the workload whenever a
   tag is added or changed.
-- Keep the report in CI output. It contains tag keys and counts, which usually explain a breach without exposing
-  the values.
+- Reports exclude tag and metric values but contain application-supplied meter names, versions, instrument names, and
+  tag keys. Review those identifiers before sharing output outside its intended audience. See
+  [privacy-and-telemetry.md](privacy-and-telemetry.md).

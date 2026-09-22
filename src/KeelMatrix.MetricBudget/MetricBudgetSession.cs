@@ -29,9 +29,10 @@ namespace KeelMatrix.MetricBudget;
 /// completed session stops delivery for everything it enabled.
 /// </para>
 /// <para>
-/// <b>Bounded memory.</b> A session keeps fixed-size digests under explicit safety bounds. When a bound is
-/// reached, the report says tracking was incomplete and the outcome becomes
-/// <see cref="MetricBudgetOutcome.ObservationIncomplete"/> rather than a pass.
+/// <b>Bounded memory.</b> A session keeps fixed-size digests under explicit safety bounds. Filling a bound does not
+/// itself make tracking incomplete; when an additional observation or state entry is rejected, the report says
+/// tracking was incomplete. A proven budget breach or selector conflict has higher outcome precedence, so consumers
+/// must inspect the completeness flags as well as <see cref="MetricBudgetReport.Outcome"/>.
 /// </para>
 /// </remarks>
 public sealed class MetricBudgetSession : IDisposable

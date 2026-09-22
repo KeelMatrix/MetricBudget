@@ -117,6 +117,43 @@ public sealed class ConcurrentAccountingTests
     }
 
     [Fact]
+    public void ImpossibleDuplicateKeyAccountingStateIsReportedAsInconsistent()
+    {
+        InstrumentIdentity identity = new InstrumentIdentity("meter", "1.0.0", "instrument", MetricInstrumentKind.Counter);
+        TagValueSnapshot impossibleTag = new TagValueSnapshot(
+            TagIdentity.EncodeKeyField("k"),
+            observedDistinctValueCount: 2,
+            observedValueOccurrenceCount: 1,
+            valueTrackingIncomplete: false,
+            untrackedValueObservations: 0);
+        InstrumentAccountSnapshot impossible = new InstrumentAccountSnapshot(
+            identity,
+            ruleIndex: 0,
+            measurementCount: 1,
+            newSeriesObservations: 1,
+            existingSeriesObservations: 0,
+            untrackedSeriesObservations: 0,
+            observedSeriesCount: 1,
+            seriesCapExhausted: false,
+            tagValueCapExhausted: false,
+            tags: new[] { impossibleTag });
+
+        SessionSnapshot snapshot = new SessionSnapshot(
+            new[] { impossible },
+            Array.Empty<ConfigurationConflictSnapshot>(),
+            measurementsDelivered: 1,
+            unmatchedMeasurements: 0,
+            maxTrackedSeries: 100,
+            maxTrackedValuesPerTag: 100,
+            maxTagValueLength: 256);
+
+        List<string> problems = new List<string>();
+
+        Assert.False(AccountingInvariants.Validate(snapshot, problems));
+        Assert.Contains(problems, problem => problem.Contains("distinct tag values", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void UnattributedMeasurementsAreReportedAsInconsistent()
     {
         SessionSnapshot snapshot = new SessionSnapshot(

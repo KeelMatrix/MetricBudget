@@ -94,27 +94,27 @@ public sealed class MetricBudgetInstrumentResult
     public int? ConfiguredMaxObservedSeries { get; }
 
     /// <summary>
-    /// Measurements whose series could not be tracked because the series safety bound for this instrument identity
-    /// was already reached.
+    /// Measurements whose new series could not be tracked because the series safety bound for this instrument identity
+    /// was already full.
     /// </summary>
     public long UntrackedSeriesObservations { get; }
 
     /// <summary>
-    /// Whether the series safety bound for this instrument identity was reached, which means
-    /// <see cref="ObservedSeriesCount"/> is a lower bound.
+    /// Whether an additional distinct series was rejected because the series safety bound for this instrument identity
+    /// was full, which means <see cref="ObservedSeriesCount"/> is a lower bound.
     /// </summary>
     public bool SeriesTrackingIncomplete { get; }
 
     /// <summary>Measurements whose tag set could not be canonically tracked.</summary>
     public long UntrackedTagSetObservations { get; }
 
-    /// <summary>Delivered tag keys that could not be retained after the per-instrument key bound was reached.</summary>
+    /// <summary>Delivered tag keys that could not be retained after the per-instrument key bound was full.</summary>
     public long UntrackedTagKeyObservations { get; }
 
     /// <summary>Whether a tag set was rejected because it was oversized or contained an unsupported value.</summary>
     public bool TagSetTrackingIncomplete { get; }
 
-    /// <summary>Whether the per-instrument retained tag-key bound was reached.</summary>
+    /// <summary>Whether the per-instrument retained tag-key bound was full and rejected an additional key.</summary>
     public bool TagKeyTrackingIncomplete { get; }
 
     /// <summary>

@@ -3,12 +3,13 @@
 namespace KeelMatrix.MetricBudget;
 
 /// <summary>
-/// Safety bounds that applied to one session and whether any of them was reached.
+/// Safety bounds that applied to one session and whether any rejected additional observation or state.
 /// </summary>
 /// <remarks>
-/// These bounds keep the verifier itself bounded under explosive cardinality. They are not budgets: reaching one
-/// never turns a failing workload into a passing report, it only marks the observed counts as lower bounds and
-/// moves the session outcome to <see cref="MetricBudgetOutcome.ObservationIncomplete"/>.
+/// These bounds keep the verifier itself bounded under explosive cardinality. They are not budgets: rejecting
+/// additional observation or state marks affected counts as lower bounds and normally moves the session outcome to
+/// <see cref="MetricBudgetOutcome.ObservationIncomplete"/>. A selector conflict or proven budget breach has higher
+/// outcome precedence, so inspect the completeness properties even when the top-level outcome differs.
 /// </remarks>
 public sealed class MetricBudgetSafetyReport
 {
@@ -86,25 +87,26 @@ public sealed class MetricBudgetSafetyReport
     public int MaxTagValueLength { get; }
 
     /// <summary>
-    /// Whether the series safety bound for an instrument identity was reached, which makes every observed series
-    /// count a lower bound.
+    /// Whether an additional distinct series could not be retained after the series safety bound for an instrument
+    /// identity was full, which makes the observed series count a lower bound.
     /// </summary>
     public bool SeriesTrackingIncomplete { get; }
 
     /// <summary>
-    /// Measurements whose series could not be tracked because the series bound for an instrument identity was already
-    /// reached.
+    /// Measurements whose new series could not be tracked because the series bound for an instrument identity was
+    /// already full.
     /// </summary>
     public long UntrackedSeriesObservations { get; }
 
     /// <summary>
-    /// Whether the per-tag value safety bound for an instrument identity was reached for at least one tag key, which
-    /// makes those observed distinct-value counts lower bounds.
+    /// Whether an additional distinct value could not be retained after the per-tag value safety bound for an
+    /// instrument identity was full for at least one tag key, which makes those observed distinct-value counts lower
+    /// bounds.
     /// </summary>
     public bool TagValueTrackingIncomplete { get; }
 
     /// <summary>
-    /// Measurements whose tag value could not be tracked because a per-tag bound was already reached.
+    /// Tag-value occurrences whose distinct value could not be tracked because a per-tag bound was already full.
     /// </summary>
     public long UntrackedTagValueObservations { get; }
 
@@ -130,15 +132,15 @@ public sealed class MetricBudgetSafetyReport
     public int MaxTagKeyLength { get; }
 
     /// <summary>
-    /// Whether a selected identity, physical instance, or identity-length bound was reached, or a bounded
+    /// Whether a selected identity, physical instance, or identity-length bound rejected state, or a bounded
     /// name-only rejection index overflowed before a later identity was admitted.
     /// </summary>
     public bool InstrumentTrackingIncomplete { get; }
 
-    /// <summary>Selected published identities not retained after the identity bound was reached.</summary>
+    /// <summary>Selected published identities not retained after the identity bound was full.</summary>
     public long UntrackedInstrumentIdentities { get; }
 
-    /// <summary>Physical instrument instances not retained after the instance bound was reached.</summary>
+    /// <summary>Physical instrument instances not retained after the instance bound was full.</summary>
     public long UntrackedInstrumentInstances { get; }
 
     /// <summary>
@@ -152,7 +154,7 @@ public sealed class MetricBudgetSafetyReport
     /// </summary>
     public long UntrackedInstrumentIdentityLengths { get; }
 
-    /// <summary>Whether the conflict-record bound was reached.</summary>
+    /// <summary>Whether the conflict-record bound was full and rejected an additional conflict record.</summary>
     public bool ConflictTrackingIncomplete { get; }
 
     /// <summary>Ambiguous identities whose conflict record was not retained.</summary>
@@ -164,10 +166,10 @@ public sealed class MetricBudgetSafetyReport
     /// <summary>Measurements whose tag set could not be canonicalized.</summary>
     public long UntrackedTagSetObservations { get; }
 
-    /// <summary>Whether the retained tag-key bound was reached.</summary>
+    /// <summary>Whether the retained tag-key bound was full and rejected an additional key.</summary>
     public bool TagKeyTrackingIncomplete { get; }
 
-    /// <summary>Delivered tag keys that were not retained after the key bound was reached.</summary>
+    /// <summary>Delivered tag keys that were not retained after the key bound was full.</summary>
     public long UntrackedTagKeyObservations { get; }
 
     /// <summary>

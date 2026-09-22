@@ -123,13 +123,13 @@ internal static class AccountingInvariants
                         + snapshot.MaxTrackedValuesPerTag.ToString(CultureInfo.InvariantCulture) + ")");
                 }
 
-                if (tag.ObservedDistinctValueCount > instrument.MeasurementCount)
+                if (tag.ObservedDistinctValueCount > tag.ObservedValueOccurrenceCount)
                 {
                     problems.Add(
-                        "accounting is inconsistent for " + identity + ": tag value count ("
+                        "accounting is inconsistent for " + identity + ": distinct tag values ("
                         + tag.ObservedDistinctValueCount.ToString(CultureInfo.InvariantCulture)
-                        + ") exceeds the measurement count ("
-                        + instrument.MeasurementCount.ToString(CultureInfo.InvariantCulture) + ")");
+                        + ") exceed observed value occurrences ("
+                        + tag.ObservedValueOccurrenceCount.ToString(CultureInfo.InvariantCulture) + ")");
                 }
             }
         }

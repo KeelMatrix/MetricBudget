@@ -15,8 +15,9 @@ namespace KeelMatrix.MetricBudget;
 /// cardinality production will produce and it is not a cost estimate.
 /// </para>
 /// <para>
-/// The report contains instrument identity, limits, counts, and tag keys. It never enumerates tag values, so
-/// printing it in test output or CI logs does not disclose the data those tags carried.
+/// The report contains application-supplied instrument identity, limits, counts, and tag keys. It never enumerates
+/// tag values or metric values, but those identifiers can themselves be confidential; review them before sharing
+/// output outside its intended audience.
 /// </para>
 /// </remarks>
 public sealed class MetricBudgetReport
@@ -77,7 +78,7 @@ public sealed class MetricBudgetReport
     public IReadOnlyList<MetricBudgetViolation> Violations { get; }
 
     /// <summary>
-    /// Safety bounds that applied to this session and whether any of them was reached.
+    /// Safety bounds that applied to this session and whether any rejected additional observation or state.
     /// </summary>
     public MetricBudgetSafetyReport Safety { get; }
 
@@ -103,12 +104,13 @@ public sealed class MetricBudgetReport
     public int ObservedSeriesCount { get; }
 
     /// <summary>
-    /// Returns an actionable, privacy-safe multi-line report.
+    /// Returns an actionable multi-line report without tag or metric values.
     /// </summary>
     /// <remarks>
     /// The text contains meter and instrument identity, configured limits, counts, tag keys, and safety-bound
-    /// state. It never contains tag values, metric values, or samples of measured data, which makes it safe to
-    /// print from a failing test.
+    /// state. It never contains tag values, metric values, or samples of measured data. It does contain
+    /// application-supplied meter names, meter versions, instrument names, and tag keys; review those identifiers
+    /// before sharing the text outside its intended audience.
     /// </remarks>
     /// <returns>The diagnostic report text.</returns>
     public string ToDiagnosticString()
@@ -241,7 +243,7 @@ public sealed class MetricBudgetReport
             MetricBudgetOutcome.InvalidConfiguration => "INVALID CONFIGURATION (no verification result)",
             MetricBudgetOutcome.NoMatchingInstrument => "NO MATCHING INSTRUMENT (nothing was verified)",
             MetricBudgetOutcome.NoMeasurementsObserved => "NO MEASUREMENTS OBSERVED (nothing was verified)",
-            MetricBudgetOutcome.ObservationIncomplete => "INCOMPLETE (safety bound reached; counts are lower bounds)",
+            MetricBudgetOutcome.ObservationIncomplete => "INCOMPLETE (state could not be fully tracked; counts may be lower bounds)",
             _ => outcome.ToString(),
         };
     }

@@ -127,5 +127,8 @@ runner prints the measured keys for those cases and fails if the printed rule an
 - `tests/MetricBudget.Probe.Net472Host` — the downlevel host that runs the `netstandard2.0` implementation on
   .NET Framework against the package's `netstandard2.0` asset.
 
-All projects are non-packable. `IsPackable` is `false` for every project, and the repository intentionally
-contains no workflow configuration.
+Those observations were scoped to the Phase 0 probe projects and the probe-era repository state; they are not
+current repository-wide claims. In the shipping repository, `src/KeelMatrix.MetricBudget` is the packable library
+project, while the probe, test, sample, and package-consumer projects remain non-shipping evidence or validation
+projects. The repository also has current CI and release workflow configuration in `.github/workflows/ci.yml` and
+`.github/workflows/release.yml`; the release workflow is tag-triggered.

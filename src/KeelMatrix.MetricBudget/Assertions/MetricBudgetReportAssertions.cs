@@ -10,9 +10,10 @@ namespace KeelMatrix.MetricBudget.Assertions;
 /// <remarks>
 /// <para>
 /// The helpers take no dependency on a test framework. They throw
-/// <see cref="MetricBudgetAssertionException"/>, whose message is the privacy-safe diagnostic report, so a failure
-/// in any framework names the instrument, the breached budget, the observed count, and the configured limit
-/// without printing tag values.
+/// <see cref="MetricBudgetAssertionException"/>, whose message is a diagnostic report, so a failure in any
+/// framework names the instrument, the breached budget, the observed count, and the configured limit without
+/// printing tag values. The report can still contain application-supplied identity and tag keys; review those
+/// identifiers before sharing an assertion message outside its intended audience.
 /// </para>
 /// <para>
 /// Focused budget helpers fail closed when their target delivered no measurements or its accounting was incomplete.
@@ -35,7 +36,7 @@ public static class MetricBudgetReportAssertions
     /// <exception cref="ArgumentNullException"><paramref name="report"/> is null.</exception>
     /// <exception cref="MetricBudgetAssertionException">
     /// The outcome is not <see cref="MetricBudgetOutcome.Passed"/>, including when nothing was observed, the
-    /// configuration was rejected, or a safety bound was reached.
+    /// configuration was rejected, or a safety bound rejected additional state.
     /// </exception>
     public static MetricBudgetReport AssertWithinBudget(this MetricBudgetReport report)
     {

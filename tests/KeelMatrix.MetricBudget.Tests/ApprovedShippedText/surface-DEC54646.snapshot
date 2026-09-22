@@ -25,8 +25,10 @@ The package observes `System.Diagnostics.Metrics` measurements from code running
 read metric values, and its bounded accounting state retains only fixed-size digests rather than raw tag values.
 Transient managed strings and byte buffers can briefly contain tag-derived data while a callback builds and hashes
 an identity; reusable hash scratch is cleared after each digest, but ordinary process memory is not a secure-erasure
-boundary. It opens no network connections except the anonymous telemetry signal described in
-[PRIVACY.md](PRIVACY.md). A report or assertion message never contains tag values.
+ boundary. It opens no network connections except the anonymous telemetry signal described in
+[PRIVACY.md](PRIVACY.md). Reports and assertion messages never contain tag values, metric values, or workload
+samples, but they retain application-supplied meter names, meter versions, instrument names, and tag keys. Review
+those identifiers before sharing diagnostics outside their intended audience.
 
 ## Supported Versions
 

@@ -56,13 +56,15 @@ either package-backed consumer. A plain solution build therefore never depends o
 
 - **Observed cardinality only.** Diagnostics say "observed series" or "observed cardinality". Never imply static
   proof of production maximums, and never present a default budget as universally safe.
-- **Privacy.** Reports, diagnostics, and assertion messages contain tag keys and counts, never tag values, metric
-  values, or workload samples. Bounded accounting retains only fixed-size digests of series and tag values. Hashing
-  can still create ordinary transient managed strings and byte buffers; reusable scratch is cleared after each
-  digest, but the package does not promise secure erasure from process memory.
-- **Bounded accounting.** Series and per-tag distinct-value accounting stay inside explicit safety bounds. A
-  bounded run is reported as incomplete, counts become documented lower bounds, and an untracked observation is
-  never matched to an existing series.
+- **Privacy.** Reports, diagnostics, and assertion messages contain application-supplied meter and instrument
+  identifiers, tag keys, and counts, but never tag values, metric values, or workload samples. Review those
+  identifiers before sharing output outside its intended audience. Bounded accounting retains only fixed-size digests
+  of series and tag values. Hashing can still create ordinary transient managed strings and byte buffers; reusable
+  scratch is cleared after each digest, but the package does not promise secure erasure from process memory.
+- **Bounded accounting.** Series and per-tag distinct-value accounting stay inside explicit safety bounds. Filling a
+  bound is not itself incomplete; when an additional observation or state entry is rejected, affected counts become
+  documented lower bounds, and an untracked observation is never matched to an existing series. Conflicts and proven
+  budget breaches have higher outcome precedence than incompleteness.
 - **One writer path.** Measurement callbacks, session bookkeeping, and summaries all serialize on one lock, and a
   summary is a single consistent snapshot. An impossible account fails loudly instead of passing.
 - **Explicit containment.** A session calls `DisableMeasurementEvents` for every instrument it enabled, because

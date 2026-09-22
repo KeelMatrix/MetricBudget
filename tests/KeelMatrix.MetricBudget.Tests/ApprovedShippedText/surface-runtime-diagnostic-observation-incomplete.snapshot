@@ -1,4 +1,4 @@
-MetricBudget observed-cardinality report: INCOMPLETE (safety bound reached; counts are lower bounds)
+MetricBudget observed-cardinality report: INCOMPLETE (state could not be fully tracked; counts may be lower bounds)
   rules: 1; instruments observed: 1; observed series: 1; measurements: 2
   safety bounds per instrument identity: series 1, values per tag 5000, tag value length 256; accounting complete: False; accounting consistent: True
   rule 1: instrument "requests" in meter "tests.metricbudget.documentation-scope.observation-incomplete" -> Observed

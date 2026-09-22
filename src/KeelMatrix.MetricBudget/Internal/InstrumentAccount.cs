@@ -140,12 +140,16 @@ internal sealed class InstrumentAccount
     {
         private readonly HashSet<Sha256Digest> values = new();
 
+        private long observedValueOccurrenceCount;
+
         private bool capExhausted;
 
         private long untrackedValueObservations;
 
         internal void Record(Sha256Digest valueDigest, int maxTrackedValuesPerTag)
         {
+            observedValueOccurrenceCount++;
+
             if (values.Contains(valueDigest))
             {
                 return;
@@ -163,7 +167,12 @@ internal sealed class InstrumentAccount
 
         internal TagValueSnapshot CreateSnapshot(string keyField)
         {
-            return new TagValueSnapshot(keyField, values.Count, capExhausted, untrackedValueObservations);
+            return new TagValueSnapshot(
+                keyField,
+                values.Count,
+                observedValueOccurrenceCount,
+                capExhausted,
+                untrackedValueObservations);
         }
     }
 }
