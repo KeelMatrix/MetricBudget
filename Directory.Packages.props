@@ -7,7 +7,7 @@
     <PackageVersion Include="System.Diagnostics.DiagnosticSource" Version="8.0.1" />
 
     <!-- Shared KeelMatrix telemetry for the anonymous activation/heartbeat signal. -->
-    <PackageVersion Include="KeelMatrix.Telemetry" Version="[0.1.0]" />
+    <PackageVersion Include="KeelMatrix.Telemetry" Version="[0.1.1]" />
 
     <!-- Consumed only by the isolated package-consumer smoke test and package-backed sample. -->
     <PackageVersion Include="KeelMatrix.MetricBudget" Version="[0.1.0]" />

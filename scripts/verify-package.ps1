@@ -394,12 +394,12 @@ function Assert-PackageMetadata {
 
         if ($targetFramework -ieq "net8.0")
         {
-            Assert-ContainsExactly $actualDependencies @("KeelMatrix.Telemetry [0.1.0]") "net8.0 dependency set mismatch."
+            Assert-ContainsExactly $actualDependencies @("KeelMatrix.Telemetry [0.1.1]") "net8.0 dependency set mismatch."
         }
         elseif ($targetFramework -ieq ".NETStandard2.0" -or $targetFramework -ieq "netstandard2.0")
         {
             Assert-ContainsExactly $actualDependencies @(
-                "KeelMatrix.Telemetry [0.1.0]",
+                "KeelMatrix.Telemetry [0.1.1]",
                 "System.Diagnostics.DiagnosticSource 8.0.1") "netstandard2.0 dependency set mismatch."
         }
         else

@@ -108,9 +108,9 @@ foreach ($node in @($packages.SelectNodes("/*[local-name()='Project']/*[local-na
     $packageVersions[$node.GetAttribute("Include")] = $node.GetAttribute("Version")
 }
 
-if (-not $packageVersions.ContainsKey("KeelMatrix.Telemetry") -or $packageVersions["KeelMatrix.Telemetry"] -ne "[0.1.0]")
+if (-not $packageVersions.ContainsKey("KeelMatrix.Telemetry") -or $packageVersions["KeelMatrix.Telemetry"] -ne "[0.1.1]")
 {
-    Fail "Dependency metadata mismatch: KeelMatrix.Telemetry must use the exact range [0.1.0]."
+    Fail "Dependency metadata mismatch: KeelMatrix.Telemetry must use the exact range [0.1.1]."
 }
 if (-not $packageVersions.ContainsKey("System.Diagnostics.DiagnosticSource") -or $packageVersions["System.Diagnostics.DiagnosticSource"] -ne "8.0.1")
 {

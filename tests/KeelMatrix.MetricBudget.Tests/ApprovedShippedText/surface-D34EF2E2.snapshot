@@ -63,7 +63,7 @@ application, repository, or project names, stack traces, user-provided budget te
 paths. The allowlist is a closed internal type with no free-form dictionary, and tests assert that every field the
 product supplies is on it and that a hostile workload's names and values cannot appear in the signal.
 
-`KeelMatrix.Telemetry` 0.1.0 exposes activation and heartbeat events with its own fixed schema and no
+`KeelMatrix.Telemetry` 0.1.1 exposes activation and heartbeat events with its own fixed schema and no
 product-specific fields, and this product's sink forwards only those two calls. The transmitted payload is
 therefore the shared schema alone; nothing in the table above is currently sent, and no field can be sent without
 being added to this allowlist first.

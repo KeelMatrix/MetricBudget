@@ -536,7 +536,7 @@
             dictionary a caller could extend.
             </para>
             <para>
-            <c>KeelMatrix.Telemetry</c> 0.1.0 exposes activation and heartbeat events with its own fixed schema and no
+            <c>KeelMatrix.Telemetry</c> 0.1.1 exposes activation and heartbeat events with its own fixed schema and no
             product-specific fields, so the aggregate signal is currently used to decide activation and heartbeat
             semantics and to prove the allowlist, not to extend the transmitted payload.
             </para>
