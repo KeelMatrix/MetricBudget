@@ -74,6 +74,8 @@ anonymous telemetry and opt-out rules are documented in
 
 ## Documentation
 
+- [examples.md](https://github.com/KeelMatrix/MetricBudget/blob/main/docs/examples.md) - canonical custom-meter and
+  ASP.NET Core/OpenTelemetry-flavored consumer examples.
 - [safety-bounds.md](https://github.com/KeelMatrix/MetricBudget/blob/main/docs/safety-bounds.md) - bounded memory,
   lifecycle state, and outcome precedence.
 - [troubleshooting.md](https://github.com/KeelMatrix/MetricBudget/blob/main/docs/troubleshooting.md) - recurring

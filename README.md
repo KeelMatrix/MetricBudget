@@ -90,6 +90,8 @@ explicitly after packing rather than as part of a normal solution build.
 
 ## Documentation
 
+- [docs/examples.md](docs/examples.md) - canonical custom-meter and ASP.NET Core/OpenTelemetry-flavored consumer
+  examples.
 - [docs/series-identity.md](docs/series-identity.md) - the exact, deterministic series identity rule.
 - [docs/observed-vs-production-cardinality.md](docs/observed-vs-production-cardinality.md) - what a passing run
   does and does not tell you.
