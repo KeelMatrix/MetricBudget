@@ -34,6 +34,10 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Check full commit history
+        shell: bash
+        run: sh .githooks/check-history
+
       - name: Verify release source provenance
         shell: pwsh
         env:
