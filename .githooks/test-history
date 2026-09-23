@@ -1,0 +1,79 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+temp_root=$(mktemp -d "${TMPDIR:-/tmp}/metricbudget-history.XXXXXX")
+trap 'rm -rf "$temp_root"' EXIT HUP INT TERM
+
+repo="$temp_root/repository"
+mkdir "$repo"
+git -C "$repo" init -q
+git -C "$repo" config user.name "KeelMatrix"
+git -C "$repo" config user.email "keelmatrix@gmail.com"
+
+printf '%s\n' 'initial' > "$repo/state.txt"
+git -C "$repo" add state.txt
+git -C "$repo" commit -q -m 'Initialize history guard fixture'
+
+if ! (cd "$repo" && sh "$script_dir/check-history"); then
+    echo "HISTORY_SELF_TEST=FAIL case=clean-history" >&2
+    exit 1
+fi
+echo "HISTORY_SELF_TEST=PASS case=clean-history"
+
+printf '%s\n' 'second' >> "$repo/state.txt"
+git -C "$repo" add state.txt
+git -C "$repo" commit -q -m 'Update project notes'
+
+if ! (cd "$repo" && sh "$script_dir/check-history"); then
+    echo "HISTORY_SELF_TEST=FAIL case=ordinary-developer-message" >&2
+    exit 1
+fi
+echo "HISTORY_SELF_TEST=PASS case=ordinary-developer-message"
+
+shallow="$temp_root/shallow"
+git clone -q --depth 1 "file://$repo" "$shallow"
+if (cd "$shallow" && sh "$script_dir/check-history"); then
+    echo "HISTORY_SELF_TEST=FAIL case=shallow-history" >&2
+    exit 1
+fi
+echo "HISTORY_SELF_TEST=PASS case=shallow-history-rejected"
+
+printf '%s\n' 'forbidden' >> "$repo/state.txt"
+git -C "$repo" add state.txt
+git -C "$repo" commit --no-verify -q -m 'Guard fixture' -m 'Co-Authored-By: Somebody <somebody@example.com>'
+if (cd "$repo" && sh "$script_dir/check-history"); then
+    echo "HISTORY_SELF_TEST=FAIL case=attribution-trailer" >&2
+    exit 1
+fi
+echo "HISTORY_SELF_TEST=PASS case=attribution-trailer-rejected"
+
+author_repo="$temp_root/non-allowed-author"
+mkdir "$author_repo"
+git -C "$author_repo" init -q
+git -C "$author_repo" config user.name "KeelMatrix"
+git -C "$author_repo" config user.email "keelmatrix@gmail.com"
+printf '%s\n' 'author fixture' > "$author_repo/state.txt"
+git -C "$author_repo" add state.txt
+GIT_AUTHOR_NAME="Somebody" GIT_AUTHOR_EMAIL="somebody@example.com" \
+    git -C "$author_repo" commit --no-verify -q -m 'Author identity fixture'
+if (cd "$author_repo" && sh "$script_dir/check-history"); then
+    echo "HISTORY_SELF_TEST=FAIL case=non-allowed-author" >&2
+    exit 1
+fi
+echo "HISTORY_SELF_TEST=PASS case=non-allowed-author-rejected"
+
+committer_repo="$temp_root/non-allowed-committer"
+mkdir "$committer_repo"
+git -C "$committer_repo" init -q
+git -C "$committer_repo" config user.name "KeelMatrix"
+git -C "$committer_repo" config user.email "keelmatrix@gmail.com"
+printf '%s\n' 'committer fixture' > "$committer_repo/state.txt"
+git -C "$committer_repo" add state.txt
+GIT_COMMITTER_NAME="Somebody" GIT_COMMITTER_EMAIL="somebody@example.com" \
+    git -C "$committer_repo" commit --no-verify -q -m 'Committer identity fixture'
+if (cd "$committer_repo" && sh "$script_dir/check-history"); then
+    echo "HISTORY_SELF_TEST=FAIL case=non-allowed-committer" >&2
+    exit 1
+fi
+echo "HISTORY_SELF_TEST=PASS case=non-allowed-committer-rejected"

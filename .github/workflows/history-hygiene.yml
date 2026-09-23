@@ -24,10 +24,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Check full commit history
+      - name: Check commit authorship and history
         shell: bash
         run: sh .githooks/check-history
 
-      - name: Run guard self-test
+      - name: Run history guard self-test
         shell: bash
         run: sh .githooks/test-history

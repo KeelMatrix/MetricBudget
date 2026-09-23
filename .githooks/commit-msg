@@ -1,0 +1,32 @@
+#!/bin/sh
+set -eu
+
+case "$#" in
+    0)
+        message=$(cat)
+        ;;
+    1)
+        if [ "$1" = "-" ]; then
+            message=$(cat)
+        else
+            if [ ! -f "$1" ]; then
+                echo "HISTORY_GUARD=FAIL reason=commit-message-file-missing" >&2
+                exit 1
+            fi
+            message=$(cat "$1")
+        fi
+        ;;
+    *)
+        echo "HISTORY_GUARD=FAIL reason=unexpected-arguments" >&2
+        exit 1
+        ;;
+esac
+
+forbidden_attribution_trailer='(^|[[:space:]])[[:alnum:]][[:alnum:]-]*-by[[:space:]]*:'
+
+if printf '%s\n' "$message" | LC_ALL=C grep -Eiq "$forbidden_attribution_trailer"; then
+    echo "HISTORY_GUARD=FAIL reason=forbidden-attribution-trailer" >&2
+    exit 1
+fi
+
+echo "HISTORY_GUARD=PASS check=commit-message"

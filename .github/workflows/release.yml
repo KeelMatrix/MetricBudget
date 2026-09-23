@@ -34,7 +34,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Check full commit history
+      - name: Check commit authorship and history
         shell: bash
         run: sh .githooks/check-history
 

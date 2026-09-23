@@ -1,0 +1,59 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+
+is_allowed_identity() {
+    case "$1" in
+        'KeelMatrix <keelmatrix@gmail.com>'|'dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>')
+            return 0
+            ;;
+    esac
+
+    return 1
+}
+
+if ! shallow_state=$(git rev-parse --is-shallow-repository 2>/dev/null); then
+    echo "HISTORY_GUARD=FAIL reason=not-a-git-repository" >&2
+    exit 1
+fi
+
+if [ "$shallow_state" = "true" ]; then
+    echo "HISTORY_GUARD=FAIL reason=shallow-history" >&2
+    exit 1
+fi
+
+if ! commits=$(git rev-list --all); then
+    echo "HISTORY_GUARD=FAIL reason=history-enumeration" >&2
+    exit 1
+fi
+
+if [ -z "$commits" ]; then
+    echo "HISTORY_GUARD=FAIL reason=no-reachable-commits" >&2
+    exit 1
+fi
+
+commit_count=0
+for commit in $commits; do
+    commit_count=$((commit_count + 1))
+    if ! metadata=$(git cat-file commit "$commit"); then
+        echo "HISTORY_GUARD=FAIL reason=commit-read commit=$commit" >&2
+        exit 1
+    fi
+
+    author=$(printf '%s\n' "$metadata" | sed -n 's/^author \(.* <[^>]*>\) [0-9][0-9]* [+-][0-9][0-9]*$/\1/p')
+    committer=$(printf '%s\n' "$metadata" | sed -n 's/^committer \(.* <[^>]*>\) [0-9][0-9]* [+-][0-9][0-9]*$/\1/p')
+    if [ -z "$author" ] || [ -z "$committer" ] \
+        || ! is_allowed_identity "$author" \
+        || ! is_allowed_identity "$committer"; then
+        echo "HISTORY_GUARD=FAIL reason=unauthorized-identity commit=$commit" >&2
+        exit 1
+    fi
+
+    if ! printf '%s\n' "$metadata" | sh "$script_dir/commit-msg" - >/dev/null; then
+        echo "HISTORY_GUARD=FAIL reason=forbidden-attribution-trailer commit=$commit" >&2
+        exit 1
+    fi
+done
+
+echo "HISTORY_GUARD=PASS check=reachable-history commits=$commit_count"
