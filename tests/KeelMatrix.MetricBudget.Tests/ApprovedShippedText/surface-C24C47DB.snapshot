@@ -1,0 +1,9 @@
+# Commit history guard
+
+The versioned hook rejects identity trailers, provider and model names, and internal task wording from new commit messages. The history checker scans every reachable commit and fails closed for shallow repositories.
+
+Activate the local hook with:
+
+`git config core.hooksPath .githooks`
+
+Run `sh .githooks/check-history` when validating a full clone. Run `sh .githooks/test-history` to exercise the clean, forbidden-metadata, and shallow-history cases.
