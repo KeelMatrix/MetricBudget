@@ -6,25 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-09-24
+
 ### Added
 
-- Observed-cardinality verification for `System.Diagnostics.Metrics`: a session selects instruments, observes the
-  measurements a workload emits, and reports the distinct observed series and distinct per-tag values it produced.
-- Explicit per-instrument observed-series budgets and per-tag distinct-value budgets, with order-independent,
-  deterministic series identity.
-- A structured report with observed counts, configured limits, offending tag keys, and series-growth diagnostics
-  that never contains tag values.
-- Test-friendly assertion helpers that require no test-framework dependency and fail with privacy-safe diagnostics.
-- Explicit outcomes for a budget violation, invalid configuration, an instrument that was never observed, a
-  session that observed no measurements, and incomplete accounting.
-- Hard in-memory safety bounds over retained identities, physical instances, conflicts, series, tag keys, tag sets,
-  and tag values, with explicit bounded-state diagnostics that can never be reported as a pass.
-
-### Fixed
-
-- Preserve lossless supported tag identity semantics, reject unsupported values without invoking user formatting, and
-  close session shutdown races, report mutability, ambiguous focused assertions, observable-listener coexistence, and
-  duplicate symbols publication paths.
-- Propagate bounded rejected-name index overflow uncertainty to later admitted instrument and tag results so focused
-  assertions fail closed, and make repository-owned development and validation entry points explicitly opt out of
-  production telemetry without tracking a local configuration file.
+- A cross-targeted `net8.0` and `netstandard2.0` package for verifying observed `System.Diagnostics.Metrics`
+  cardinality in tests and CI without a collector, exporter, or observability backend.
+- Metric-budget sessions that select instruments and report the distinct observed series and per-tag distinct values
+  produced by the exercised workload, with explicit per-instrument series and per-tag value limits.
+- Deterministic, order-independent tag-set identity, plus structured reports and test-framework-independent assertion
+  helpers with explicit outcomes for budget violations, invalid configuration, unobserved instruments, empty
+  observations, and incomplete accounting.
+- Privacy-safe diagnostics that retain instrument and tag-key context while excluding raw tag values, metric values,
+  and workload samples.
+- Bounded in-memory accounting with explicit safety limits and failure-safe incomplete-state diagnostics for
+  observations that exceed the verifier's retained-state capacity.
