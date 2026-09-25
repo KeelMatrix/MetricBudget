@@ -31,6 +31,17 @@ if ! (cd "$repo" && sh "$script_dir/check-history"); then
 fi
 echo "HISTORY_SELF_TEST=PASS case=ordinary-developer-message"
 
+printf '%s\n' 'web-flow' >> "$repo/state.txt"
+git -C "$repo" add state.txt
+GIT_COMMITTER_NAME="GitHub" GIT_COMMITTER_EMAIL="noreply@github.com" \
+    git -C "$repo" commit -q -m 'Update project notes through web flow'
+
+if ! (cd "$repo" && sh "$script_dir/check-history"); then
+    echo "HISTORY_SELF_TEST=FAIL case=github-web-flow-committer" >&2
+    exit 1
+fi
+echo "HISTORY_SELF_TEST=PASS case=github-web-flow-committer"
+
 shallow="$temp_root/shallow"
 git clone -q --depth 1 "file://$repo" "$shallow"
 if (cd "$shallow" && sh "$script_dir/check-history"); then

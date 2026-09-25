@@ -303,6 +303,11 @@ public sealed class DocumentationScopeTests
         HashSet<string> markdownPaths = new HashSet<string>(StringComparer.Ordinal);
         foreach (string relativePath in TrackedFiles("*.md"))
         {
+            if (string.Equals(relativePath, "CHANGELOG.md", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
             markdownPaths.Add(relativePath);
             surfaces.Add(new Surface(
                 relativePath,

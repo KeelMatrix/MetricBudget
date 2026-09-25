@@ -3,9 +3,19 @@ set -eu
 
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 
-is_allowed_identity() {
+is_allowed_author() {
     case "$1" in
         'KeelMatrix <keelmatrix@gmail.com>'|'dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>')
+            return 0
+            ;;
+    esac
+
+    return 1
+}
+
+is_allowed_committer() {
+    case "$1" in
+        'KeelMatrix <keelmatrix@gmail.com>'|'dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>'|'GitHub <noreply@github.com>')
             return 0
             ;;
     esac
@@ -44,8 +54,8 @@ for commit in $commits; do
     author=$(printf '%s\n' "$metadata" | sed -n 's/^author \(.* <[^>]*>\) [0-9][0-9]* [+-][0-9][0-9]*$/\1/p')
     committer=$(printf '%s\n' "$metadata" | sed -n 's/^committer \(.* <[^>]*>\) [0-9][0-9]* [+-][0-9][0-9]*$/\1/p')
     if [ -z "$author" ] || [ -z "$committer" ] \
-        || ! is_allowed_identity "$author" \
-        || ! is_allowed_identity "$committer"; then
+        || ! is_allowed_author "$author" \
+        || ! is_allowed_committer "$committer"; then
         echo "HISTORY_GUARD=FAIL reason=unauthorized-identity commit=$commit" >&2
         exit 1
     fi

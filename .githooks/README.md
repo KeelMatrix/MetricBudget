@@ -1,6 +1,6 @@
 # Commit history guard
 
-The versioned hooks keep commit authorship consistent and reject attribution trailers from new commit messages. The history checker validates every reachable commit and fails closed for shallow repositories.
+The versioned hooks keep commit authorship consistent, support the GitHub web-flow committer identity, and reject attribution trailers from new commit messages. The history checker validates every reachable commit and fails closed for shallow repositories.
 
 Activate the local hook with:
 
