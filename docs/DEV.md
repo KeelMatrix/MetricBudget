@@ -51,7 +51,9 @@ The declared repository-text set is reproducible from the repository root with:
 git ls-files -- '*.md' 'samples/**' 'tests/KeelMatrix.MetricBudget.PackageConsumer/**'
 ```
 
-The guard interprets every path returned for `*.md` as Markdown. For the `samples/**` and package-consumer
+The guard interprets every tracked Markdown path except `CHANGELOG.md` as a snapshot-protected Markdown surface. The
+changelog is intentionally excluded because release version/date edits are validated semantically by
+`scripts/validate-release.ps1`, not by this immutable snapshot mechanism. For the `samples/**` and package-consumer
 pathspecs, it snapshots every returned UTF-8 text file (a file containing a NUL byte is not text). It then adds the
 generated XML documentation for both target frameworks and one runtime snapshot for every outcome branch of
 `MetricBudgetReport.ToDiagnosticString()`: `Passed`, `Violation`, `InvalidConfiguration`, `NoMatchingInstrument`,
@@ -63,17 +65,21 @@ scans untracked directories. Such output cannot appear in a Git diff, the source
 file remains in scope even if its path happens to contain `bin/` or `obj/`.
 
 Snapshots are under `tests/KeelMatrix.MetricBudget.Tests/ApprovedShippedText/`, with one snapshot for each declared
-surface. A missing snapshot, an orphan snapshot, a missing tracked file, or a newly tracked text file fails the guard.
+surface. `CHANGELOG.md` has no snapshot by design. A missing snapshot, an orphan snapshot, a missing tracked file, or
+a newly tracked text file fails the guard.
 
-Any change to shipped text requires a deliberate approval commit. First review the complete change and confirm that
-the scope semantics are still **per instrument identity**, then build Release if generated XML may change and run:
+Any change to snapshot-protected shipped text requires a deliberate approval commit. First review the complete change
+and confirm that the scope semantics are still **per instrument identity**, then build Release if generated XML may
+change and run:
 
 ```powershell
 $env:KEELMATRIX_METRICBUDGET_APPROVE_DOCUMENTATION_SNAPSHOTS='1'; dotnet test tests/KeelMatrix.MetricBudget.Tests/KeelMatrix.MetricBudget.Tests.csproj -c Release --no-build --no-restore --filter FullyQualifiedName~DocumentationScopeTests
 ```
 
 Inspect the resulting snapshot diff, unset the environment variable, rerun the focused guard, and commit the shipped
-text together with its deliberately approved snapshots. Ordinary test runs never regenerate snapshots.
+text together with its deliberately approved snapshots. For a normal release version/date change, update
+`CHANGELOG.md` and run `scripts/validate-release.ps1`; do not add or update a documentation snapshot. Ordinary test
+runs never regenerate snapshots.
 
 ## Development evidence
 
