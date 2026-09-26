@@ -16,7 +16,7 @@ function Assert-True {
 }
 
 function Invoke-ReleaseValidator {
-    $output = @(& pwsh -NoProfile -File $validatorPath -Version 0.1.0 2>&1)
+    $output = @(& pwsh -NoProfile -WindowStyle Hidden -File $validatorPath -Version 0.1.0 2>&1)
     return [pscustomobject]@{
         ExitCode = $LASTEXITCODE
         Output = ($output -join "`n")
