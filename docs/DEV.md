@@ -14,6 +14,7 @@ dotnet build KeelMatrix.MetricBudget.sln -c Release --no-restore
 dotnet test tests/KeelMatrix.MetricBudget.Tests/KeelMatrix.MetricBudget.Tests.csproj -c Release --framework net8.0 --no-build --no-restore
 dotnet test tests/KeelMatrix.MetricBudget.Tests/KeelMatrix.MetricBudget.Tests.csproj -c Release --framework net472 --no-build --no-restore
 dotnet format KeelMatrix.MetricBudget.sln --verify-no-changes --no-restore
+pwsh -NoProfile -File scripts/tests/verify-package.tests.ps1
 ```
 
 Run the self-contained package and consumer gate:
@@ -33,8 +34,8 @@ shell that invokes `dotnet`, or use the equivalent process-environment setting o
 
 `.github/workflows/ci.yml` runs for pushes to `main`, pull requests targeting `main`, and manual dispatches. Its
 matrix covers `windows-latest` and `ubuntu-latest`, and every job sets `KEELMATRIX_NO_TELEMETRY=1`. Each matrix leg
-restores with the committed `NuGet.config`, builds the solution in Release, runs the `net8.0` tests, verifies
-formatting, and runs `scripts/verify-package.ps1`. The package gate packs the library, inspects both archives, runs
+restores with the committed `NuGet.config`, builds the solution in Release, runs the vulnerability-gate regressions
+and `net8.0` tests, verifies formatting, and runs `scripts/verify-package.ps1`. The package gate packs the library, inspects both archives, runs
 the clean-cache package-consumer and sample smoke tests, and audits transitive dependencies. Windows additionally
 runs the `net472` test host against the `netstandard2.0` asset; that host is not available on Linux.
 

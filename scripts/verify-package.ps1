@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
     [switch] $InspectOnly,
+    [switch] $FunctionsOnly,
     [string] $PackageDirectory = "",
     [string] $ExpectedVersion = ""
 )
@@ -512,12 +513,14 @@ function Invoke-CleanConsumerProof {
     $oldHttpCache = $env:NUGET_HTTP_CACHE_PATH
     $oldFallback = $env:NUGET_FALLBACK_PACKAGES
     $oldBuildServers = $env:DOTNET_CLI_DISABLE_BUILD_SERVERS
+    $oldControlledTimeZone = $env:METRICBUDGET_CONTROLLED_TIME_ZONE
     try
     {
         $env:NUGET_PACKAGES = $packages
         $env:NUGET_HTTP_CACHE_PATH = $httpCache
         $env:NUGET_FALLBACK_PACKAGES = ""
         $env:DOTNET_CLI_DISABLE_BUILD_SERVERS = "1"
+        $env:METRICBUDGET_CONTROLLED_TIME_ZONE = if ($IsWindows) { "Pacific Standard Time" } else { "America/Los_Angeles" }
         $cleanBuildProperties = @("-p:UseSharedCompilation=false", "-p:MSBuildNodeReuse=false")
 
         foreach ($project in @($packageConsumerProject, $sampleProject))
@@ -561,6 +564,7 @@ function Invoke-CleanConsumerProof {
         if ($null -eq $oldHttpCache) { Remove-Item Env:NUGET_HTTP_CACHE_PATH -ErrorAction SilentlyContinue } else { $env:NUGET_HTTP_CACHE_PATH = $oldHttpCache }
         if ($null -eq $oldFallback) { Remove-Item Env:NUGET_FALLBACK_PACKAGES -ErrorAction SilentlyContinue } else { $env:NUGET_FALLBACK_PACKAGES = $oldFallback }
         if ($null -eq $oldBuildServers) { Remove-Item Env:DOTNET_CLI_DISABLE_BUILD_SERVERS -ErrorAction SilentlyContinue } else { $env:DOTNET_CLI_DISABLE_BUILD_SERVERS = $oldBuildServers }
+        if ($null -eq $oldControlledTimeZone) { Remove-Item Env:METRICBUDGET_CONTROLLED_TIME_ZONE -ErrorAction SilentlyContinue } else { $env:METRICBUDGET_CONTROLLED_TIME_ZONE = $oldControlledTimeZone }
         if (Test-Path -LiteralPath $scratch)
         {
             $removed = $false
@@ -585,10 +589,261 @@ function Invoke-CleanConsumerProof {
     }
 }
 
-function Test-VulnerabilityResult {
-    param([Parameter(Mandatory = $true)][AllowEmptyString()][string] $Output)
+function Get-JsonPropertyValue {
+    param(
+        [Parameter(Mandatory = $true)] $Object,
+        [Parameter(Mandatory = $true)][string] $Name
+    )
 
-    return $Output -match "(?im)has the following vulnerable packages|known vulnerability|severity\s*[:|]\s*(critical|high|moderate|low)"
+    $property = $Object.PSObject.Properties[$Name]
+    if ($null -eq $property)
+    {
+        return $null
+    }
+
+    # Keep JSON arrays as one pipeline object; otherwise PowerShell unrolls a single-element array and loses its
+    # schema shape before the caller can validate it.
+    return ,$property.Value
+}
+
+function Test-NonEmptyText {
+    param([AllowNull()][AllowEmptyString()][string] $Value)
+
+    return -not [string]::IsNullOrWhiteSpace($Value)
+}
+
+function Test-JsonArray {
+    param([AllowNull()] $Value)
+
+    return $null -ne $Value -and $Value -is [Array]
+}
+
+function Normalize-VulnerabilityPath {
+    param([Parameter(Mandatory = $true)][string] $Path)
+
+    return $Path.Replace('\', '/').TrimEnd('/').ToUpperInvariant()
+}
+
+function Get-VulnerabilityReportAssessment {
+    param(
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string] $Output,
+        [string[]] $ExpectedProjectPaths = @()
+    )
+
+    $invalid = {
+        param([string] $Reason)
+        return [pscustomobject]@{
+            IsValid = $false
+            HasVulnerability = $false
+            FailureReason = $Reason
+        }
+    }
+
+    if ([string]::IsNullOrWhiteSpace($Output))
+    {
+        return & $invalid "the vulnerability report was empty."
+    }
+
+    try
+    {
+        $report = $Output | ConvertFrom-Json -Depth 100 -NoEnumerate -ErrorAction Stop
+    }
+    catch
+    {
+        return & $invalid "the vulnerability report was not valid JSON: $($_.Exception.Message)"
+    }
+
+    if ($null -eq $report -or $report -is [Array])
+    {
+        return & $invalid "the vulnerability report root was not a JSON object."
+    }
+
+    $version = Get-JsonPropertyValue $report "version"
+    if ($null -eq $version -or $version.ToString([Globalization.CultureInfo]::InvariantCulture) -ne "1")
+    {
+        return & $invalid "the vulnerability report used an unsupported or missing schema version."
+    }
+
+    $parametersValue = Get-JsonPropertyValue $report "parameters"
+    if ($parametersValue -isnot [string])
+    {
+        return & $invalid "the vulnerability report did not contain a textual parameter record."
+    }
+
+    $parameters = [string]$parametersValue
+    if ($parameters -notmatch "(^|\s)--vulnerable(\s|$)" -or $parameters -notmatch "(^|\s)--include-transitive(\s|$)")
+    {
+        return & $invalid "the vulnerability report does not prove a direct and transitive vulnerability scan."
+    }
+
+    $sources = Get-JsonPropertyValue $report "sources"
+    if (-not (Test-JsonArray $sources) -or $sources.Count -eq 0)
+    {
+        return & $invalid "the vulnerability report did not identify an advisory source."
+    }
+
+    foreach ($source in $sources)
+    {
+        if ($source -isnot [string] -or -not (Test-NonEmptyText $source))
+        {
+            return & $invalid "the vulnerability report contained an invalid advisory source."
+        }
+    }
+
+    $problemsProperty = $report.PSObject.Properties["problems"]
+    if ($null -ne $problemsProperty -and (-not (Test-JsonArray $problemsProperty.Value) -or $problemsProperty.Value.Count -gt 0))
+    {
+        return & $invalid "the vulnerability report contained reported errors or warnings."
+    }
+
+    $projects = Get-JsonPropertyValue $report "projects"
+    if (-not (Test-JsonArray $projects) -or $projects.Count -eq 0)
+    {
+        return & $invalid "the vulnerability report contained no project coverage."
+    }
+
+    $projectPaths = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    $hasVulnerability = $false
+    foreach ($project in @($projects))
+    {
+        if ($null -eq $project -or $project -is [Array])
+        {
+            return & $invalid "the vulnerability report contained an invalid project entry."
+        }
+
+        $pathValue = Get-JsonPropertyValue $project "path"
+        if ($pathValue -isnot [string] -or -not (Test-NonEmptyText $pathValue))
+        {
+            return & $invalid "the vulnerability report contained a missing or invalid project path."
+        }
+
+        $path = [string]$pathValue
+        if (-not $projectPaths.Add((Normalize-VulnerabilityPath $path)))
+        {
+            return & $invalid "the vulnerability report contained a missing or duplicate project path."
+        }
+
+        $frameworksProperty = $project.PSObject.Properties["frameworks"]
+        if ($null -eq $frameworksProperty)
+        {
+            # The vulnerability-filtered CLI omits empty framework package collections for a clean project.
+            continue
+        }
+
+        if (-not (Test-JsonArray $frameworksProperty.Value))
+        {
+            return & $invalid "the vulnerability report contained an invalid framework collection."
+        }
+
+        foreach ($framework in $frameworksProperty.Value)
+        {
+            if ($null -eq $framework -or $framework -is [Array])
+            {
+                return & $invalid "the vulnerability report contained an invalid framework entry."
+            }
+
+            $frameworkName = Get-JsonPropertyValue $framework "framework"
+            if ($frameworkName -isnot [string] -or -not (Test-NonEmptyText $frameworkName))
+            {
+                return & $invalid "the vulnerability report contained an invalid framework entry."
+            }
+
+            foreach ($collectionName in @("topLevelPackages", "transitivePackages"))
+            {
+                $collectionProperty = $framework.PSObject.Properties[$collectionName]
+                if ($null -eq $collectionProperty)
+                {
+                    continue
+                }
+
+                if (-not (Test-JsonArray $collectionProperty.Value))
+                {
+                    return & $invalid "the vulnerability report contained an invalid package collection."
+                }
+
+                foreach ($package in $collectionProperty.Value)
+                {
+                    if ($null -eq $package -or $package -is [Array])
+                    {
+                        return & $invalid "the vulnerability report contained an invalid package entry."
+                    }
+
+                    $packageId = Get-JsonPropertyValue $package "id"
+                    $resolvedVersion = Get-JsonPropertyValue $package "resolvedVersion"
+                    if ($packageId -isnot [string] -or -not (Test-NonEmptyText $packageId) -or $resolvedVersion -isnot [string] -or -not (Test-NonEmptyText $resolvedVersion))
+                    {
+                        return & $invalid "the vulnerability report contained an invalid package entry."
+                    }
+
+                    $vulnerabilityProperty = $package.PSObject.Properties["vulnerabilities"]
+                    if ($null -eq $vulnerabilityProperty)
+                    {
+                        continue
+                    }
+
+                    if (-not (Test-JsonArray $vulnerabilityProperty.Value))
+                    {
+                        return & $invalid "the vulnerability report contained an invalid advisory collection."
+                    }
+
+                    foreach ($vulnerability in $vulnerabilityProperty.Value)
+                    {
+                        if ($null -eq $vulnerability -or $vulnerability -is [Array])
+                        {
+                            return & $invalid "the vulnerability report contained an invalid advisory entry."
+                        }
+
+                        $severity = Get-JsonPropertyValue $vulnerability "severity"
+                        $advisoryUrl = Get-JsonPropertyValue $vulnerability "advisoryurl"
+                        if ($severity -isnot [string] -or -not (Test-NonEmptyText $severity) -or $advisoryUrl -isnot [string] -or -not (Test-NonEmptyText $advisoryUrl))
+                        {
+                            return & $invalid "the vulnerability report contained an invalid advisory entry."
+                        }
+
+                        $hasVulnerability = $true
+                    }
+                }
+            }
+        }
+    }
+
+    if (@($ExpectedProjectPaths).Count -gt 0)
+    {
+        $expectedPaths = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+        foreach ($expectedPath in @($ExpectedProjectPaths))
+        {
+            if (-not (Test-NonEmptyText ([string]$expectedPath)) -or -not $expectedPaths.Add((Normalize-VulnerabilityPath ([string]$expectedPath))))
+            {
+                return & $invalid "the expected vulnerability-scan project set was invalid."
+            }
+        }
+
+        if ($expectedPaths.Count -ne $projectPaths.Count -or @($expectedPaths | Where-Object { -not $projectPaths.Contains($_) }).Count -gt 0)
+        {
+            return & $invalid "the vulnerability report did not cover every expected solution project."
+        }
+    }
+
+    return [pscustomobject]@{
+        IsValid = $true
+        HasVulnerability = $hasVulnerability
+        FailureReason = ""
+    }
+}
+
+function Test-VulnerabilityResult {
+    param(
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string] $Output,
+        [string[]] $ExpectedProjectPaths = @()
+    )
+
+    $assessment = Get-VulnerabilityReportAssessment $Output $ExpectedProjectPaths
+    if (-not $assessment.IsValid)
+    {
+        throw "The vulnerability report could not be understood: $($assessment.FailureReason)"
+    }
+
+    return [bool]$assessment.HasVulnerability
 }
 
 function Test-AdvisoryNetworkFailure {
@@ -597,19 +852,60 @@ function Test-AdvisoryNetworkFailure {
     return $Output -match "(?im)NU1301|NU1801|NU1900|unable to load the service index|vulnerability data|advisory service|timed? ?out|timeout|temporary failure|name resolution|connection (?:refused|reset|closed)|service unavailable|\b(?:502|503|504)\b|network"
 }
 
+function Get-SolutionProjectPaths {
+    $listing = Invoke-Dotnet -Step "List solution projects for vulnerability coverage" -Arguments @("sln", $solutionPath, "list")
+    $paths = @($listing.StandardOutput -split "`r?`n" | Where-Object { $_ -match "\.csproj\s*$" } | ForEach-Object {
+            $relativePath = $_.Trim()
+            [IO.Path]::GetFullPath((Join-Path $repositoryRoot $relativePath))
+        })
+    if ($paths.Count -eq 0)
+    {
+        throw "Could not establish the solution project set for the vulnerability audit."
+    }
+
+    return $paths
+}
+
 function Invoke-VulnerabilityAudit {
-    $auditArguments = @("list", $solutionPath, "package", "--vulnerable", "--include-transitive", "--no-restore")
-    $firstAttempt = Invoke-Dotnet -Step "Vulnerability audit (attempt 1)" -Arguments $auditArguments -AllowFailure
+    param(
+        [string[]] $ExpectedProjectPaths = @(),
+        [scriptblock] $AttemptInvoker = $null
+    )
+
+    if (@($ExpectedProjectPaths).Count -eq 0)
+    {
+        $ExpectedProjectPaths = Get-SolutionProjectPaths
+    }
+
+    $auditArguments = @(
+        "list", $solutionPath, "package", "--vulnerable", "--include-transitive", "--format", "json",
+        "--output-version", "1", "--no-restore"
+    )
+    $firstAttempt = if ($null -eq $AttemptInvoker) {
+        Invoke-Dotnet -Step "Vulnerability audit (attempt 1)" -Arguments $auditArguments -AllowFailure
+    }
+    else {
+        & $AttemptInvoker 1 $auditArguments
+    }
     Write-Host "VULNERABILITY_AUDIT_ATTEMPT=1 EXIT_CODE=$($firstAttempt.ExitCode)"
 
-    if (Test-VulnerabilityResult $firstAttempt.CombinedOutput)
+    $firstAssessment = if ($firstAttempt.StandardOutput.Length -gt 0) {
+        Get-VulnerabilityReportAssessment $firstAttempt.StandardOutput $ExpectedProjectPaths
+    }
+    else {
+        [pscustomobject]@{ IsValid = $false; HasVulnerability = $false; FailureReason = "standard output was empty." }
+    }
+
+    if ($firstAssessment.IsValid -and $firstAssessment.HasVulnerability)
     {
         Write-Host "VULNERABILITY_AUDIT=FAIL attempt=1 retry=not-attempted vulnerability-result=true"
         throw "The dependency audit reported a vulnerability on attempt 1; no retry was attempted."
     }
 
-    $firstAttemptIsNetworkFailure = Test-AdvisoryNetworkFailure $firstAttempt.CombinedOutput
-    if (($firstAttempt.ExitCode -eq 0) -and -not $firstAttemptIsNetworkFailure)
+    # Retry classification is restricted to the process error channel. Arbitrary or localized report text on stdout
+    # is evidence to parse, not proof that a transient advisory service failure occurred.
+    $firstAttemptIsNetworkFailure = Test-AdvisoryNetworkFailure $firstAttempt.StandardError
+    if ($firstAssessment.IsValid -and $firstAttempt.ExitCode -eq 0 -and $firstAttempt.StandardError.Length -eq 0 -and -not $firstAttemptIsNetworkFailure)
     {
         Write-Host "VULNERABILITY_AUDIT=PASS attempt=1"
         return
@@ -618,27 +914,44 @@ function Invoke-VulnerabilityAudit {
     if (-not $firstAttemptIsNetworkFailure)
     {
         Write-Host "VULNERABILITY_AUDIT=FAIL attempt=1 retry=not-attempted network-failure=false"
-        throw "Vulnerability audit failed on attempt 1 without a recognized advisory-service or network failure."
+        throw "Vulnerability audit failed on attempt 1: $($firstAssessment.FailureReason)"
     }
 
     Write-Host "VULNERABILITY_AUDIT_RETRY=1 reason=recognized-advisory-service-or-network-failure"
-    $secondAttempt = Invoke-Dotnet -Step "Vulnerability audit (attempt 2)" -Arguments $auditArguments -AllowFailure
+    $secondAttempt = if ($null -eq $AttemptInvoker) {
+        Invoke-Dotnet -Step "Vulnerability audit (attempt 2)" -Arguments $auditArguments -AllowFailure
+    }
+    else {
+        & $AttemptInvoker 2 $auditArguments
+    }
     Write-Host "VULNERABILITY_AUDIT_ATTEMPT=2 EXIT_CODE=$($secondAttempt.ExitCode)"
 
-    if (Test-VulnerabilityResult $secondAttempt.CombinedOutput)
+    $secondAssessment = if ($secondAttempt.StandardOutput.Length -gt 0) {
+        Get-VulnerabilityReportAssessment $secondAttempt.StandardOutput $ExpectedProjectPaths
+    }
+    else {
+        [pscustomobject]@{ IsValid = $false; HasVulnerability = $false; FailureReason = "standard output was empty." }
+    }
+
+    if ($secondAssessment.IsValid -and $secondAssessment.HasVulnerability)
     {
         Write-Host "VULNERABILITY_AUDIT=FAIL attempt=2 retry=exhausted vulnerability-result=true"
         throw "The dependency audit reported a vulnerability on attempt 2."
     }
 
-    $secondAttemptIsNetworkFailure = Test-AdvisoryNetworkFailure $secondAttempt.CombinedOutput
-    if ($secondAttempt.ExitCode -ne 0 -or $secondAttemptIsNetworkFailure)
+    $secondAttemptIsNetworkFailure = Test-AdvisoryNetworkFailure $secondAttempt.StandardError
+    if (-not $secondAssessment.IsValid -or $secondAttempt.ExitCode -ne 0 -or $secondAttempt.StandardError.Length -gt 0 -or $secondAttemptIsNetworkFailure)
     {
         Write-Host "VULNERABILITY_AUDIT=FAIL attempt=2 retry=exhausted network-or-advisory-failure=true"
-        throw "The dependency audit failed after the one permitted retry."
+        throw "The dependency audit failed after the one permitted retry: $($secondAssessment.FailureReason)"
     }
 
     Write-Host "VULNERABILITY_AUDIT=PASS attempt=2 after-one-retry"
+}
+
+if ($FunctionsOnly)
+{
+    return
 }
 
 if (-not $InspectOnly)

@@ -345,6 +345,23 @@ internal static class ReportBuilder
                 configuredLimit: null));
         }
 
+        if (snapshot.KnownSelectorConflict
+            && (snapshot.Conflicts.Length == 0 || snapshot.UntrackedConflicts > 0))
+        {
+            violations.Add(new MetricBudgetViolation(
+                MetricBudgetViolationKind.ConfigurationInvalid,
+                "one or more selected instrument identities matched multiple configured rules, but detailed conflict "
+                + "identity and rule-index information could not all be retained within the configured safety bounds. "
+                + "The configuration is invalid; make the selectors disjoint.",
+                meterName: null,
+                meterVersion: null,
+                instrumentName: null,
+                instrumentKind: MetricInstrumentKind.Unknown,
+                tagKey: null,
+                observedCount: null,
+                configuredLimit: null));
+        }
+
         for (int i = 0; i < invariantProblems.Count; i++)
         {
             violations.Add(new MetricBudgetViolation(
@@ -431,7 +448,7 @@ internal static class ReportBuilder
         bool tagValueTrackingIncomplete,
         bool stateTrackingIncomplete)
     {
-        if (snapshot.Conflicts.Length > 0)
+        if (snapshot.KnownSelectorConflict || snapshot.Conflicts.Length > 0)
         {
             return MetricBudgetOutcome.InvalidConfiguration;
         }

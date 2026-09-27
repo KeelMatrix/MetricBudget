@@ -234,8 +234,13 @@ internal static class TagIdentity
                     + ((int)character).ToString("X4", CultureInfo.InvariantCulture);
                 return true;
             case DateTime dateTime:
-                descriptor = typeof(DateTime).FullName + ":binary="
-                    + dateTime.ToBinary().ToString(CultureInfo.InvariantCulture);
+                // DateTime.ToBinary normalizes Local values through the host time zone. That is not an injective
+                // representation of the original wall-clock ticks around invalid daylight-saving gaps. DateTime
+                // has no fold/occurrence bit for ambiguous Local values, so equal raw ticks and Kind intentionally
+                // represent the same value regardless of which ambiguous occurrence a caller had in mind.
+                descriptor = typeof(DateTime).FullName + ":kind="
+                    + dateTime.Kind.ToString()
+                    + ":ticks=" + dateTime.Ticks.ToString(CultureInfo.InvariantCulture);
                 return true;
             case DateTimeOffset dateTimeOffset:
                 descriptor = typeof(DateTimeOffset).FullName + ":ticks="

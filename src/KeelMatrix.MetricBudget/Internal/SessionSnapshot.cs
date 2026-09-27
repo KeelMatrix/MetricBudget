@@ -69,7 +69,8 @@ internal sealed class SessionSnapshot
         int maxTagCount,
         int maxInstrumentIdentityLength,
         int maxTagKeyLength,
-        bool[] ruleTrackingIncomplete)
+        bool[] ruleTrackingIncomplete,
+        bool knownSelectorConflict = false)
     {
         Instruments = instruments;
         Conflicts = conflicts;
@@ -94,6 +95,7 @@ internal sealed class SessionSnapshot
         MaxInstrumentIdentityLength = maxInstrumentIdentityLength;
         MaxTagKeyLength = maxTagKeyLength;
         RuleTrackingIncomplete = ruleTrackingIncomplete;
+        KnownSelectorConflict = knownSelectorConflict;
     }
 
     internal InstrumentAccountSnapshot[] Instruments { get; }
@@ -121,6 +123,9 @@ internal sealed class SessionSnapshot
     internal bool InstrumentIdentityLengthTrackingIncomplete { get; }
 
     internal bool ConflictTrackingIncomplete { get; }
+
+    /// <summary>Whether selector matching detected an overlap, even if its bounded detail was not retained.</summary>
+    internal bool KnownSelectorConflict { get; }
 
     internal int MaxTrackedSeries { get; }
 

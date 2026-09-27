@@ -637,9 +637,182 @@ public sealed class BoundedObservationTests
         counter.Add(1);
         MetricBudgetReport report = session.Complete();
 
-        Assert.Equal(MetricBudgetOutcome.ObservationIncomplete, report.Outcome);
+        Assert.Equal(MetricBudgetOutcome.InvalidConfiguration, report.Outcome);
         Assert.True(report.Safety.ConflictTrackingIncomplete);
-        Assert.Empty(report.Violations.Where(violation => violation.Kind == MetricBudgetViolationKind.ConfigurationInvalid));
+        Assert.Contains(report.Violations, violation => violation.Kind == MetricBudgetViolationKind.ConfigurationInvalid);
+    }
+
+    [Fact]
+    public void OverlongOverlappingSelectorRemainsInvalidConfiguration()
+    {
+        string meterName = TestNames.Meter(nameof(OverlongOverlappingSelectorRemainsInvalidConfiguration));
+        using Meter meter = new Meter(meterName, "1.0.0");
+        Counter<long> counter = meter.CreateCounter<long>("requests");
+        MetricBudgetOptions options = new MetricBudgetOptions
+        {
+            MaxInstrumentIdentityLength = 4,
+        };
+        options.ForMeter(meterName, budget => budget.MaxObservedSeries = 10);
+        options.ForInstrument(meterName, "requests", budget => budget.MaxObservedSeries = 10);
+
+        using MetricBudgetSession session = MetricBudgetSession.Start(options);
+        counter.Add(1);
+        MetricBudgetReport report = session.Complete();
+
+        Assert.Equal(MetricBudgetOutcome.InvalidConfiguration, report.Outcome);
+        Assert.Contains(report.Violations, violation => violation.Kind == MetricBudgetViolationKind.ConfigurationInvalid);
+        Assert.All(report.Rules, rule => Assert.False(rule.IsWithinBudget));
+        Assert.True(report.Safety.InstrumentIdentityLengthTrackingIncomplete);
+    }
+
+    [Fact]
+    public void ManyMatchingRulesRemainInvalidWhenTheirIndexesExceedTheConflictBound()
+    {
+        string meterName = TestNames.Meter(nameof(ManyMatchingRulesRemainInvalidWhenTheirIndexesExceedTheConflictBound));
+        using Meter meter = new Meter(meterName, "1.0.0");
+        Counter<long> counter = meter.CreateCounter<long>("requests");
+        MetricBudgetOptions options = new MetricBudgetOptions
+        {
+            MaxTrackedConflicts = 2,
+        };
+        options.ForMeter(meterName, budget => budget.MaxObservedSeries = 10);
+        options.ForMeter(meterName, budget => budget.MaxObservedSeries = 10);
+        options.ForInstrument(meterName, "requests", budget => budget.MaxObservedSeries = 10);
+
+        using MetricBudgetSession session = MetricBudgetSession.Start(options);
+        counter.Add(1);
+        MetricBudgetReport report = session.Complete();
+
+        Assert.Equal(MetricBudgetOutcome.InvalidConfiguration, report.Outcome);
+        Assert.True(report.Safety.ConflictTrackingIncomplete);
+        Assert.Contains(report.Violations, violation => violation.Kind == MetricBudgetViolationKind.ConfigurationInvalid);
+        Assert.All(report.Rules, rule => Assert.False(rule.IsWithinBudget));
+    }
+
+    [Fact]
+    public void ExhaustedConflictCollectionRetainsKnownInvalidConfiguration()
+    {
+        string meterName = TestNames.Meter(nameof(ExhaustedConflictCollectionRetainsKnownInvalidConfiguration));
+        using Meter meter = new Meter(meterName, "1.0.0");
+        Counter<long> counter = meter.CreateCounter<long>("requests");
+        Histogram<long> histogram = meter.CreateHistogram<long>("requests");
+        MetricBudgetOptions options = new MetricBudgetOptions
+        {
+            MaxTrackedConflicts = 1,
+        };
+        options.ForMeter(meterName, budget => budget.MaxObservedSeries = 10);
+        options.ForInstrument(meterName, "requests", budget => budget.MaxObservedSeries = 10);
+
+        using MetricBudgetSession session = MetricBudgetSession.Start(options);
+        counter.Add(1);
+        histogram.Record(1);
+        MetricBudgetReport report = session.Complete();
+
+        Assert.Equal(MetricBudgetOutcome.InvalidConfiguration, report.Outcome);
+        Assert.True(report.Safety.ConflictTrackingIncomplete);
+        Assert.True(report.Safety.UntrackedConflicts > 0);
+        Assert.Contains(report.Violations, violation => violation.Kind == MetricBudgetViolationKind.ConfigurationInvalid);
+        Assert.All(report.Rules, rule => Assert.False(rule.IsWithinBudget));
+    }
+
+    [Fact]
+    public void ConflictDetectedForInstrumentPublishedAfterSessionStartRemainsInvalid()
+    {
+        string meterName = TestNames.Meter(nameof(ConflictDetectedForInstrumentPublishedAfterSessionStartRemainsInvalid));
+        MetricBudgetOptions options = new MetricBudgetOptions
+        {
+            MaxTrackedConflicts = 1,
+        };
+        options.ForMeter(meterName, budget => budget.MaxObservedSeries = 10);
+        options.ForInstrument(meterName, "requests", budget => budget.MaxObservedSeries = 10);
+
+        using MetricBudgetSession session = MetricBudgetSession.Start(options);
+        using Meter meter = new Meter(meterName, "1.0.0");
+        Counter<long> counter = meter.CreateCounter<long>("requests");
+        counter.Add(1);
+        MetricBudgetReport report = session.Complete();
+
+        Assert.Equal(MetricBudgetOutcome.InvalidConfiguration, report.Outcome);
+        Assert.True(report.Safety.ConflictTrackingIncomplete);
+        Assert.Contains(report.Violations, violation => violation.Kind == MetricBudgetViolationKind.ConfigurationInvalid);
+        Assert.All(report.Rules, rule => Assert.False(rule.IsWithinBudget));
+    }
+
+    [Fact]
+    public void KnownConflictTakesPrecedenceOverIndependentBudgetViolation()
+    {
+        string violatingMeterName = TestNames.Meter(nameof(KnownConflictTakesPrecedenceOverIndependentBudgetViolation) + ".violating");
+        string conflictingMeterName = TestNames.Meter(nameof(KnownConflictTakesPrecedenceOverIndependentBudgetViolation) + ".conflicting");
+        using Meter violatingMeter = new Meter(violatingMeterName, "1.0.0");
+        using Meter conflictingMeter = new Meter(conflictingMeterName, "1.0.0");
+        Counter<long> violating = violatingMeter.CreateCounter<long>("requests");
+        Counter<long> conflicting = conflictingMeter.CreateCounter<long>("requests");
+
+        MetricBudgetOptions options = new MetricBudgetOptions
+        {
+            MaxTrackedConflicts = 1,
+        };
+        options.ForInstrument(violatingMeterName, "requests", budget => budget.MaxObservedSeries = 1);
+        options.ForMeter(conflictingMeterName, budget => budget.MaxObservedSeries = 10);
+        options.ForInstrument(conflictingMeterName, "requests", budget => budget.MaxObservedSeries = 10);
+
+        using MetricBudgetSession session = MetricBudgetSession.Start(options);
+        violating.Add(1, new KeyValuePair<string, object?>("route", "/a"));
+        violating.Add(1, new KeyValuePair<string, object?>("route", "/b"));
+        conflicting.Add(1);
+        MetricBudgetReport report = session.Complete();
+
+        Assert.Equal(MetricBudgetOutcome.InvalidConfiguration, report.Outcome);
+        Assert.Contains(report.Violations, violation => violation.Kind == MetricBudgetViolationKind.ObservedSeriesBudgetExceeded);
+        Assert.Contains(report.Violations, violation => violation.Kind == MetricBudgetViolationKind.ConfigurationInvalid);
+        Assert.False(report.Rules[0].IsWithinBudget);
+        Assert.False(report.Rules[1].IsWithinBudget);
+        Assert.False(report.Rules[2].IsWithinBudget);
+    }
+
+    [Fact]
+    public void DateTimeIdentityPreservesTicksAndKindWithoutTimezoneNormalization()
+    {
+        DateTime springForwardGap = new DateTime(2010, 3, 14, 2, 30, 0, DateTimeKind.Local);
+        DateTime afterSpringForwardGap = new DateTime(2010, 3, 14, 3, 30, 0, DateTimeKind.Local);
+        DateTimeOffset fallBackDaylightOccurrence = new DateTimeOffset(2010, 11, 7, 1, 30, 0, TimeSpan.FromHours(-7));
+        DateTimeOffset fallBackStandardOccurrence = new DateTimeOffset(2010, 11, 7, 1, 30, 0, TimeSpan.FromHours(-8));
+        DateTime fallBackFirstOccurrence = DateTime.SpecifyKind(fallBackDaylightOccurrence.DateTime, DateTimeKind.Local);
+        DateTime fallBackSecondOccurrence = DateTime.SpecifyKind(fallBackStandardOccurrence.DateTime, DateTimeKind.Local);
+        DateTime adjacent = new DateTime(DateTime.MaxValue.Ticks - 1, DateTimeKind.Unspecified);
+        DateTime minimum = new DateTime(DateTime.MinValue.Ticks, DateTimeKind.Unspecified);
+        DateTime maximum = new DateTime(DateTime.MaxValue.Ticks, DateTimeKind.Unspecified);
+        DateTime sameTicksLocal = new DateTime(123456789, DateTimeKind.Local);
+        DateTime sameTicksUtc = new DateTime(123456789, DateTimeKind.Utc);
+        DateTime sameTicksUnspecified = new DateTime(123456789, DateTimeKind.Unspecified);
+
+        Assert.Equal(
+            "System.DateTime:kind=Local:ticks=" + springForwardGap.Ticks.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            TagIdentity.DescribeValue(springForwardGap, 256));
+        Assert.Equal(
+            "System.DateTime:kind=Local:ticks=" + afterSpringForwardGap.Ticks.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            TagIdentity.DescribeValue(afterSpringForwardGap, 256));
+        Assert.NotEqual(springForwardGap.Ticks, afterSpringForwardGap.Ticks);
+        Assert.NotEqual(
+            TagIdentity.DescribeValue(springForwardGap, 256),
+            TagIdentity.DescribeValue(afterSpringForwardGap, 256));
+        Assert.Equal(
+            TagIdentity.DescribeValue(fallBackFirstOccurrence, 256),
+            TagIdentity.DescribeValue(fallBackSecondOccurrence, 256));
+        Assert.NotEqual(
+            TagIdentity.DescribeValue(fallBackDaylightOccurrence, 256),
+            TagIdentity.DescribeValue(fallBackStandardOccurrence, 256));
+        Assert.NotEqual(
+            TagIdentity.DescribeValue(sameTicksUtc, 256),
+            TagIdentity.DescribeValue(sameTicksUnspecified, 256));
+        Assert.NotEqual(
+            TagIdentity.DescribeValue(sameTicksLocal, 256),
+            TagIdentity.DescribeValue(sameTicksUtc, 256));
+        Assert.NotEqual(
+            TagIdentity.DescribeValue(sameTicksLocal, 256),
+            TagIdentity.DescribeValue(sameTicksUnspecified, 256));
+        Assert.NotEqual(TagIdentity.DescribeValue(adjacent, 256), TagIdentity.DescribeValue(maximum, 256));
+        Assert.NotEqual(TagIdentity.DescribeValue(minimum, 256), TagIdentity.DescribeValue(maximum, 256));
     }
 
     [Fact]

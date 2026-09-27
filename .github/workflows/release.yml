@@ -130,6 +130,10 @@ jobs:
       - name: Build solution (Release)
         run: dotnet build KeelMatrix.MetricBudget.sln --configuration Release --no-restore
 
+      - name: Test package vulnerability gate
+        shell: pwsh
+        run: pwsh -NoProfile -File scripts/tests/verify-package.tests.ps1
+
       - name: Test net8.0
         run: dotnet test tests/KeelMatrix.MetricBudget.Tests/KeelMatrix.MetricBudget.Tests.csproj --configuration Release --framework net8.0 --no-build --no-restore
 

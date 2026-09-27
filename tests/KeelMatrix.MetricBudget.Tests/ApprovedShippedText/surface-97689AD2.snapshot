@@ -27,7 +27,8 @@ oversized descriptor  = {CLR type full name}#chars={count}#sha256={hex}
 Supported tag values are `null`, `string`, `bool`, all eight integral types, `float`, `double`, `decimal`,
 `char`, `DateTime`, `DateTimeOffset`, `TimeSpan`, and `Guid`. Integral values use invariant decimal text;
 floating-point values use their exact IEEE bit patterns; `decimal` uses all four values returned by
-`decimal.GetBits`; date/time values use their exact ticks, offset, or `DateTime.ToBinary()` representation; and
+`decimal.GetBits`; `DateTime` uses its raw `Ticks` together with its `Kind`; `DateTimeOffset` uses its exact ticks
+and offset; and
 GUIDs use their canonical hexadecimal form. Strings are sequences of UTF-16 code units, including unpaired
 surrogates. Oversized strings are hashed from those exact code units, without a replacement fallback.
 
@@ -47,6 +48,11 @@ Notes that the implementation, the diagnostics, and this document share:
   key are three different identities.
 - **The CLR type is part of identity.** `int 1`, `double 1`, and `string "1"` are different identities, so a
   type-blind formatter cannot merge them.
+- **DateTime keeps wall-clock identity.** A `DateTime` descriptor is `System.DateTime:kind={Kind}:ticks={Ticks}`.
+  Local values are not converted through the host time zone, so invalid spring-forward wall-clock values retain
+  their original ticks. `DateTime` has no fold/occurrence bit: two ambiguous Local values with the same ticks are
+  intentionally the same identity regardless of which fall-back occurrence a caller intended. The descriptor does
+  not validate whether a Local value is valid in the host time zone.
 - **Oversized values are digested.** When a value's invariant text is longer than `MaxTagValueLength`, the
   descriptor becomes a stable hash of the exact supported representation, so one pathological value cannot inflate
   an identity while different values stay distinct.

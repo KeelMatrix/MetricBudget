@@ -379,6 +379,9 @@
         <member name="P:KeelMatrix.MetricBudget.Internal.SessionSnapshot.UnmatchedMeasurements">
             <summary>Delivery callbacks that could not be attributed to a selected instrument.</summary>
         </member>
+        <member name="P:KeelMatrix.MetricBudget.Internal.SessionSnapshot.KnownSelectorConflict">
+            <summary>Whether selector matching detected an overlap, even if its bounded detail was not retained.</summary>
+        </member>
         <member name="P:KeelMatrix.MetricBudget.Internal.SessionSnapshot.RuleTrackingIncomplete">
             <summary>Whether admission or selector ambiguity made accounting incomplete for each configured rule.</summary>
         </member>

@@ -37,6 +37,7 @@ internal sealed class MetricBudgetState
     private bool instrumentIdentityLengthTrackingIncomplete;
     private bool untrackedNameOnlyIdentityIndexOverflowed;
     private bool conflictTrackingIncomplete;
+    private bool knownSelectorConflict;
     private bool stopped;
     private int activeMeasurements;
 
@@ -83,6 +84,13 @@ internal sealed class MetricBudgetState
                 return;
             }
 
+            if (matchCount > 1)
+            {
+                // Keep the semantic fact separate from bounded explanatory detail. A selected overlap remains
+                // invalid even when its identity is too long or its rule-index record cannot be retained.
+                knownSelectorConflict = true;
+            }
+
             if (!identity.HasComponentLengthsAtMost(options.MaxInstrumentIdentityLength))
             {
                 RememberUntrackedName(identity);
@@ -90,6 +98,11 @@ internal sealed class MetricBudgetState
                 MarkMatchingRulesIncomplete(identity);
                 instrumentIdentityLengthTrackingIncomplete = true;
                 untrackedInstrumentIdentityLengths++;
+                if (matchCount > 1)
+                {
+                    conflictTrackingIncomplete = true;
+                    untrackedConflicts++;
+                }
                 return;
             }
 
@@ -339,7 +352,8 @@ internal sealed class MetricBudgetState
                 options.MaxTagCount,
                 options.MaxInstrumentIdentityLength,
                 options.MaxTagKeyLength,
-                (bool[])ruleTrackingIncomplete.Clone());
+                (bool[])ruleTrackingIncomplete.Clone(),
+                knownSelectorConflict);
         }
     }
 
