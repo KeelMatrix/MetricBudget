@@ -8,6 +8,7 @@ $repositoryRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot "../.."))
 $testRoot = Join-Path ([IO.Path]::GetTempPath()) ("metricbudget-release-date-tests-" + [Guid]::NewGuid().ToString("N"))
 $validatorPath = Join-Path $testRoot "scripts/validate-release.ps1"
 $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+. (Join-Path $PSScriptRoot "pwsh-launch.ps1")
 
 function Assert-True {
     param([Parameter(Mandatory = $true)][bool] $Condition, [Parameter(Mandatory = $true)][string] $Message)
@@ -16,7 +17,8 @@ function Assert-True {
 }
 
 function Invoke-ReleaseValidator {
-    $output = @(& pwsh -NoProfile -WindowStyle Hidden -File $validatorPath -Version 0.1.0 2>&1)
+    $arguments = Get-PwshChildArguments -HideWindow ([bool]$IsWindows) -ScriptPath $validatorPath -ScriptArguments @('-Version', '0.1.0')
+    $output = @(& pwsh @arguments 2>&1)
     return [pscustomobject]@{
         ExitCode = $LASTEXITCODE
         Output = ($output -join "`n")
@@ -41,6 +43,14 @@ function Write-Changelog {
 }
 
 try {
+    $windowsArguments = @(Get-PwshChildArguments -HideWindow $true -ScriptPath 'validator.ps1' -ScriptArguments @('-Version', '0.1.0'))
+    Assert-True (($windowsArguments -join ' ') -eq '-NoProfile -WindowStyle Hidden -File validator.ps1 -Version 0.1.0') `
+        "Windows child PowerShell arguments must hide the child window. Actual: $($windowsArguments -join ' ')"
+
+    $portableArguments = @(Get-PwshChildArguments -HideWindow $false -ScriptPath 'validator.ps1' -ScriptArguments @('-Version', '0.1.0'))
+    Assert-True (-not ($portableArguments -contains '-WindowStyle')) `
+        "Non-Windows child PowerShell arguments must omit the Windows-only window-style switch. Actual: $($portableArguments -join ' ')"
+
     foreach ($relativePath in @(
         "Directory.Build.props",
         "Directory.Packages.props",
@@ -76,7 +86,7 @@ try {
     Assert-True ($future.ExitCode -ne 0 -and $future.Output -match "future") `
         "a future release date must fail. Output: $($future.Output)"
 
-    Write-Output "RELEASE_VALIDATION_TEST=PASS cases=4"
+    Write-Output "RELEASE_VALIDATION_TEST=PASS cases=6"
 }
 finally {
     if (Test-Path -LiteralPath $testRoot) {
