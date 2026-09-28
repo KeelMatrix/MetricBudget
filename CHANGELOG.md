@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   admitted shutdown callbacks commit before completion returns.
 - Require release validation to run from the exact current `origin/main` commit.
 - Make local package archive provenance reproducible from normal and detached candidate checkouts.
+- Route documented package validation through the provenance-aware gate and guard against raw pack bypasses.
 
 ## [0.1.0] - 2026-09-25
 

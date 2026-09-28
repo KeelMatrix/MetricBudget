@@ -36,7 +36,7 @@ dotnet restore KeelMatrix.MetricBudget.sln
 dotnet build KeelMatrix.MetricBudget.sln -c Release
 dotnet test tests/KeelMatrix.MetricBudget.Tests/KeelMatrix.MetricBudget.Tests.csproj -c Release
 dotnet test tests/KeelMatrix.MetricBudget.Tests/KeelMatrix.MetricBudget.Tests.csproj -c Release --framework net472
-dotnet pack src/KeelMatrix.MetricBudget/KeelMatrix.MetricBudget.csproj -c Release -o artifacts/packages
+pwsh -NoProfile -File scripts/verify-package.ps1
 dotnet run --project tests/KeelMatrix.MetricBudget.PackageConsumer -c Release
 dotnet run --project samples/KeelMatrix.MetricBudget.Sample -c Release
 dotnet format KeelMatrix.MetricBudget.sln --verify-no-changes

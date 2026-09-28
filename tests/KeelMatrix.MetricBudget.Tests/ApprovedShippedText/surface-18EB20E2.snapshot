@@ -116,16 +116,15 @@ The test project targets `net8.0` and `net472`. The `net472` run executes the li
 against `System.Diagnostics.DiagnosticSource` 8.0.1 on .NET Framework, which is the only way to exercise that
 asset honestly.
 
-Package validation:
+Package validation, including archive inspection and clean package-backed smoke tests:
 
-```text
-dotnet pack src/KeelMatrix.MetricBudget/KeelMatrix.MetricBudget.csproj -c Release -o artifacts/packages
-dotnet run --project tests/KeelMatrix.MetricBudget.PackageConsumer -c Release
-dotnet run --project samples/KeelMatrix.MetricBudget.Sample -c Release
+```powershell
+pwsh -NoProfile -File scripts/verify-package.ps1
 ```
 
-Both package-backed projects restore `KeelMatrix.MetricBudget` from `artifacts/packages` and reference no project in
-this repository. See [docs/DEV.md](docs/DEV.md) for the complete reproducible validation sequence.
+The provenance-aware gate builds both archives with the exact candidate commit and explicit `refs/heads/main`
+metadata, then restores both package-backed projects from `artifacts/packages`; neither references a project in this
+repository. See [docs/DEV.md](docs/DEV.md) for the complete reproducible validation sequence.
 
 ## License
 

@@ -61,6 +61,22 @@ function Invoke-TestGit {
     return ($output -join "`n").Trim()
 }
 
+$documentedMarkdownFiles = @(Get-ChildItem -LiteralPath $repositoryRoot -Recurse -File -Filter "*.md" |
+    Where-Object {
+        $_.FullName -notmatch "[\\/](?:\.git|artifacts|bin|obj)[\\/]" -and
+        $_.FullName -notmatch "[\\/]ApprovedShippedText[\\/]" -and
+        $_.Name -ne "CHANGELOG.md"
+    })
+$rawPackSurfaces = @($documentedMarkdownFiles | ForEach-Object {
+    $text = [IO.File]::ReadAllText($_.FullName)
+    if ($text -match "(?i)\bdotnet\s+pack\b")
+    {
+        $_.FullName.Substring($repositoryRoot.Length + 1)
+    }
+})
+Assert-True ($rawPackSurfaces.Count -eq 0) `
+    "release-facing Markdown must route package validation through scripts/verify-package.ps1; raw dotnet pack found in: $($rawPackSurfaces -join ', ')"
+
 $knownCommit = "0123456789abcdef0123456789abcdef01234567"
 $knownProperties = @(Get-PackageRepositoryProperties -ExpectedCommit $knownCommit)
 Assert-True ($knownProperties -contains "-p:RepositoryBranch=refs/heads/main") `
@@ -254,4 +270,4 @@ Assert-Throws {
 } "a second advisory-service failure must fail the gate"
 Assert-True ($persistentFailureCount -eq 2) "advisory-service failure retry must remain bounded"
 
-Write-Output "VERIFY_PACKAGE_TEST=PASS cases=24"
+Write-Output "VERIFY_PACKAGE_TEST=PASS cases=25"
