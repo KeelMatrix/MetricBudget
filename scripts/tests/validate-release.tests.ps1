@@ -106,8 +106,8 @@ try {
     Reset-Fixtures
     Write-Changelog ([DateTime]::UtcNow.ToString("yyyy-MM-dd", [Globalization.CultureInfo]::InvariantCulture)) -Version "0.1.1"
     $missingTarget = Invoke-ReleaseValidator @('-Version', '0.1.0')
-    Assert-True ($missingTarget.ExitCode -ne 0 -and $missingTarget.Output -match "no released entry") `
-        "a missing target release entry must fail. Output: $($missingTarget.Output)"
+    Assert-True ($missingTarget.ExitCode -ne 0 -and $missingTarget.Output -match "CHANGELOG\.md") `
+        "a missing target release entry must fail with a changelog diagnostic. Output: $($missingTarget.Output)"
 
     Write-Changelog "2026-2-3"
     $malformed = Invoke-ReleaseValidator @('-Version', '0.1.0')
