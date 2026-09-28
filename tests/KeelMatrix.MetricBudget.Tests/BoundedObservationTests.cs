@@ -1700,6 +1700,12 @@ public sealed class BoundedObservationTests
         MetricBudgetAssertionException exception = Assert.Throws<MetricBudgetAssertionException>(
             () => report.AssertObservedSeriesAtMost(meterName, "requests", 1));
         Assert.Contains("ambiguous", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("IdentityDiscriminator", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("identityDiscriminator", exception.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("full meter version and instrument kind", exception.Message, StringComparison.Ordinal);
+        Assert.All(
+            report.Rules[0].Instruments,
+            instrument => Assert.Contains(instrument.IdentityDiscriminator, exception.Message, StringComparison.Ordinal));
     }
 
     [Fact]
@@ -1720,6 +1726,115 @@ public sealed class BoundedObservationTests
         MetricBudgetAssertionException exception = Assert.Throws<MetricBudgetAssertionException>(
             () => report.AssertObservedSeriesAtMost(meterName, "requests", 1));
         Assert.Contains("ambiguous", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("IdentityDiscriminator", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("identityDiscriminator", exception.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("full meter version and instrument kind", exception.Message, StringComparison.Ordinal);
+        Assert.All(
+            report.Rules[0].Instruments,
+            instrument => Assert.Contains(instrument.IdentityDiscriminator, exception.Message, StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("unit")]
+    [InlineData("description")]
+    [InlineData("measurement type")]
+    [InlineData("meter tags")]
+    [InlineData("instrument tags")]
+    public void FocusedAssertionListsDiscriminatorForEachStaticMetadataDimension(string dimension)
+    {
+        string meterName = TestNames.Meter(nameof(FocusedAssertionListsDiscriminatorForEachStaticMetadataDimension) + dimension);
+        Meter firstMeter;
+        Meter secondMeter;
+        Action firstMeasurement;
+        Action secondMeasurement;
+
+        switch (dimension)
+        {
+            case "meter tags":
+                firstMeter = new Meter(new MeterOptions(meterName)
+                {
+                    Version = "1.0.0",
+                    Tags = new[] { new KeyValuePair<string, object?>("stream", "first") },
+                });
+                secondMeter = new Meter(new MeterOptions(meterName)
+                {
+                    Version = "1.0.0",
+                    Tags = new[] { new KeyValuePair<string, object?>("stream", "second") },
+                });
+                Counter<long> firstMeterTagCounter = firstMeter.CreateCounter<long>("requests");
+                Counter<long> secondMeterTagCounter = secondMeter.CreateCounter<long>("requests");
+                firstMeasurement = () => firstMeterTagCounter.Add(1);
+                secondMeasurement = () => secondMeterTagCounter.Add(1);
+                break;
+            default:
+                firstMeter = new Meter(meterName, "1.0.0");
+                secondMeter = firstMeter;
+                switch (dimension)
+                {
+                    case "unit":
+                        Counter<long> firstUnitCounter = firstMeter.CreateCounter<long>("requests", unit: "items");
+                        Counter<long> secondUnitCounter = firstMeter.CreateCounter<long>("requests", unit: "seconds");
+                        firstMeasurement = () => firstUnitCounter.Add(1);
+                        secondMeasurement = () => secondUnitCounter.Add(1);
+                        break;
+                    case "description":
+                        Counter<long> firstDescriptionCounter = firstMeter.CreateCounter<long>(
+                            "requests",
+                            description: "first");
+                        Counter<long> secondDescriptionCounter = firstMeter.CreateCounter<long>(
+                            "requests",
+                            description: "second");
+                        firstMeasurement = () => firstDescriptionCounter.Add(1);
+                        secondMeasurement = () => secondDescriptionCounter.Add(1);
+                        break;
+                    case "measurement type":
+                        Counter<long> longCounter = firstMeter.CreateCounter<long>("requests");
+                        Counter<int> intCounter = firstMeter.CreateCounter<int>("requests");
+                        firstMeasurement = () => longCounter.Add(1);
+                        secondMeasurement = () => intCounter.Add(1);
+                        break;
+                    case "instrument tags":
+                        Counter<long> firstInstrumentTagCounter = firstMeter.CreateCounter<long>(
+                            "requests",
+                            unit: null,
+                            description: null,
+                            tags: new[] { new KeyValuePair<string, object?>("stream", "first") });
+                        Counter<long> secondInstrumentTagCounter = firstMeter.CreateCounter<long>(
+                            "requests",
+                            unit: null,
+                            description: null,
+                            tags: new[] { new KeyValuePair<string, object?>("stream", "second") });
+                        firstMeasurement = () => firstInstrumentTagCounter.Add(1);
+                        secondMeasurement = () => secondInstrumentTagCounter.Add(1);
+                        break;
+                    default:
+                        throw new ArgumentOutOfRangeException(nameof(dimension), dimension, "Unknown identity dimension.");
+                }
+
+                break;
+        }
+
+        using (firstMeter)
+        using (secondMeter == firstMeter ? null : secondMeter)
+        {
+            MetricBudgetOptions options = new MetricBudgetOptions();
+            options.ForInstrument(meterName, "requests", budget => budget.MaxObservedSeries = 10);
+            using MetricBudgetSession session = MetricBudgetSession.Start(options);
+            firstMeasurement();
+            secondMeasurement();
+            MetricBudgetReport report = session.Complete();
+
+            Assert.Equal(2, report.Rules[0].Instruments.Count);
+            MetricBudgetAssertionException exception = Assert.Throws<MetricBudgetAssertionException>(
+                () => report.AssertObservedSeriesAtMost(meterName, "requests", 1));
+            Assert.Contains("ambiguous", exception.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("IdentityDiscriminator", exception.Message, StringComparison.Ordinal);
+            Assert.Contains("identityDiscriminator", exception.Message, StringComparison.Ordinal);
+            Assert.DoesNotContain("full meter version and instrument kind", exception.Message, StringComparison.Ordinal);
+            Assert.All(
+                report.Rules[0].Instruments,
+                instrument => Assert.Contains(instrument.IdentityDiscriminator, exception.Message, StringComparison.Ordinal));
+        }
     }
 
     private static Exception? RecordUnsupported(Counter<long> counter)

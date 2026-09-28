@@ -43,6 +43,42 @@ function Get-PropertyValue {
     return $node.InnerText.Trim()
 }
 
+function Get-PublicApiEntries {
+    param([Parameter(Mandatory = $true)][string] $RelativePath)
+
+    $path = Join-Path $repositoryRoot $RelativePath
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf))
+    {
+        Fail "Required API baseline '$RelativePath' is missing."
+    }
+
+    $entries = @()
+    foreach ($line in @(Get-Content -LiteralPath $path))
+    {
+        $trimmed = $line.Trim()
+        if ($trimmed.Length -gt 0 -and -not $trimmed.StartsWith('#', [StringComparison]::Ordinal))
+        {
+            $entries += $trimmed
+        }
+    }
+
+    return @($entries)
+}
+
+function Assert-FirstReleaseApiBaseline {
+    $unshippedEntries = @(Get-PublicApiEntries "src/KeelMatrix.MetricBudget/PublicAPI.Unshipped.txt")
+    if ($unshippedEntries.Count -gt 0)
+    {
+        Fail "First-release API baseline mismatch: PublicAPI.Unshipped.txt must be header-only; move every shipping public API entry to PublicAPI.Shipped.txt."
+    }
+
+    $shippedEntries = @(Get-PublicApiEntries "src/KeelMatrix.MetricBudget/PublicAPI.Shipped.txt")
+    if ($shippedEntries.Count -eq 0)
+    {
+        Fail "First-release API baseline mismatch: PublicAPI.Shipped.txt must contain the shipping public API."
+    }
+}
+
 if ([string]::IsNullOrWhiteSpace($Tag) -and [string]::IsNullOrWhiteSpace($Version))
 {
     Fail "Provide -Tag vX.Y.Z or -Version X.Y.Z."
@@ -101,6 +137,11 @@ if ((@($actualTargetFrameworks) -join ";") -ne (@($expectedTargetFrameworks) -jo
     Fail "Package metadata mismatch: target frameworks are '$targetFrameworks', expected 'net8.0;netstandard2.0'."
 }
 
+if ($Version -eq "0.1.0")
+{
+    Assert-FirstReleaseApiBaseline
+}
+
 $packages = Get-ProjectXml "Directory.Packages.props"
 $packageVersions = @{}
 foreach ($node in @($packages.SelectNodes("/*[local-name()='Project']/*[local-name()='ItemGroup']/*[local-name()='PackageVersion']")))
@@ -124,6 +165,42 @@ if (-not $packageVersions.ContainsKey("KeelMatrix.MetricBudget") -or $packageVer
 $changelogPath = Join-Path $repositoryRoot "CHANGELOG.md"
 $changelogLines = @(Get-Content $changelogPath)
 $releaseHeadingPattern = '^##\s+\[(?<version>\d+\.\d+\.\d+)\](?:\s*-\s*(?<date>.+))?\s*$'
+$unreleasedStart = -1
+$unreleasedEnd = $changelogLines.Count
+$unreleasedHeadingPattern = '^##\s+\[Unreleased\]\s*$'
+for ($index = 0; $index -lt $changelogLines.Count; $index++)
+{
+    if ($changelogLines[$index] -match $unreleasedHeadingPattern)
+    {
+        $unreleasedStart = $index
+        break
+    }
+}
+
+if ($unreleasedStart -lt 0)
+{
+    Fail "Changelog structure mismatch: CHANGELOG.md must contain an Unreleased section."
+}
+
+for ($index = $unreleasedStart + 1; $index -lt $changelogLines.Count; $index++)
+{
+    if ($changelogLines[$index] -match '^##\s+')
+    {
+        $unreleasedEnd = $index
+        break
+    }
+}
+
+$unreleasedText = if ($unreleasedEnd -gt $unreleasedStart + 1) {
+    $changelogLines[($unreleasedStart + 1)..($unreleasedEnd - 1)] -join "`n"
+}
+else { "" }
+$unreleasedText = [regex]::Replace($unreleasedText, '(?s)<!--.*?-->', '')
+if (-not [string]::IsNullOrWhiteSpace($unreleasedText))
+{
+    Fail "Changelog mismatch: substantive content remains under Unreleased; finalize the first-release entry before tagging or publishing."
+}
+
 $releaseStart = -1
 $releaseDate = $null
 for ($index = 0; $index -lt $changelogLines.Count; $index++)

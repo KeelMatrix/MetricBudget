@@ -62,6 +62,10 @@ jobs:
         shell: pwsh
         run: pwsh -NoProfile -File scripts/tests/validate-release-provenance.tests.ps1
 
+      - name: Test release contract
+        shell: pwsh
+        run: pwsh -NoProfile -File scripts/tests/validate-release.tests.ps1
+
       - name: Validate workflow safety
         shell: pwsh
         run: pwsh -NoProfile -File scripts/validate-workflows.ps1
@@ -80,13 +84,14 @@ jobs:
               throw "Directory.Build.props must define a stable X.Y.Z <Version>."
           }
 
+          $validatorArguments = @()
           if ([string]$env:RELEASE_EVENT_NAME -eq 'push') {
               $tag = [string]$env:RELEASE_REF_NAME
               if ($tag -notmatch '^v(?<version>\d+\.\d+\.\d+)$') {
                   throw "Malformed release tag '$tag'. Expected v<major>.<minor>.<patch>."
               }
               $releaseVersion = $Matches.version
-              pwsh -NoProfile -File scripts/validate-release.ps1 -Tag $tag
+              $validatorArguments = @('-Tag', $tag)
           }
           else {
               $requestedVersion = ([string]$env:RELEASE_INPUT_VERSION).Trim()
@@ -94,6 +99,12 @@ jobs:
               if ($releaseVersion -ne $configuredVersion) {
                   throw "Manual validation version '$releaseVersion' does not match Directory.Build.props version '$configuredVersion'."
               }
+              $validatorArguments = @('-Version', $releaseVersion)
+          }
+
+          & pwsh -NoProfile -File scripts/validate-release.ps1 @validatorArguments
+          if ($LASTEXITCODE -ne 0) {
+              throw "Repository release validation failed for version '$releaseVersion'."
           }
 
           "version=$releaseVersion" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append

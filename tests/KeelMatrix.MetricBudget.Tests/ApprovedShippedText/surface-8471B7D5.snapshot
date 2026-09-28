@@ -21,6 +21,7 @@ exitCode += RunFocusedObservationIncompleteAdmission();
 exitCode += RunFocusedObservationIncompleteTagValueTracking();
 exitCode += RunDateTimeIdentityBudget();
 exitCode += RunConflictPrecedence();
+exitCode += RunStaticMetadataIdentityDiscriminators();
 
 Console.WriteLine(exitCode == 0
     ? "PACKAGE CONSUMER SMOKE: PASS"
@@ -362,5 +363,95 @@ static int RunConflictPrecedence()
     }
 
     Console.WriteLine("conflict precedence stayed invalid when detailed conflict retention was exhausted.");
+    return 0;
+}
+
+static int RunStaticMetadataIdentityDiscriminators()
+{
+    Console.WriteLine("--- static metadata identity discriminators ---");
+
+    const string meterName = "Smoke.Consumer.StaticMetadataIdentity";
+    using Meter firstMeter = new Meter(new MeterOptions(meterName)
+    {
+        Version = "1.0.0",
+        Tags = new[] { new KeyValuePair<string, object?>("stream", "first") },
+    });
+    using Meter secondMeter = new Meter(new MeterOptions(meterName)
+    {
+        Version = "1.0.0",
+        Tags = new[] { new KeyValuePair<string, object?>("stream", "second") },
+    });
+    Counter<long> first = firstMeter.CreateCounter<long>("requests");
+    Counter<long> second = secondMeter.CreateCounter<long>("requests");
+    MetricBudgetOptions options = new MetricBudgetOptions();
+    options.ForInstrument(meterName, "requests", budget => budget.MaxObservedSeries = 1);
+
+    using MetricBudgetSession session = MetricBudgetSession.Start(options);
+    first.Add(1, new KeyValuePair<string, object?>("route", "/first"));
+    second.Add(1, new KeyValuePair<string, object?>("route", "/second-a"));
+    second.Add(1, new KeyValuePair<string, object?>("route", "/second-b"));
+    MetricBudgetReport report = session.Complete();
+    IReadOnlyList<MetricBudgetInstrumentResult> instruments = report.Rules[0].Instruments;
+    MetricBudgetInstrumentResult firstResult = instruments.Single(instrument => instrument.ObservedSeriesCount == 1);
+    MetricBudgetInstrumentResult secondResult = instruments.Single(instrument => instrument.ObservedSeriesCount == 2);
+
+    if (instruments.Count != 2
+        || firstResult.IdentityDiscriminator == secondResult.IdentityDiscriminator
+        || firstResult.MeasurementCount != 1
+        || secondResult.MeasurementCount != 2)
+    {
+        Console.WriteLine("UNEXPECTED: same-name static-metadata streams were not retained separately: " + report);
+        return 1;
+    }
+
+    try
+    {
+        _ = report.AssertObservedSeriesAtMost(
+            meterName,
+            "requests",
+            firstResult.IdentityDiscriminator,
+            1);
+    }
+    catch (MetricBudgetAssertionException exception)
+    {
+        Console.WriteLine("UNEXPECTED: first discriminator did not select its within-budget stream: " + exception.Message);
+        return 1;
+    }
+
+    try
+    {
+        _ = report.AssertObservedSeriesAtMost(
+            meterName,
+            "requests",
+            secondResult.IdentityDiscriminator,
+            1);
+        Console.WriteLine("UNEXPECTED: second discriminator did not retain its series-budget violation.");
+        return 1;
+    }
+    catch (MetricBudgetAssertionException)
+    {
+        Console.WriteLine("both same-name streams remained separately selectable by discriminator.");
+    }
+
+    const string failureMeterName = "Smoke.Consumer.StaticMetadataFailure";
+    using Meter failureMeter = new Meter(failureMeterName, "1.0.0");
+    Counter<long> failureCounter = failureMeter.CreateCounter<long>("requests", description: "too-long");
+    MetricBudgetOptions failureOptions = new MetricBudgetOptions
+    {
+        MaxStaticMetadataTextLength = 1,
+    };
+    failureOptions.ForInstrument(failureMeterName, "requests", budget => budget.MaxObservedSeries = 1);
+    using MetricBudgetSession failureSession = MetricBudgetSession.Start(failureOptions);
+    failureCounter.Add(1);
+    MetricBudgetReport failureReport = failureSession.Complete();
+
+    if (failureReport.Safety.StaticMetadataFailures.Count != 1
+        || failureReport.Safety.StaticMetadataFailures[0].Kind != MetricBudgetStaticMetadataFailureKind.TextLength)
+    {
+        Console.WriteLine("UNEXPECTED: static metadata rejection was not reported through Safety.StaticMetadataFailures.");
+        return 1;
+    }
+
+    Console.WriteLine("static metadata rejection was reported through Safety.StaticMetadataFailures.");
     return 0;
 }

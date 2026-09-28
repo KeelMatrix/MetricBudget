@@ -9,7 +9,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Complete instrument identity with unit, description, measurement type, meter tags, and instrument tags, and make
   admitted shutdown callbacks commit before completion returns.
 - Expose a privacy-safe identity discriminator for complete retained identities and make focused assertions able to
-  select same-name streams by that discriminator.
+  select same-name streams by that discriminator; ambiguity diagnostics now direct callers to the discriminator
+  overload.
 - Make focused observation assertions fail closed for incomplete identity, series, tag, and per-tag value accounting,
   including identity-cap and physical-instance admission loss.
 - Give static metadata its own bounded options and dimension-specific safety failures; delivered-tag bounds no longer

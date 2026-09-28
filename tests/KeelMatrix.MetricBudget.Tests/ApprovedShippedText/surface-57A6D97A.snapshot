@@ -42,6 +42,24 @@ and the report names every rule it matched. Make the rules disjoint.
 Invalid *options* fail earlier and louder: starting a session with no rules, with a rule that declares no limit, or
 with a non-positive safety bound throws `MetricBudgetConfigurationException` before anything is observed.
 
+## A focused assertion is ambiguous
+
+A name-only focused assertion is ambiguous when the report retained more than one complete instrument identity with
+the same meter and instrument names. The diagnostic lists each candidate's `IdentityDiscriminator`; pass one of those
+values to the overload that accepts `identityDiscriminator`, for example:
+
+```csharp
+report.AssertObservedSeriesAtMost(
+    meterName,
+    instrumentName,
+    instrument.IdentityDiscriminator,
+    maxObservedSeries);
+```
+
+The discriminator distinguishes unit, description, measurement type, meter tags, and instrument tags without
+printing those metadata values. A meter version and instrument kind alone are not sufficient to select a complete
+identity.
+
 ## `ObservationIncomplete`
 
 A later observation or state entry could not be retained within a safety bound, a delivered value/tag set could not

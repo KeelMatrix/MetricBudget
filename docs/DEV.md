@@ -81,8 +81,11 @@ $env:KEELMATRIX_METRICBUDGET_APPROVE_DOCUMENTATION_SNAPSHOTS='1'; dotnet test te
 
 Inspect the resulting snapshot diff, unset the environment variable, rerun the focused guard, and commit the shipped
 text together with its deliberately approved snapshots. For a normal release version/date change, update
-`CHANGELOG.md` and run `scripts/validate-release.ps1`; do not add or update a documentation snapshot. Ordinary test
-runs never regenerate snapshots.
+`CHANGELOG.md` and run `scripts/validate-release.ps1`; do not add or update a documentation snapshot. For the first
+release version `0.1.0`, that validator also requires `PublicAPI.Unshipped.txt` to be header-only and rejects
+substantive content under `Unreleased`. The tag and manual-dispatch release paths pass through this same validator,
+and `scripts/tests/validate-release.tests.ps1` covers the positive and negative release-contract controls. Ordinary
+test runs never regenerate snapshots.
 
 ## Development evidence
 

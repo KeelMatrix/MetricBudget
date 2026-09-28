@@ -66,7 +66,9 @@ the API and safety docs, privacy and telemetry in the privacy guide, and recurri
 - tag-set identity that is order-independent and deterministic, so the same combination never counts twice;
 - instrument identity that includes unit, description, measurement type, meter tags, and instrument tags while
   excluding `Meter.Scope` from the stream key. Retained results expose a privacy-safe `IdentityDiscriminator` so
-  focused assertions can select same-name streams without exposing static metadata values;
+  focused assertions can select same-name streams without exposing static metadata values. When a name-only focused
+  assertion is ambiguous, pass one of the listed discriminator values to the overload that accepts
+  `identityDiscriminator`;
 - static metadata admission through dedicated bounded options, with rejected dimensions reported in
   `Safety.StaticMetadataFailures` rather than being attributed to delivered-tag limits;
 - explicit outcomes for a budget breach, invalid configuration, an instrument that was never observed, and a

@@ -489,7 +489,8 @@ public static class MetricBudgetReportAssertions
                 "The focused assertion for meter \"" + meterName + "\" and instrument \"" + instrumentName
                 + "\" is ambiguous. It matched multiple instrument identities: "
                 + string.Join(", ", ambiguous)
-                + ". Inspect the report and select the full meter version and instrument kind before asserting."
+                + ". Use one of the listed IdentityDiscriminator values with the overload that accepts"
+                + " identityDiscriminator before asserting."
                 + Environment.NewLine
                 + report.ToDiagnosticString());
         }
