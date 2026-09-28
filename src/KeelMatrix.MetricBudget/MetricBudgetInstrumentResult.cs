@@ -12,8 +12,10 @@ namespace KeelMatrix.MetricBudget;
 /// One result covers one complete public instrument identity: meter name, meter version, instrument name, instrument
 /// kind, and the privacy-safe identity discriminator for static metadata. Counts describe the exercised workload
 /// only. If selected physical instances or same-name identities were rejected by an admission bound, or a bounded
-/// name-only rejection index overflowed before this identity was admitted,
-/// <see cref="InstrumentTrackingIncomplete"/> is set and no within-budget conclusion is drawn from this result.
+/// name-only rejection index overflowed before this identity was admitted, <see cref="InstrumentTrackingIncomplete"/>
+/// is set. If a per-tag value bound rejected an additional distinct value, the affected tag's
+/// <see cref="MetricBudgetTagResult.ValueTrackingIncomplete"/> is set. No within-budget conclusion is drawn from
+/// an affected result.
 /// </remarks>
 public sealed class MetricBudgetInstrumentResult
 {

@@ -16,7 +16,8 @@ namespace KeelMatrix.MetricBudget.Assertions;
 /// identifiers before sharing an assertion message outside its intended audience.
 /// </para>
 /// <para>
-/// Focused budget and observation helpers fail closed when their target delivered no measurements or its accounting was incomplete.
+/// Focused budget and observation helpers fail closed when their target delivered no measurements or its accounting was incomplete,
+/// including series, tag-set, tag-key, per-tag value, or instrument admission tracking.
 /// A name-only focused check also fails when selected identity admission loss makes that name ambiguous or when the
 /// bounded rejected-name index overflowed before the target was admitted, while unrelated instruments' incomplete
 /// accounting does not invalidate a target that was fully tracked when the index did not overflow.
@@ -400,10 +401,23 @@ public static class MetricBudgetReportAssertions
 
     private static bool InstrumentTrackingIncomplete(MetricBudgetInstrumentResult instrument)
     {
-        return instrument.SeriesTrackingIncomplete
+        if (instrument.SeriesTrackingIncomplete
             || instrument.TagSetTrackingIncomplete
             || instrument.TagKeyTrackingIncomplete
-            || instrument.InstrumentTrackingIncomplete;
+            || instrument.InstrumentTrackingIncomplete)
+        {
+            return true;
+        }
+
+        for (int i = 0; i < instrument.Tags.Count; i++)
+        {
+            if (instrument.Tags[i].ValueTrackingIncomplete)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static bool TagTrackingIncomplete(MetricBudgetTagResult tag)

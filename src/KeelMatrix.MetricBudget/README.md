@@ -60,7 +60,7 @@ and tag keys, but never prints tag or metric values.
   additional observation or state entry is rejected. `InvalidConfiguration` and a proven `Violation` have higher
   outcome precedence than `ObservationIncomplete`, so inspect `report.Safety`, the per-result completeness flags,
   and `report.AccountingIsConsistent` for every result. Focused budget and observation assertions fail closed for a
-  target whose accounting is incomplete. See
+  target whose accounting is incomplete, including per-tag value tracking. See
   [safety-bounds.md](https://github.com/KeelMatrix/MetricBudget/blob/main/docs/safety-bounds.md).
 - **Privacy boundary.** Reports exclude tag values, metric values, and workload samples, but retain application-
   supplied meter names, meter versions, instrument names, and tag keys. Review those identifiers before sharing

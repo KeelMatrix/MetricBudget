@@ -88,6 +88,49 @@ public sealed class BoundedObservationTests
     }
 
     [Fact]
+    public void FocusedObservationAssertionsFailClosedWhenTagValueTrackingIsIncomplete()
+    {
+        string meterName = TestNames.Meter(nameof(FocusedObservationAssertionsFailClosedWhenTagValueTrackingIsIncomplete));
+        using Meter meter = new Meter(meterName, "1.0.0");
+        Counter<long> configured = meter.CreateCounter<long>("configured");
+        Counter<long> unconfigured = meter.CreateCounter<long>("unconfigured");
+        MetricBudgetOptions options = new MetricBudgetOptions
+        {
+            MaxTrackedValuesPerTag = 1,
+        };
+        options.ForInstrument(meterName, "configured", budget =>
+        {
+            budget.MaxObservedSeries = 2;
+            budget.Tag("id").MaxDistinctValues = 2;
+        });
+        options.ForInstrument(meterName, "unconfigured", budget => budget.MaxObservedSeries = 2);
+
+        using MetricBudgetSession session = MetricBudgetSession.Start(options);
+        configured.Add(1, new KeyValuePair<string, object?>("id", "a"));
+        configured.Add(1, new KeyValuePair<string, object?>("id", "b"));
+        unconfigured.Add(1, new KeyValuePair<string, object?>("id", "a"));
+        unconfigured.Add(1, new KeyValuePair<string, object?>("id", "b"));
+
+        MetricBudgetReport report = session.Complete();
+        MetricBudgetInstrumentResult configuredResult = Assert.Single(report.Rules[0].Instruments);
+        MetricBudgetInstrumentResult unconfiguredResult = Assert.Single(report.Rules[1].Instruments);
+
+        Assert.Equal(MetricBudgetOutcome.ObservationIncomplete, report.Outcome);
+        Assert.True(report.Safety.TagValueTrackingIncomplete);
+        Assert.True(Assert.Single(configuredResult.Tags).ValueTrackingIncomplete);
+        Assert.True(Assert.Single(unconfiguredResult.Tags).ValueTrackingIncomplete);
+
+        Assert.Throws<MetricBudgetAssertionException>(
+            () => report.AssertInstrumentObserved(meterName, "configured"));
+        Assert.Throws<MetricBudgetAssertionException>(
+            () => report.AssertInstrumentObserved(meterName, "configured", configuredResult.IdentityDiscriminator));
+        Assert.Throws<MetricBudgetAssertionException>(
+            () => report.AssertInstrumentObserved(meterName, "unconfigured"));
+        Assert.Throws<MetricBudgetAssertionException>(
+            () => report.AssertInstrumentObserved(meterName, "unconfigured", unconfiguredResult.IdentityDiscriminator));
+    }
+
+    [Fact]
     public void DynamicInstrumentAdmissionIsBoundedAndIncomplete()
     {
         string meterName = TestNames.Meter(nameof(DynamicInstrumentAdmissionIsBoundedAndIncomplete));

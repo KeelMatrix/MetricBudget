@@ -18,6 +18,7 @@ exitCode += RunPassingBudget();
 exitCode += RunFailingBudget();
 exitCode += RunRuleLevelIncompleteAdmission();
 exitCode += RunFocusedObservationIncompleteAdmission();
+exitCode += RunFocusedObservationIncompleteTagValueTracking();
 exitCode += RunDateTimeIdentityBudget();
 exitCode += RunConflictPrecedence();
 
@@ -209,6 +210,68 @@ static int RunFocusedObservationIncompleteAdmission()
     }
 
     Console.WriteLine("both focused observation overloads failed closed for incomplete identity admission.");
+    return 0;
+}
+
+static int RunFocusedObservationIncompleteTagValueTracking()
+{
+    Console.WriteLine("--- focused observation incomplete tag-value tracking ---");
+
+    const string meterName = "Smoke.Consumer.FocusedObservationTagValues";
+    using Meter meter = new Meter(meterName, "1.0.0");
+    Counter<long> requests = meter.CreateCounter<long>("requests");
+    MetricBudgetOptions options = new MetricBudgetOptions
+    {
+        MaxTrackedValuesPerTag = 1,
+    };
+    options.ForInstrument(meterName, "requests", budget =>
+    {
+        budget.MaxObservedSeries = 2;
+        budget.Tag("tenant").MaxDistinctValues = 2;
+    });
+
+    using MetricBudgetSession session = MetricBudgetSession.Start(options);
+    requests.Add(1, new KeyValuePair<string, object?>("tenant", "tenant-a"));
+    requests.Add(1, new KeyValuePair<string, object?>("tenant", "tenant-b"));
+
+    MetricBudgetReport report = session.Complete();
+    MetricBudgetInstrumentResult result = report.Rules[0].Instruments.Single();
+    Console.WriteLine(report.ToDiagnosticString());
+
+    if (report.Outcome != MetricBudgetOutcome.ObservationIncomplete
+        || !result.WasObserved
+        || !result.Tags.Single().ValueTrackingIncomplete)
+    {
+        Console.WriteLine("UNEXPECTED: focused observation tag-value loss was not surfaced: " + report);
+        return 1;
+    }
+
+    int failures = 0;
+    try
+    {
+        _ = report.AssertInstrumentObserved(meterName, "requests");
+    }
+    catch (MetricBudgetAssertionException)
+    {
+        failures++;
+    }
+
+    try
+    {
+        _ = report.AssertInstrumentObserved(meterName, "requests", result.IdentityDiscriminator);
+    }
+    catch (MetricBudgetAssertionException)
+    {
+        failures++;
+    }
+
+    if (failures != 2)
+    {
+        Console.WriteLine("UNEXPECTED: focused observation tag-value assertions did not fail closed: " + report);
+        return 1;
+    }
+
+    Console.WriteLine("both focused observation overloads failed closed for incomplete tag-value tracking.");
     return 0;
 }
 
