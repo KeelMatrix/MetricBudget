@@ -62,9 +62,10 @@ Reports exclude tag and metric values but retain application-supplied meter name
 keys. Review those identifiers before sharing diagnostics outside their intended audience; see
 [privacy-and-telemetry.md](privacy-and-telemetry.md).
 
-Instrument identity admission and identity component length are distinct cases. An oversized instrument that no
-rule selects is ignored and does not invalidate the session. An oversized selected instrument is rejected and the
-diagnostic names `MaxInstrumentIdentityLength`; a selected identity or physical instance rejected by an admission
+Instrument identity admission and identity component/static-metadata bounds are distinct cases. An oversized instrument
+that no rule selects is ignored and does not invalidate the session. An oversized selected instrument, or a selected
+instrument with unsupported or unenumerable static metadata, is rejected and the diagnostic names
+`MaxInstrumentIdentityLength`; a selected identity or physical instance rejected by an admission
 bound names `MaxTrackedInstrumentIdentities` or `MaxTrackedInstrumentInstances` instead. A retained result affected
 by a rejected same-name identity or physical instance has `InstrumentTrackingIncomplete = true`, so focused budget
 assertions fail closed for that target. The bounded rejected-name index records overflow uncertainty; every identity
@@ -83,7 +84,8 @@ incomplete tracking does not invalidate a fully tracked target when the index di
 ## A test fails in parallel CI but passes alone
 
 Another test in the same process publishes instruments with the same identity. Identity is meter name, meter
-version, instrument name, and instrument kind, so generic names collide across libraries. Use specific names, and
+version, instrument name, kind, unit, description, measurement type, and static meter/instrument tags, so generic
+names with equivalent metadata can still share accounting while distinct streams do not merge. Use specific names, and
 keep each session scoped to the workload it verifies. A completed session disables every instrument it enabled,
 so it cannot leak delivery into later tests.
 

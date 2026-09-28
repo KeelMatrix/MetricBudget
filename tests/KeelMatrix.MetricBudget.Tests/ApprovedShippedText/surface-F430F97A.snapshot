@@ -72,7 +72,8 @@ either package-backed consumer. A plain solution build therefore never depends o
 - **Honest isolation.** Instrument publication is process-global; delivery is scoped to the instruments a session
   enabled. Do not promise isolation the platform cannot give.
 - **Deterministic identity.** Tag order never changes identity, duplicate keys are a sorted multiset, and the CLR
-  type of a value is part of identity.
+  type of a value is part of identity. Instrument identity also includes meter/instrument unit, description,
+  measurement type, meter tags, and instrument tags; `Meter.Scope` is explicitly excluded.
 - **Telemetry.** Only the allowlisted aggregate fields may ever be attached, activation means a completed
   verification that observed at least one selected instrument, and telemetry failure must never change a result.
   Tests, local development, the sample, and the package-consumer smoke test run with

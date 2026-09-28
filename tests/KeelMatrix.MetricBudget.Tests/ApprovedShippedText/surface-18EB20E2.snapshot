@@ -63,6 +63,8 @@ the API and safety docs, privacy and telemetry in the privacy guide, and recurri
 - the distinct **observed series** an instrument produced during the exercised workload;
 - the distinct **values** each configured tag key produced;
 - tag-set identity that is order-independent and deterministic, so the same combination never counts twice;
+- instrument identity that includes unit, description, measurement type, meter tags, and instrument tags while
+  excluding `Meter.Scope` from the stream key;
 - explicit outcomes for a budget breach, invalid configuration, an instrument that was never observed, and a
   session that observed no measurements at all.
 

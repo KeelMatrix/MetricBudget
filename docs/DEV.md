@@ -70,7 +70,8 @@ surface. `CHANGELOG.md` has no snapshot by design. A missing snapshot, an orphan
 a newly tracked text file fails the guard.
 
 Any change to snapshot-protected shipped text requires a deliberate approval commit. First review the complete change
-and confirm that the scope semantics are still **per instrument identity**, then build Release if generated XML may
+and confirm that the scope semantics are still **per complete instrument identity** (including supported static
+metadata, with `Meter.Scope` excluded), then build Release if generated XML may
 change and run:
 
 ```powershell

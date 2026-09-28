@@ -197,7 +197,7 @@ function Get-MappingLine {
 $expressionKeyAllowlist = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
 foreach ($key in @(
         "if", "name", "runs-on", "group", "env", "with", "path", "version", "timeout-minutes",
-        "RELEASE_EVENT_NAME", "RELEASE_REF_NAME", "RELEASE_INPUT_VERSION", "RELEASE_VERSION", "NUGET_PUSH_CREDENTIAL"
+        "RELEASE_EVENT_NAME", "RELEASE_REF_NAME", "RELEASE_REF", "RELEASE_INPUT_VERSION", "RELEASE_VERSION", "NUGET_PUSH_CREDENTIAL"
     ))
 {
     [void]$expressionKeyAllowlist.Add($key)

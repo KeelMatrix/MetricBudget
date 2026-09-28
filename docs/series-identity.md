@@ -9,11 +9,12 @@ would be wrong.
 ```text
 seriesKey  = instrumentKey U+001F tagSetKey
 
-instrumentKey = meterNameField U+001F meterVersionField U+001F instrumentNameField U+001F kindField
+instrumentKey = meterNameField U+001F meterVersionField U+001F instrumentNameField U+001F kindField U+001F metadataField
 meterNameField      = {length}:{meter name}
 meterVersionField   = {length}:{meter version}, or the bare marker null when the meter has no version
 instrumentNameField = {length}:{instrument name}
 kindField           = {length}:{counter|updowncounter|histogram|observablecounter|observableupdowncounter|observablegauge}
+metadataField       = {length}:{uppercase SHA-256 digest}
 
 tagSetKey = entries joined by U+001F, entries sorted with ordinal string comparison
 entry     = keyField U+001E valueField
@@ -62,13 +63,19 @@ Notes that the implementation, the diagnostics, and this document share:
   not a secure-erasure boundary. Raw tag values never appear in reports or telemetry.
 - **Instrument identity is part of the series key.** Two instruments with the same name in different meters, or in
   different versions of one meter name, never share accounting. Instrument *kind* is part of identity as well, so
-  a counter and a histogram with the same name are separate. `Meter.Scope` is not part of identity, matching the
-  instrumentation-scope model the BCL metrics APIs and the OpenTelemetry .NET SDK use, so two `Meter` instances
-  that share a name and version share one observed identity.
-- **Selected identity admission is bounded.** Selector matching happens before the identity component-length bound,
-  so oversized unselected instruments do not affect a scoped session. An oversized selected identity is rejected and
-  makes the report incomplete; a selected identity or physical instance rejected by an admission bound also makes
-  any affected retained result incomplete. Focused assertions do not draw a pass conclusion from those results.
+  a counter and a histogram with the same name are separate. The metadata field is a digest of the instrument
+  `Unit`, `Description`, closed generic measurement type, canonical `Meter.Tags`, and canonical `Instrument.Tags`.
+  A difference in any of those supported fields produces a different identity, so same-name streams cannot merge.
+  `Meter.Scope` is not part of identity, matching the instrumentation-scope model the BCL metrics APIs and the
+  OpenTelemetry .NET SDK use; two meters that differ only by scope share one observed identity.
+- **Static metadata is fail-closed and bounded.** Metadata tag enumeration is limited by
+  `MaxInstrumentIdentityLength`, uses the same supported lossless tag descriptors as delivered tags, and retains only
+  fixed-size digests. A throwing or unsupported metadata tag, an overlong caller-supplied unit or description, or an
+  overlong metadata tag key rejects the selected identity and marks the report incomplete; the finite framework
+  measurement-type token is bounded independently and never falls back to a name-only merge. Selector matching still
+  happens before identity admission, so rejected unselected instruments do not affect
+  a scoped session. A selected identity or physical instance rejected by an admission bound also makes any affected
+  retained result incomplete. Focused assertions do not draw a pass conclusion from those results.
 
 The rule is implemented by `TagIdentity` in the library. If the code and this document ever disagree, the code is
 wrong: the product documentation, the printed diagnostics, and the implementation are required to agree.

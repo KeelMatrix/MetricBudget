@@ -161,6 +161,295 @@ public sealed class BoundedObservationTests
     }
 
     [Fact]
+    public void InstrumentIdentitySeparatesSupportedStaticMetadataEquivalenceClasses()
+    {
+        string meterName = TestNames.Meter(nameof(InstrumentIdentitySeparatesSupportedStaticMetadataEquivalenceClasses));
+        KeyValuePair<string, object?> meterTag = new KeyValuePair<string, object?>("scope", "one");
+        KeyValuePair<string, object?> instrumentTag = new KeyValuePair<string, object?>("stream", "one");
+
+        using Meter baselineMeter = new Meter(meterName, "1.0.0");
+        using Meter scopedMeter = new Meter(new MeterOptions(meterName)
+        {
+            Version = "1.0.0",
+            Scope = new object(),
+        });
+        using Meter meterTagged = new Meter(new MeterOptions(meterName)
+        {
+            Version = "1.0.0",
+            Tags = new[] { meterTag },
+        });
+        using Meter unitMeter = new Meter(meterName, "1.0.0");
+        using Meter descriptionMeter = new Meter(meterName, "1.0.0");
+        using Meter typeMeter = new Meter(meterName, "1.0.0");
+        using Meter instrumentTaggedMeter = new Meter(meterName, "1.0.0");
+
+        Counter<long> baseline = baselineMeter.CreateCounter<long>("requests", "ms", "one");
+        Counter<long> scopedCounter = scopedMeter.CreateCounter<long>("requests", "ms", "one");
+        Counter<long> meterTaggedCounter = meterTagged.CreateCounter<long>("requests", "ms", "one");
+        Counter<long> unitCounter = unitMeter.CreateCounter<long>("requests", "seconds", "one");
+        Counter<long> descriptionCounter = descriptionMeter.CreateCounter<long>("requests", "ms", "two");
+        Counter<int> typeCounter = typeMeter.CreateCounter<int>("requests", "ms", "one");
+        Counter<long> instrumentTaggedCounter = instrumentTaggedMeter.CreateCounter<long>(
+            "requests",
+            "ms",
+            "one",
+            new[] { instrumentTag });
+
+        MetricBudgetOptions options = new MetricBudgetOptions();
+        options.ForInstrument(meterName, "requests", budget => budget.MaxObservedSeries = 10);
+
+        using MetricBudgetSession session = MetricBudgetSession.Start(options);
+        baseline.Add(1);
+        scopedCounter.Add(1);
+        meterTaggedCounter.Add(1);
+        unitCounter.Add(1);
+        descriptionCounter.Add(1);
+        typeCounter.Add(1);
+        instrumentTaggedCounter.Add(1);
+
+        MetricBudgetReport report = session.Complete();
+
+        Assert.Equal(MetricBudgetOutcome.Passed, report.Outcome);
+        Assert.Equal(6, report.ObservedInstrumentCount);
+        Assert.Equal(6, report.Rules[0].Instruments.Count);
+        Assert.Equal(7, report.TotalMeasurementsObserved);
+        Assert.Equal(2, report.Rules[0].Instruments.Single(instrument => instrument.MeasurementCount == 2).MeasurementCount);
+    }
+
+    [Fact]
+    public void UnsupportedStaticMetadataIsRejectedWithoutNameOnlyMerge()
+    {
+        string meterName = TestNames.Meter(nameof(UnsupportedStaticMetadataIsRejectedWithoutNameOnlyMerge));
+        using Meter meter = new Meter(new MeterOptions(meterName)
+        {
+            Version = "1.0.0",
+            Tags = new[] { new KeyValuePair<string, object?>("scope", new ThrowingValue()) },
+        });
+        Counter<long> counter = meter.CreateCounter<long>("requests");
+        MetricBudgetOptions options = new MetricBudgetOptions { MaxInstrumentIdentityLength = 64 };
+        options.ForInstrument(meterName, "requests", budget => budget.MaxObservedSeries = 1);
+
+        using MetricBudgetSession session = MetricBudgetSession.Start(options);
+        counter.Add(1);
+        MetricBudgetReport report = session.Complete();
+
+        Assert.Equal(MetricBudgetOutcome.ObservationIncomplete, report.Outcome);
+        Assert.Empty(report.Rules[0].Instruments);
+        Assert.Equal(0, report.ObservedInstrumentCount);
+        Assert.True(report.Safety.InstrumentIdentityLengthTrackingIncomplete);
+        Assert.Equal(1, report.Safety.UntrackedInstrumentIdentityLengths);
+    }
+
+    [Fact]
+    public void OverlongStaticDescriptionIsRejectedBeforeAdmission()
+    {
+        string meterName = TestNames.Meter(nameof(OverlongStaticDescriptionIsRejectedBeforeAdmission));
+        using Meter meter = new Meter(meterName, "1.0.0");
+        Counter<long> counter = meter.CreateCounter<long>("requests", description: new string('d', 65));
+        MetricBudgetOptions options = new MetricBudgetOptions { MaxInstrumentIdentityLength = 64 };
+        options.ForInstrument(meterName, "requests", budget => budget.MaxObservedSeries = 1);
+
+        using MetricBudgetSession session = MetricBudgetSession.Start(options);
+        counter.Add(1);
+        MetricBudgetReport report = session.Complete();
+
+        Assert.Equal(MetricBudgetOutcome.ObservationIncomplete, report.Outcome);
+        Assert.Empty(report.Rules[0].Instruments);
+        Assert.True(report.Safety.InstrumentIdentityLengthTrackingIncomplete);
+        Assert.Equal(1, report.Safety.UntrackedInstrumentIdentityLengths);
+    }
+
+    [Fact]
+    public async Task AdmittedMeasurementCommitsBeforeCompleteReturns()
+    {
+        string meterName = TestNames.Meter(nameof(AdmittedMeasurementCommitsBeforeCompleteReturns));
+        using Meter meter = new Meter(meterName, "1.0.0");
+        Counter<long> counter = meter.CreateCounter<long>("requests");
+        MetricBudgetOptions options = new MetricBudgetOptions();
+        options.ForInstrument(meterName, "requests", budget => budget.MaxObservedSeries = 1);
+        using MetricBudgetSession session = MetricBudgetSession.Start(options);
+
+        using ManualResetEventSlim commitEntered = new ManualResetEventSlim();
+        using ManualResetEventSlim releaseCommit = new ManualResetEventSlim();
+        int entered = 0;
+        MetricBudgetState.BeforeMeasurementCommitForTesting = () =>
+        {
+            if (Interlocked.Exchange(ref entered, 1) == 0)
+            {
+                commitEntered.Set();
+                releaseCommit.Wait();
+            }
+        };
+
+        try
+        {
+            Task measurement = Task.Run(() => counter.Add(1));
+            Assert.True(commitEntered.Wait(TimeSpan.FromSeconds(5)));
+            Task<MetricBudgetReport> completion = Task.Run(session.Complete);
+
+            Task completedOrTimedOut = await Task.WhenAny(completion, Task.Delay(100));
+            Assert.NotSame(completion, completedOrTimedOut);
+            releaseCommit.Set();
+
+            await measurement;
+            MetricBudgetReport report = await completion;
+            Assert.Equal(1, report.TotalMeasurementsObserved);
+            Assert.Equal(1, report.ObservedSeriesCount);
+            Assert.Equal(MetricBudgetOutcome.Passed, report.Outcome);
+        }
+        finally
+        {
+            releaseCommit.Set();
+            MetricBudgetState.BeforeMeasurementCommitForTesting = null;
+        }
+    }
+
+    [Fact]
+    public async Task AdmittedUnsupportedMeasurementCommitsBeforeCompleteReturns()
+    {
+        string meterName = TestNames.Meter(nameof(AdmittedUnsupportedMeasurementCommitsBeforeCompleteReturns));
+        using Meter meter = new Meter(meterName, "1.0.0");
+        Counter<long> counter = meter.CreateCounter<long>("requests");
+        MetricBudgetOptions options = new MetricBudgetOptions { MaxTagCount = 1 };
+        options.ForInstrument(meterName, "requests", budget => budget.MaxObservedSeries = 1);
+        using MetricBudgetSession session = MetricBudgetSession.Start(options);
+
+        using ManualResetEventSlim commitEntered = new ManualResetEventSlim();
+        using ManualResetEventSlim releaseCommit = new ManualResetEventSlim();
+        int entered = 0;
+        MetricBudgetState.BeforeMeasurementCommitForTesting = () =>
+        {
+            if (Interlocked.Exchange(ref entered, 1) == 0)
+            {
+                commitEntered.Set();
+                releaseCommit.Wait();
+            }
+        };
+
+        try
+        {
+            Task measurement = Task.Run(
+                () => counter.Add(
+                    1,
+                    new KeyValuePair<string, object?>("first", 1),
+                    new KeyValuePair<string, object?>("second", 2)));
+            Assert.True(commitEntered.Wait(TimeSpan.FromSeconds(5)));
+            Task<MetricBudgetReport> completion = Task.Run(session.Complete);
+
+            Task completedOrTimedOut = await Task.WhenAny(completion, Task.Delay(100));
+            Assert.NotSame(completion, completedOrTimedOut);
+            releaseCommit.Set();
+
+            await measurement;
+            MetricBudgetReport report = await completion;
+            Assert.Equal(1, report.TotalMeasurementsObserved);
+            Assert.Equal(MetricBudgetOutcome.ObservationIncomplete, report.Outcome);
+            Assert.True(report.Safety.TagSetTrackingIncomplete);
+        }
+        finally
+        {
+            releaseCommit.Set();
+            MetricBudgetState.BeforeMeasurementCommitForTesting = null;
+        }
+    }
+
+    [Fact]
+    public async Task RepeatedAdmittedMeasurementCommitsBeforeCompleteReturns()
+    {
+        string meterName = TestNames.Meter(nameof(RepeatedAdmittedMeasurementCommitsBeforeCompleteReturns));
+        using Meter meter = new Meter(meterName, "1.0.0");
+        Counter<long> counter = meter.CreateCounter<long>("requests");
+        MetricBudgetOptions options = new MetricBudgetOptions();
+        options.ForInstrument(meterName, "requests", budget => budget.MaxObservedSeries = 1);
+        using MetricBudgetSession session = MetricBudgetSession.Start(options);
+
+        using ManualResetEventSlim commitEntered = new ManualResetEventSlim();
+        using ManualResetEventSlim releaseCommit = new ManualResetEventSlim();
+        int entered = 0;
+        MetricBudgetState.BeforeMeasurementCommitForTesting = () =>
+        {
+            if (Interlocked.Exchange(ref entered, 1) == 0)
+            {
+                commitEntered.Set();
+                releaseCommit.Wait();
+            }
+        };
+
+        try
+        {
+            Task first = Task.Run(() => counter.Add(1));
+            Assert.True(commitEntered.Wait(TimeSpan.FromSeconds(5)));
+            Task second = Task.Run(() => counter.Add(1));
+            await second;
+            Task<MetricBudgetReport> completion = Task.Run(session.Complete);
+
+            Task completedOrTimedOut = await Task.WhenAny(completion, Task.Delay(100));
+            Assert.NotSame(completion, completedOrTimedOut);
+            releaseCommit.Set();
+
+            await first;
+            MetricBudgetReport report = await completion;
+            Assert.Equal(2, report.TotalMeasurementsObserved);
+            Assert.Equal(2, report.Rules[0].Instruments[0].MeasurementCount);
+            Assert.Equal(MetricBudgetOutcome.Passed, report.Outcome);
+        }
+        finally
+        {
+            releaseCommit.Set();
+            MetricBudgetState.BeforeMeasurementCommitForTesting = null;
+        }
+    }
+
+    [Fact]
+    public async Task AdmittedCallbacksCrossBudgetBoundaryBeforeCompleteReturns()
+    {
+        string meterName = TestNames.Meter(nameof(AdmittedCallbacksCrossBudgetBoundaryBeforeCompleteReturns));
+        using Meter meter = new Meter(meterName, "1.0.0");
+        Counter<long> counter = meter.CreateCounter<long>("requests");
+        MetricBudgetOptions options = new MetricBudgetOptions { MaxTrackedSeries = 2 };
+        options.ForInstrument(meterName, "requests", budget => budget.MaxObservedSeries = 1);
+        using MetricBudgetSession session = MetricBudgetSession.Start(options);
+
+        using ManualResetEventSlim commitEntered = new ManualResetEventSlim();
+        using ManualResetEventSlim releaseCommit = new ManualResetEventSlim();
+        int entered = 0;
+        MetricBudgetState.BeforeMeasurementCommitForTesting = () =>
+        {
+            if (Interlocked.Exchange(ref entered, 1) == 0)
+            {
+                commitEntered.Set();
+                releaseCommit.Wait();
+            }
+        };
+
+        try
+        {
+            Task first = Task.Run(
+                () => counter.Add(1, new KeyValuePair<string, object?>("route", "first")));
+            Assert.True(commitEntered.Wait(TimeSpan.FromSeconds(5)));
+            Task second = Task.Run(
+                () => counter.Add(1, new KeyValuePair<string, object?>("route", "second")));
+            await second;
+            Task<MetricBudgetReport> completion = Task.Run(session.Complete);
+
+            Task completedOrTimedOut = await Task.WhenAny(completion, Task.Delay(100));
+            Assert.NotSame(completion, completedOrTimedOut);
+            releaseCommit.Set();
+
+            await first;
+            MetricBudgetReport report = await completion;
+            Assert.Equal(2, report.TotalMeasurementsObserved);
+            Assert.Equal(2, report.ObservedSeriesCount);
+            Assert.Equal(MetricBudgetOutcome.Violation, report.Outcome);
+        }
+        finally
+        {
+            releaseCommit.Set();
+            MetricBudgetState.BeforeMeasurementCommitForTesting = null;
+        }
+    }
+
+    [Fact]
     public void RuleResultCannotPassWhenAnOverlongInstrumentIdentityIsRejected()
     {
         const string meterName = "m";

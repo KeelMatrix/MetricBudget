@@ -17,6 +17,9 @@ internal sealed class MetricBudgetState
     // Test-only synchronization point for proving that publication cannot pass shutdown while enabling.
     internal static Action? BeforeEnableForTesting { get; set; }
 
+    // Test-only synchronization point for proving that an admitted callback commits before shutdown returns.
+    internal static Action? BeforeMeasurementCommitForTesting { get; set; }
+
     private readonly FrozenOptions options;
     private readonly object sync = new();
     private readonly Dictionary<InstrumentIdentity, InstrumentAccount> accounts = new();
@@ -54,7 +57,7 @@ internal sealed class MetricBudgetState
     /// </summary>
     internal void OnInstrumentPublished(Instrument instrument, MeterListener listener)
     {
-        InstrumentIdentity identity = InstrumentIdentity.FromInstrument(instrument);
+        InstrumentIdentity identity = InstrumentIdentity.FromInstrument(instrument, options);
 
         lock (sync)
         {
@@ -91,7 +94,8 @@ internal sealed class MetricBudgetState
                 knownSelectorConflict = true;
             }
 
-            if (!identity.HasComponentLengthsAtMost(options.MaxInstrumentIdentityLength))
+            if (!identity.MetadataComplete
+                || !identity.HasComponentLengthsAtMost(options.MaxInstrumentIdentityLength))
             {
                 RememberUntrackedName(identity);
                 MarkKnownAccountsWithSameName(identity);
@@ -234,9 +238,10 @@ internal sealed class MetricBudgetState
                     out TagField[] fields))
             {
                 _ = TagIdentity.GetLastFailure();
+                BeforeMeasurementCommitForTesting?.Invoke();
                 lock (sync)
                 {
-                    if (!stopped && accounts.TryGetValue(identity, out InstrumentAccount? failedAccount))
+                    if (accounts.TryGetValue(identity, out InstrumentAccount? failedAccount))
                     {
                         measurementsDelivered++;
                         failedAccount.RecordIncompleteMeasurement();
@@ -248,20 +253,18 @@ internal sealed class MetricBudgetState
 
             Sha256Digest seriesDigest = Sha256TextHash.Digest(TagIdentity.CreateSeriesKey(identity, tagSetKey));
 
+            BeforeMeasurementCommitForTesting?.Invoke();
             lock (sync)
             {
-                if (!stopped)
-                {
-                    measurementsDelivered++;
+                measurementsDelivered++;
 
-                    if (!accounts.TryGetValue(identity, out InstrumentAccount? account))
-                    {
-                        unmatchedMeasurements++;
-                    }
-                    else
-                    {
-                        account.Record(fields, seriesDigest, options);
-                    }
+                if (!accounts.TryGetValue(identity, out InstrumentAccount? account))
+                {
+                    unmatchedMeasurements++;
+                }
+                else
+                {
+                    account.Record(fields, seriesDigest, options);
                 }
             }
         }

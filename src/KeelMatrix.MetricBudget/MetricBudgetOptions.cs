@@ -59,7 +59,7 @@ public sealed class MetricBudgetOptions
     /// <summary>Default number of tags accepted from one delivered measurement.</summary>
     public const int DefaultMaxTagCount = 64;
 
-    /// <summary>Default maximum length of each meter or instrument identity component.</summary>
+    /// <summary>Default maximum length of each retained meter or instrument identity component.</summary>
     public const int DefaultMaxInstrumentIdentityLength = 256;
 
     /// <summary>Default maximum length of a delivered tag key.</summary>
@@ -150,8 +150,8 @@ public sealed class MetricBudgetOptions
     /// <remarks>A larger tag set is not canonicalized or retained and makes the report explicitly incomplete.</remarks>
     public int MaxTagCount { get; set; } = DefaultMaxTagCount;
 
-    /// <summary>Maximum length of each meter name, meter version, and instrument name retained in identity state.</summary>
-    /// <remarks>An identity with a longer component is not retained or enabled.</remarks>
+    /// <summary>Maximum length of each caller-supplied identity and static metadata text component.</summary>
+    /// <remarks>An identity with a longer or unsupported caller-supplied component is not retained or enabled.</remarks>
     public int MaxInstrumentIdentityLength { get; set; } = DefaultMaxInstrumentIdentityLength;
 
     /// <summary>Maximum length of a delivered tag key retained in tag accounting state.</summary>

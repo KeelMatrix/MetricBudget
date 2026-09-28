@@ -125,7 +125,7 @@ public sealed class MetricBudgetSafetyReport
     /// <summary>Configured bound on tags accepted from one measurement.</summary>
     public int MaxTagCount { get; }
 
-    /// <summary>Configured bound on each meter and instrument identity component.</summary>
+    /// <summary>Configured bound on each caller-supplied identity and static metadata text component.</summary>
     public int MaxInstrumentIdentityLength { get; }
 
     /// <summary>Configured bound on a delivered tag key.</summary>
@@ -144,13 +144,13 @@ public sealed class MetricBudgetSafetyReport
     public long UntrackedInstrumentInstances { get; }
 
     /// <summary>
-    /// Whether selected instrument identities were rejected because a meter name, meter version, or instrument
-    /// name exceeded <see cref="MaxInstrumentIdentityLength"/>.
+    /// Whether selected instrument identities were rejected because an identity or static metadata component was
+    /// unsupported or exceeded <see cref="MaxInstrumentIdentityLength"/>.
     /// </summary>
     public bool InstrumentIdentityLengthTrackingIncomplete { get; }
 
     /// <summary>
-    /// Selected published identities rejected by the instrument identity component-length bound.
+    /// Selected published identities rejected by the instrument identity or static metadata bound.
     /// </summary>
     public long UntrackedInstrumentIdentityLengths { get; }
 

@@ -33,7 +33,8 @@ the consumer documentation set.
 - **Explicit containment.** A session disables measurement events for every instrument it enabled, because
   `MeterListener.Dispose` does not stop delivery by itself.
 - **Deterministic identity.** Series identity stays order-independent; the rule is documented in
-  [docs/series-identity.md](docs/series-identity.md) and must match the implementation.
+  [docs/series-identity.md](docs/series-identity.md), including static instrument metadata, and must match the
+  implementation.
 
 ## Submitting a pull request
 

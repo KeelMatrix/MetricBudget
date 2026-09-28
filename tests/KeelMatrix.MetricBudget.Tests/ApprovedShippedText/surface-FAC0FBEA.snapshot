@@ -295,26 +295,38 @@
         </member>
         <member name="T:KeelMatrix.MetricBudget.Internal.InstrumentIdentity">
             <summary>
-            Observed instrument identity: meter name, meter version, instrument name, and instrument kind.
+            Observed instrument identity: meter scope metadata, instrument metadata, and instrument kind.
             </summary>
             <remarks>
             <para>
             The BCL metrics identity model does not include the <c>Meter.Scope</c> object, and measurement delivery is
-            process-wide per instrument, so two <c>Meter</c> instances that share a name and version share one observed
-            identity. That is the same instrumentation-scope identity model used by the OpenTelemetry .NET SDK.
+            process-wide per instrument. Meter tags, instrument tags, unit, description, and measurement type are part of
+            this identity because they distinguish otherwise same-name metric streams.
             </para>
             <para>
-            The meter version is part of identity, so the same instrument name in two versions of a meter is accounted
-            separately.
+            Raw static tag values are never retained: the metadata portion is a fixed-size digest of the canonical tag
+            descriptors. The meter scope marker itself is intentionally excluded because it is not measurement identity.
             </para>
             </remarks>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.Internal.InstrumentIdentity.MetadataDigest">
+            <summary>Fixed-size digest of unit, description, measurement type, meter tags, and instrument tags.</summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.Internal.InstrumentIdentity.MetadataComplete">
+            <summary>Whether static metadata was fully enumerable and supported by the identity contract.</summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.Internal.InstrumentIdentity.MetadataComponentLengthsValid">
+            <summary>Whether every retained static metadata component is within the configured length bound.</summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.Internal.InstrumentIdentity.MetadataComponentLength">
+            <summary>Largest static metadata component length, used for diagnostics-free bounded admission.</summary>
         </member>
         <member name="P:KeelMatrix.MetricBudget.Internal.InstrumentIdentity.KindName">
             <summary>Stable lowercase token for the instrument kind, used inside series identity text.</summary>
         </member>
         <member name="M:KeelMatrix.MetricBudget.Internal.InstrumentIdentity.Describe">
             <summary>
-            Human-readable identity used in diagnostics. Contains no tag keys or values.
+            Human-readable identity used in diagnostics. Contains no tag keys, tag values, or static metadata values.
             </summary>
         </member>
         <member name="T:KeelMatrix.MetricBudget.Internal.MetricBudgetState">
@@ -820,7 +832,7 @@
             <summary>Default number of tags accepted from one delivered measurement.</summary>
         </member>
         <member name="F:KeelMatrix.MetricBudget.MetricBudgetOptions.DefaultMaxInstrumentIdentityLength">
-            <summary>Default maximum length of each meter or instrument identity component.</summary>
+            <summary>Default maximum length of each retained meter or instrument identity component.</summary>
         </member>
         <member name="F:KeelMatrix.MetricBudget.MetricBudgetOptions.DefaultMaxTagKeyLength">
             <summary>Default maximum length of a delivered tag key.</summary>
@@ -905,8 +917,8 @@
             <remarks>A larger tag set is not canonicalized or retained and makes the report explicitly incomplete.</remarks>
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetOptions.MaxInstrumentIdentityLength">
-            <summary>Maximum length of each meter name, meter version, and instrument name retained in identity state.</summary>
-            <remarks>An identity with a longer component is not retained or enabled.</remarks>
+            <summary>Maximum length of each caller-supplied identity and static metadata text component.</summary>
+            <remarks>An identity with a longer or unsupported caller-supplied component is not retained or enabled.</remarks>
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetOptions.MaxTagKeyLength">
             <summary>Maximum length of a delivered tag key retained in tag accounting state.</summary>
@@ -1254,7 +1266,7 @@
             <summary>Configured bound on tags accepted from one measurement.</summary>
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.MaxInstrumentIdentityLength">
-            <summary>Configured bound on each meter and instrument identity component.</summary>
+            <summary>Configured bound on each caller-supplied identity and static metadata text component.</summary>
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.MaxTagKeyLength">
             <summary>Configured bound on a delivered tag key.</summary>
@@ -1273,13 +1285,13 @@
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.InstrumentIdentityLengthTrackingIncomplete">
             <summary>
-            Whether selected instrument identities were rejected because a meter name, meter version, or instrument
-            name exceeded <see cref="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.MaxInstrumentIdentityLength"/>.
+            Whether selected instrument identities were rejected because an identity or static metadata component was
+            unsupported or exceeded <see cref="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.MaxInstrumentIdentityLength"/>.
             </summary>
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.UntrackedInstrumentIdentityLengths">
             <summary>
-            Selected published identities rejected by the instrument identity component-length bound.
+            Selected published identities rejected by the instrument identity or static metadata bound.
             </summary>
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.ConflictTrackingIncomplete">

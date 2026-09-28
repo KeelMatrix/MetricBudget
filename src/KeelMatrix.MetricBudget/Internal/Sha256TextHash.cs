@@ -52,6 +52,14 @@ internal readonly struct Sha256Digest : IEquatable<Sha256Digest>
         return unchecked((int)(first ^ (first >> 32) ^ second));
     }
 
+    internal string ToHex()
+    {
+        return first.ToString("X16", CultureInfo.InvariantCulture)
+            + second.ToString("X16", CultureInfo.InvariantCulture)
+            + third.ToString("X16", CultureInfo.InvariantCulture)
+            + fourth.ToString("X16", CultureInfo.InvariantCulture);
+    }
+
     private static ulong ReadUInt64(byte[] bytes, int offset)
     {
         return ((ulong)bytes[offset] << 56)

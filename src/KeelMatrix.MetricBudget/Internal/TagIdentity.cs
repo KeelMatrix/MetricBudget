@@ -301,6 +301,8 @@ internal static class TagIdentity
             + EntrySeparator
             + EncodeField(instrument.KindName)
             + EntrySeparator
+            + EncodeField(instrument.MetadataDigest.ToHex())
+            + EntrySeparator
             + tagSetKey;
     }
 }

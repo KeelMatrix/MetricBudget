@@ -41,30 +41,18 @@ jobs:
       - name: Verify release source provenance
         shell: pwsh
         env:
+          RELEASE_EVENT_NAME: ${{ github.event_name }}
           RELEASE_REF_NAME: ${{ github.ref_name }}
+          RELEASE_REF: ${{ github.ref }}
         run: |
-          $ErrorActionPreference = 'Stop'
-          git fetch --no-tags --prune origin '+refs/heads/main:refs/remotes/origin/main'
-          if ($LASTEXITCODE -ne 0) {
-              throw 'Release source validation failed: could not fetch origin/main.'
-          }
+          pwsh -NoProfile -File scripts/validate-release-provenance.ps1 `
+            -EventName $env:RELEASE_EVENT_NAME `
+            -RefName $env:RELEASE_REF_NAME `
+            -Ref $env:RELEASE_REF
 
-          $taggedCommit = (git rev-parse HEAD).Trim()
-          if ([string]::IsNullOrWhiteSpace($taggedCommit)) {
-              throw 'Release source validation failed: could not resolve the checked-out commit.'
-          }
-
-          # This proves that the tagged commit is contained in the origin/main ref fetched in this run,
-          # which catches a tag placed outside main. It does not defend against a party able to modify or
-          # serve the repository's main ref, or to push to the repository, because that party can also push
-          # the tag itself. That residual is accepted because origin is the same remote that receives the tag.
-          git merge-base --is-ancestor HEAD origin/main
-          if ($LASTEXITCODE -ne 0) {
-              throw "Release source validation failed: tagged commit '$taggedCommit' is not contained in origin/main."
-          }
-
-          Write-Output "RELEASE_SOURCE ref=$env:RELEASE_REF_NAME sha=$taggedCommit contained_in_main=PASS"
-          "RELEASE_COMMIT=$taggedCommit" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+      - name: Test release source provenance
+        shell: pwsh
+        run: pwsh -NoProfile -File scripts/tests/validate-release-provenance.tests.ps1
 
       - name: Validate workflow safety
         shell: pwsh

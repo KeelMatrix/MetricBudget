@@ -191,8 +191,8 @@ public sealed class SeriesBudgetTests
         IReadOnlyList<MetricBudgetInstrumentResult> instruments = report.Rules[0].Instruments;
         Assert.Equal(3, instruments.Count);
 
-        // Two meters with the same name and version share one observed identity, matching the BCL metrics scope
-        // model, so their measurements produce one series of two measurements.
+        // Two meters with the same name, version, and static metadata share one observed identity, matching the BCL
+        // metrics scope model; Meter.Scope itself is intentionally excluded.
         MetricBudgetInstrumentResult shared = instruments.Single(
             instrument => instrument.MeterVersion == "1.0.0" && instrument.InstrumentKind == MetricInstrumentKind.Counter);
         Assert.Equal(2, shared.MeasurementCount);

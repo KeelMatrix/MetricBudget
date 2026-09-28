@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+- Complete instrument identity with unit, description, measurement type, meter tags, and instrument tags, and make
+  admitted shutdown callbacks commit before completion returns.
+- Require release validation to run from the exact current `origin/main` commit.
+
 ## [0.1.0] - 2026-09-25
 
 ### Added
