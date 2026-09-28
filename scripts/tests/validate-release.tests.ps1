@@ -9,6 +9,7 @@ $testRoot = Join-Path ([IO.Path]::GetTempPath()) ("metricbudget-release-date-tes
 $validatorPath = Join-Path $testRoot "scripts/validate-release.ps1"
 $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 . (Join-Path $PSScriptRoot "pwsh-launch.ps1")
+. (Join-Path $PSScriptRoot "../../build/Invoke-NestedPwsh.ps1")
 
 function Assert-True {
     param([Parameter(Mandatory = $true)][bool] $Condition, [Parameter(Mandatory = $true)][string] $Message)
@@ -17,8 +18,8 @@ function Assert-True {
 }
 
 function Invoke-ReleaseValidator {
-    $arguments = Get-PwshChildArguments -HideWindow ([bool]$IsWindows) -ScriptPath $validatorPath -ScriptArguments @('-Version', '0.1.0')
-    $output = @(& pwsh @arguments 2>&1)
+    $arguments = Get-PwshChildArguments -HideWindow $false -ScriptPath $validatorPath -ScriptArguments @('-Version', '0.1.0')
+    $output = @(Invoke-NestedPwsh -ArgumentList $arguments 2>&1)
     return [pscustomobject]@{
         ExitCode = $LASTEXITCODE
         Output = ($output -join "`n")

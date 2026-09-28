@@ -10,6 +10,7 @@ $origin = Join-Path $testRoot "origin.git"
 $seed = Join-Path $testRoot "seed"
 $candidate = Join-Path $testRoot "candidate"
 . (Join-Path $PSScriptRoot "pwsh-launch.ps1")
+. (Join-Path $PSScriptRoot "../../build/Invoke-NestedPwsh.ps1")
 
 function Assert-True {
     param([Parameter(Mandatory = $true)][bool] $Condition, [Parameter(Mandatory = $true)][string] $Message)
@@ -41,10 +42,10 @@ function Invoke-Validator {
     Push-Location $candidate
     try {
         $arguments = Get-PwshChildArguments `
-            -HideWindow ([bool]$IsWindows) `
+            -HideWindow $false `
             -ScriptPath (Join-Path $repositoryRoot "scripts/validate-release-provenance.ps1") `
             -ScriptArguments @('-EventName', $EventName, '-RefName', $RefName, '-Ref', $Ref)
-        $output = @(& pwsh @arguments 2>&1)
+        $output = @(Invoke-NestedPwsh -ArgumentList $arguments 2>&1)
         return [pscustomobject]@{
             ExitCode = $LASTEXITCODE
             Output = ($output -join "`n")

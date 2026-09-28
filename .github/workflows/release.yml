@@ -34,6 +34,14 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Verify hidden child PowerShell launch guard
+        shell: pwsh
+        run: ./build/Test-NestedPwshLaunch.ps1 -SelfTest
+
+      - name: Scan repository child PowerShell launches
+        shell: pwsh
+        run: ./build/Test-NestedPwshLaunch.ps1
+
       - name: Check commit authorship and history
         shell: bash
         run: sh .githooks/check-history
