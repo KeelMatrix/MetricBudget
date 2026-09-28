@@ -50,7 +50,8 @@ public sealed class MetricBudgetViolation
         MetricInstrumentKind instrumentKind,
         string? tagKey,
         int? observedCount,
-        int? configuredLimit)
+        int? configuredLimit,
+        string? identityDiscriminator = null)
     {
         Kind = kind;
         Description = description;
@@ -58,6 +59,7 @@ public sealed class MetricBudgetViolation
         MeterVersion = meterVersion;
         InstrumentName = instrumentName;
         InstrumentKind = instrumentKind;
+        IdentityDiscriminator = identityDiscriminator;
         TagKey = tagKey;
         ObservedCount = observedCount;
         ConfiguredLimit = configuredLimit;
@@ -94,6 +96,12 @@ public sealed class MetricBudgetViolation
     /// <see cref="MetricInstrumentKind.Unknown"/>.
     /// </summary>
     public MetricInstrumentKind InstrumentKind { get; }
+
+    /// <summary>
+    /// Privacy-safe discriminator for the complete instrument identity, or <see langword="null"/> when the record
+    /// does not refer to a retained instrument identity.
+    /// </summary>
+    public string? IdentityDiscriminator { get; }
 
     /// <summary>
     /// Tag key for tag-level records, otherwise <see langword="null"/>. A delivered <see langword="null"/> tag key

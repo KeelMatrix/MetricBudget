@@ -21,6 +21,11 @@ versions, instrument names, and tag keys. Those identifiers can themselves be co
 sharing output outside its intended audience. If you need to know which value produced a breach, reproduce it locally
 with a debugger rather than printing values into persistent CI output.
 
+Complete retained instrument identities also expose an `IdentityDiscriminator`, a lowercase SHA-256 token derived from
+the identity fields. It distinguishes same-name streams without exposing unit, description, measurement type, meter
+tags, or instrument tags. Static-metadata rejection records contain only the rejected dimension, count, and effective
+bound; they never contain metadata values.
+
 ## Memory
 
 Series and tag-value identity retained by bounded accounting consists of fixed-size SHA-256 digests, inside the

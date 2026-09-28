@@ -62,6 +62,7 @@ internal static class ReportBuilder
                     account.Identity.MeterVersion,
                     account.Identity.InstrumentName,
                     account.Identity.Kind,
+                    account.Identity.IdentityDiscriminator,
                     account.MeasurementCount,
                     account.ObservedSeriesCount,
                     rule.MaxObservedSeries,
@@ -91,7 +92,8 @@ internal static class ReportBuilder
                         account.Identity.Kind,
                         tagKey: null,
                         observedCount: 0,
-                        configuredLimit: null));
+                        configuredLimit: null,
+                        identityDiscriminator: account.Identity.IdentityDiscriminator));
                     continue;
                 }
 
@@ -111,7 +113,8 @@ internal static class ReportBuilder
                         account.Identity.Kind,
                         tagKey: null,
                         observedCount: null,
-                        configuredLimit: null));
+                        configuredLimit: null,
+                        identityDiscriminator: account.Identity.IdentityDiscriminator));
                 }
 
                 if (account.TagKeyCapExhausted)
@@ -127,7 +130,8 @@ internal static class ReportBuilder
                         account.Identity.Kind,
                         tagKey: null,
                         observedCount: null,
-                        configuredLimit: null));
+                        configuredLimit: null,
+                        identityDiscriminator: account.Identity.IdentityDiscriminator));
                 }
 
                 if (rule.MaxObservedSeries is int maxSeries && account.ObservedSeriesCount > maxSeries)
@@ -147,7 +151,8 @@ internal static class ReportBuilder
                         account.Identity.Kind,
                         tagKey: null,
                         observedCount: account.ObservedSeriesCount,
-                        configuredLimit: maxSeries));
+                        configuredLimit: maxSeries,
+                        identityDiscriminator: account.Identity.IdentityDiscriminator));
                 }
 
                 for (int k = 0; k < tags.Count; k++)
@@ -170,7 +175,8 @@ internal static class ReportBuilder
                             account.Identity.Kind,
                             tag.Key,
                             tag.ObservedDistinctValueCount,
-                            configuredLimit: null));
+                            configuredLimit: null,
+                            identityDiscriminator: account.Identity.IdentityDiscriminator));
                     }
 
                     if (tag.IsConfigured
@@ -193,7 +199,8 @@ internal static class ReportBuilder
                             account.Identity.Kind,
                             tag.Key,
                             tag.ObservedDistinctValueCount,
-                            tagLimit));
+                            tagLimit,
+                            identityDiscriminator: account.Identity.IdentityDiscriminator));
                     }
                 }
             }
@@ -286,6 +293,25 @@ internal static class ReportBuilder
                 configuredLimit: snapshot.MaxInstrumentIdentityLength));
         }
 
+        List<MetricBudgetStaticMetadataFailure> staticMetadataFailures = BuildStaticMetadataFailures(snapshot);
+        for (int i = 0; i < staticMetadataFailures.Count; i++)
+        {
+            MetricBudgetStaticMetadataFailure failure = staticMetadataFailures[i];
+            string limit = failure.EffectiveLimit is int effectiveLimit
+                ? "; effective bound " + effectiveLimit.ToString(CultureInfo.InvariantCulture)
+                : string.Empty;
+            violations.Add(new MetricBudgetViolation(
+                MetricBudgetViolationKind.SafetyLimitReached,
+                DescribeStaticMetadataFailure(failure.Kind, failure.RejectedInstrumentCount, limit),
+                meterName: null,
+                meterVersion: null,
+                instrumentName: null,
+                instrumentKind: MetricInstrumentKind.Unknown,
+                tagKey: null,
+                observedCount: null,
+                configuredLimit: failure.EffectiveLimit));
+        }
+
         if (snapshot.ConflictTrackingIncomplete)
         {
             violations.Add(new MetricBudgetViolation(
@@ -325,7 +351,8 @@ internal static class ReportBuilder
                 account.Identity.Kind,
                 tagKey: null,
                 observedCount: account.ObservedSeriesCount,
-                configuredLimit: snapshot.MaxTrackedSeries));
+                configuredLimit: snapshot.MaxTrackedSeries,
+                identityDiscriminator: account.Identity.IdentityDiscriminator));
         }
 
         for (int i = 0; i < snapshot.Conflicts.Length; i++)
@@ -342,7 +369,8 @@ internal static class ReportBuilder
                 conflict.Identity.Kind,
                 tagKey: null,
                 observedCount: null,
-                configuredLimit: null));
+                configuredLimit: null,
+                identityDiscriminator: conflict.Identity.IdentityDiscriminator));
         }
 
         if (snapshot.KnownSelectorConflict
@@ -403,7 +431,8 @@ internal static class ReportBuilder
             snapshot.MaxTagKeyLength,
             snapshot.InstrumentIdentityTrackingIncomplete
                 || snapshot.InstrumentInstanceTrackingIncomplete
-                || snapshot.InstrumentIdentityLengthTrackingIncomplete,
+                || snapshot.InstrumentIdentityLengthTrackingIncomplete
+                || snapshot.StaticMetadataTrackingIncomplete,
             snapshot.UntrackedInstrumentIdentities,
             snapshot.UntrackedInstrumentInstances,
             snapshot.InstrumentIdentityLengthTrackingIncomplete,
@@ -413,7 +442,12 @@ internal static class ReportBuilder
             TagSetTrackingIncomplete(snapshot),
             UntrackedTagSetObservations(snapshot),
             TagKeyTrackingIncomplete(snapshot),
-            UntrackedTagKeyObservations(snapshot));
+            UntrackedTagKeyObservations(snapshot),
+            snapshot.MaxStaticMetadataTagCount,
+            snapshot.MaxStaticMetadataTagKeyLength,
+            snapshot.MaxStaticMetadataTagValueLength,
+            snapshot.MaxStaticMetadataTextLength,
+            staticMetadataFailures);
 
         int observedInstrumentCount = 0;
         int observedSeriesCount = 0;
@@ -533,6 +567,113 @@ internal static class ReportBuilder
         }
 
         return false;
+    }
+
+    private static List<MetricBudgetStaticMetadataFailure> BuildStaticMetadataFailures(SessionSnapshot snapshot)
+    {
+        List<MetricBudgetStaticMetadataFailure> failures = new List<MetricBudgetStaticMetadataFailure>();
+        MetricBudgetStaticMetadataFailureKind[] kinds =
+        {
+            MetricBudgetStaticMetadataFailureKind.TextLength,
+            MetricBudgetStaticMetadataFailureKind.MeasurementType,
+            MetricBudgetStaticMetadataFailureKind.MeterTagCount,
+            MetricBudgetStaticMetadataFailureKind.MeterTagKeyLength,
+            MetricBudgetStaticMetadataFailureKind.MeterTagValueLength,
+            MetricBudgetStaticMetadataFailureKind.MeterTagValue,
+            MetricBudgetStaticMetadataFailureKind.MeterTagEnumeration,
+            MetricBudgetStaticMetadataFailureKind.InstrumentTagCount,
+            MetricBudgetStaticMetadataFailureKind.InstrumentTagKeyLength,
+            MetricBudgetStaticMetadataFailureKind.InstrumentTagValueLength,
+            MetricBudgetStaticMetadataFailureKind.InstrumentTagValue,
+            MetricBudgetStaticMetadataFailureKind.InstrumentTagEnumeration,
+        };
+
+        for (int i = 0; i < kinds.Length; i++)
+        {
+            int index = (int)kinds[i];
+            if (index >= snapshot.UntrackedStaticMetadataFailures.Length
+                || snapshot.UntrackedStaticMetadataFailures[index] == 0)
+            {
+                continue;
+            }
+
+            failures.Add(new MetricBudgetStaticMetadataFailure(
+                kinds[i],
+                snapshot.UntrackedStaticMetadataFailures[index],
+                StaticMetadataEffectiveLimit(kinds[i], snapshot)));
+        }
+
+        return failures;
+    }
+
+    private static int? StaticMetadataEffectiveLimit(
+        MetricBudgetStaticMetadataFailureKind kind,
+        SessionSnapshot snapshot)
+    {
+        return kind switch
+        {
+            MetricBudgetStaticMetadataFailureKind.TextLength => Math.Min(
+                snapshot.MaxStaticMetadataTextLength,
+                InstrumentIdentity.MaxStaticMetadataTextLength),
+            MetricBudgetStaticMetadataFailureKind.MeasurementType => InstrumentIdentity.MaxStaticMetadataTextLength,
+            MetricBudgetStaticMetadataFailureKind.MeterTagCount
+                or MetricBudgetStaticMetadataFailureKind.InstrumentTagCount => Math.Min(
+                    snapshot.MaxStaticMetadataTagCount,
+                    InstrumentIdentity.MaxStaticMetadataTagCount),
+            MetricBudgetStaticMetadataFailureKind.MeterTagKeyLength
+                or MetricBudgetStaticMetadataFailureKind.InstrumentTagKeyLength => Math.Min(
+                    snapshot.MaxStaticMetadataTagKeyLength,
+                    InstrumentIdentity.MaxStaticMetadataTagKeyLength),
+            MetricBudgetStaticMetadataFailureKind.MeterTagValueLength
+                or MetricBudgetStaticMetadataFailureKind.InstrumentTagValueLength => Math.Min(
+                    snapshot.MaxStaticMetadataTagValueLength,
+                    InstrumentIdentity.MaxStaticMetadataTagValueLength),
+            _ => null,
+        };
+    }
+
+    private static string DescribeStaticMetadataFailure(
+        MetricBudgetStaticMetadataFailureKind kind,
+        long count,
+        string limit)
+    {
+        string description = kind switch
+        {
+            MetricBudgetStaticMetadataFailureKind.TextLength => "static metadata unit or description text exceeded its effective length safety bound",
+            MetricBudgetStaticMetadataFailureKind.MeasurementType => "the instrument measurement type could not be represented within the static metadata identity contract",
+            MetricBudgetStaticMetadataFailureKind.MeterTagCount => "meter static tag count exceeded its effective safety bound",
+            MetricBudgetStaticMetadataFailureKind.MeterTagKeyLength => "a meter static tag key exceeded its effective length safety bound",
+            MetricBudgetStaticMetadataFailureKind.MeterTagValueLength => "a meter static tag value exceeded its effective length safety bound",
+            MetricBudgetStaticMetadataFailureKind.MeterTagValue => "a meter static tag value used an unsupported type",
+            MetricBudgetStaticMetadataFailureKind.MeterTagEnumeration => "meter static tags could not be enumerated safely",
+            MetricBudgetStaticMetadataFailureKind.InstrumentTagCount => "instrument static tag count exceeded its effective safety bound",
+            MetricBudgetStaticMetadataFailureKind.InstrumentTagKeyLength => "an instrument static tag key exceeded its effective length safety bound",
+            MetricBudgetStaticMetadataFailureKind.InstrumentTagValueLength => "an instrument static tag value exceeded its effective length safety bound",
+            MetricBudgetStaticMetadataFailureKind.InstrumentTagValue => "an instrument static tag value used an unsupported type",
+            MetricBudgetStaticMetadataFailureKind.InstrumentTagEnumeration => "instrument static tags could not be enumerated safely",
+            _ => "static metadata could not be represented",
+        };
+
+        string option = kind switch
+        {
+            MetricBudgetStaticMetadataFailureKind.TextLength => "MaxStaticMetadataTextLength",
+            MetricBudgetStaticMetadataFailureKind.MeasurementType => "the fixed measurement-type ceiling",
+            MetricBudgetStaticMetadataFailureKind.MeterTagCount
+                or MetricBudgetStaticMetadataFailureKind.InstrumentTagCount => "MaxStaticMetadataTagCount",
+            MetricBudgetStaticMetadataFailureKind.MeterTagKeyLength
+                or MetricBudgetStaticMetadataFailureKind.InstrumentTagKeyLength => "MaxStaticMetadataTagKeyLength",
+            MetricBudgetStaticMetadataFailureKind.MeterTagValueLength
+                or MetricBudgetStaticMetadataFailureKind.InstrumentTagValueLength => "MaxStaticMetadataTagValueLength",
+            MetricBudgetStaticMetadataFailureKind.MeterTagValue
+                or MetricBudgetStaticMetadataFailureKind.InstrumentTagValue => "the supported static tag value types",
+            MetricBudgetStaticMetadataFailureKind.MeterTagEnumeration
+                or MetricBudgetStaticMetadataFailureKind.InstrumentTagEnumeration => "the enumerable static tag collection",
+            _ => "the static metadata safety contract",
+        };
+
+        return description + "; " + count.ToString(CultureInfo.InvariantCulture)
+            + " selected instrument identity(ies) were not retained or enabled. Correct " + option + limit
+            + ". The report is incomplete and cannot pass.";
     }
 
     private static List<MetricBudgetTagResult> BuildTagResults(FrozenRule rule, InstrumentAccountSnapshot account)

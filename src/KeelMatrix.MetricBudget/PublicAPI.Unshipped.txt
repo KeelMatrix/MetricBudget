@@ -1,1 +1,40 @@
 #nullable enable
+const KeelMatrix.MetricBudget.MetricBudgetOptions.DefaultMaxStaticMetadataTagCount = 256 -> int
+const KeelMatrix.MetricBudget.MetricBudgetOptions.DefaultMaxStaticMetadataTagKeyLength = 256 -> int
+const KeelMatrix.MetricBudget.MetricBudgetOptions.DefaultMaxStaticMetadataTagValueLength = 256 -> int
+const KeelMatrix.MetricBudget.MetricBudgetOptions.DefaultMaxStaticMetadataTextLength = 256 -> int
+KeelMatrix.MetricBudget.MetricBudgetStaticMetadataFailure
+KeelMatrix.MetricBudget.MetricBudgetStaticMetadataFailure.EffectiveLimit.get -> int?
+KeelMatrix.MetricBudget.MetricBudgetStaticMetadataFailure.Kind.get -> KeelMatrix.MetricBudget.MetricBudgetStaticMetadataFailureKind
+KeelMatrix.MetricBudget.MetricBudgetStaticMetadataFailure.RejectedInstrumentCount.get -> long
+KeelMatrix.MetricBudget.MetricBudgetStaticMetadataFailureKind
+KeelMatrix.MetricBudget.MetricBudgetStaticMetadataFailureKind.InstrumentTagCount = 7 -> KeelMatrix.MetricBudget.MetricBudgetStaticMetadataFailureKind
+KeelMatrix.MetricBudget.MetricBudgetStaticMetadataFailureKind.InstrumentTagEnumeration = 11 -> KeelMatrix.MetricBudget.MetricBudgetStaticMetadataFailureKind
+KeelMatrix.MetricBudget.MetricBudgetStaticMetadataFailureKind.InstrumentTagKeyLength = 8 -> KeelMatrix.MetricBudget.MetricBudgetStaticMetadataFailureKind
+KeelMatrix.MetricBudget.MetricBudgetStaticMetadataFailureKind.InstrumentTagValue = 10 -> KeelMatrix.MetricBudget.MetricBudgetStaticMetadataFailureKind
+KeelMatrix.MetricBudget.MetricBudgetStaticMetadataFailureKind.InstrumentTagValueLength = 9 -> KeelMatrix.MetricBudget.MetricBudgetStaticMetadataFailureKind
+KeelMatrix.MetricBudget.MetricBudgetStaticMetadataFailureKind.MeasurementType = 1 -> KeelMatrix.MetricBudget.MetricBudgetStaticMetadataFailureKind
+KeelMatrix.MetricBudget.MetricBudgetStaticMetadataFailureKind.MeterTagCount = 2 -> KeelMatrix.MetricBudget.MetricBudgetStaticMetadataFailureKind
+KeelMatrix.MetricBudget.MetricBudgetStaticMetadataFailureKind.MeterTagEnumeration = 6 -> KeelMatrix.MetricBudget.MetricBudgetStaticMetadataFailureKind
+KeelMatrix.MetricBudget.MetricBudgetStaticMetadataFailureKind.MeterTagKeyLength = 3 -> KeelMatrix.MetricBudget.MetricBudgetStaticMetadataFailureKind
+KeelMatrix.MetricBudget.MetricBudgetStaticMetadataFailureKind.MeterTagValue = 5 -> KeelMatrix.MetricBudget.MetricBudgetStaticMetadataFailureKind
+KeelMatrix.MetricBudget.MetricBudgetStaticMetadataFailureKind.MeterTagValueLength = 4 -> KeelMatrix.MetricBudget.MetricBudgetStaticMetadataFailureKind
+KeelMatrix.MetricBudget.MetricBudgetStaticMetadataFailureKind.TextLength = 0 -> KeelMatrix.MetricBudget.MetricBudgetStaticMetadataFailureKind
+KeelMatrix.MetricBudget.MetricBudgetInstrumentResult.IdentityDiscriminator.get -> string!
+KeelMatrix.MetricBudget.MetricBudgetOptions.MaxStaticMetadataTagCount.get -> int
+KeelMatrix.MetricBudget.MetricBudgetOptions.MaxStaticMetadataTagCount.set -> void
+KeelMatrix.MetricBudget.MetricBudgetOptions.MaxStaticMetadataTagKeyLength.get -> int
+KeelMatrix.MetricBudget.MetricBudgetOptions.MaxStaticMetadataTagKeyLength.set -> void
+KeelMatrix.MetricBudget.MetricBudgetOptions.MaxStaticMetadataTagValueLength.get -> int
+KeelMatrix.MetricBudget.MetricBudgetOptions.MaxStaticMetadataTagValueLength.set -> void
+KeelMatrix.MetricBudget.MetricBudgetOptions.MaxStaticMetadataTextLength.get -> int
+KeelMatrix.MetricBudget.MetricBudgetOptions.MaxStaticMetadataTextLength.set -> void
+KeelMatrix.MetricBudget.MetricBudgetSafetyReport.MaxStaticMetadataTagCount.get -> int
+KeelMatrix.MetricBudget.MetricBudgetSafetyReport.MaxStaticMetadataTagKeyLength.get -> int
+KeelMatrix.MetricBudget.MetricBudgetSafetyReport.MaxStaticMetadataTagValueLength.get -> int
+KeelMatrix.MetricBudget.MetricBudgetSafetyReport.MaxStaticMetadataTextLength.get -> int
+KeelMatrix.MetricBudget.MetricBudgetSafetyReport.StaticMetadataFailures.get -> System.Collections.Generic.IReadOnlyList<KeelMatrix.MetricBudget.MetricBudgetStaticMetadataFailure!>!
+KeelMatrix.MetricBudget.MetricBudgetViolation.IdentityDiscriminator.get -> string?
+static KeelMatrix.MetricBudget.Assertions.MetricBudgetReportAssertions.AssertInstrumentObserved(this KeelMatrix.MetricBudget.MetricBudgetReport! report, string! meterName, string! instrumentName, string! identityDiscriminator) -> KeelMatrix.MetricBudget.MetricBudgetReport!
+static KeelMatrix.MetricBudget.Assertions.MetricBudgetReportAssertions.AssertObservedSeriesAtMost(this KeelMatrix.MetricBudget.MetricBudgetReport! report, string! meterName, string! instrumentName, string! identityDiscriminator, int maxObservedSeries) -> KeelMatrix.MetricBudget.MetricBudgetReport!
+static KeelMatrix.MetricBudget.Assertions.MetricBudgetReportAssertions.AssertTagDistinctValuesAtMost(this KeelMatrix.MetricBudget.MetricBudgetReport! report, string! meterName, string! instrumentName, string! identityDiscriminator, string! tagKey, int maxDistinctValues) -> KeelMatrix.MetricBudget.MetricBudgetReport!

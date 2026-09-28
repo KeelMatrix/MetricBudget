@@ -22,10 +22,10 @@ namespace KeelMatrix.MetricBudget.Internal;
 /// </remarks>
 internal readonly struct InstrumentIdentity : IEquatable<InstrumentIdentity>
 {
-    private const int MaxStaticMetadataComponentLength = 256;
-    private const int MaxStaticMetadataTagCount = 256;
-    private const int MaxStaticMetadataTagKeyLength = 256;
-    private const int MaxStaticMetadataTagValueLength = 256;
+    internal const int MaxStaticMetadataTextLength = 256;
+    internal const int MaxStaticMetadataTagCount = 256;
+    internal const int MaxStaticMetadataTagKeyLength = 256;
+    internal const int MaxStaticMetadataTagValueLength = 256;
 
     internal InstrumentIdentity(
         string meterName,
@@ -39,8 +39,8 @@ internal readonly struct InstrumentIdentity : IEquatable<InstrumentIdentity>
         Kind = kind;
         MetadataDigest = default;
         MetadataComplete = true;
-        MetadataComponentLengthsValid = true;
-        MetadataComponentLength = 0;
+        MetadataFailures = StaticMetadataFailure.None;
+        IdentityDiscriminator = CreateIdentityDiscriminator();
     }
 
     private InstrumentIdentity(
@@ -50,14 +50,13 @@ internal readonly struct InstrumentIdentity : IEquatable<InstrumentIdentity>
         MetricInstrumentKind kind,
         Sha256Digest metadataDigest,
         bool metadataComplete,
-        bool metadataComponentLengthsValid,
-        int metadataComponentLength)
+        StaticMetadataFailure metadataFailures)
         : this(meterName, meterVersion, instrumentName, kind)
     {
         MetadataDigest = metadataDigest;
         MetadataComplete = metadataComplete;
-        MetadataComponentLengthsValid = metadataComponentLengthsValid;
-        MetadataComponentLength = metadataComponentLength;
+        MetadataFailures = metadataFailures;
+        IdentityDiscriminator = CreateIdentityDiscriminator();
     }
 
     internal string MeterName { get; }
@@ -74,22 +73,20 @@ internal readonly struct InstrumentIdentity : IEquatable<InstrumentIdentity>
     /// <summary>Whether static metadata was fully enumerable and supported by the identity contract.</summary>
     internal bool MetadataComplete { get; }
 
-    /// <summary>Whether every retained static metadata component is within the configured length bound.</summary>
-    internal bool MetadataComponentLengthsValid { get; }
+    /// <summary>Static metadata admission failures, when the identity could not be fully represented.</summary>
+    internal StaticMetadataFailure MetadataFailures { get; }
 
-    /// <summary>Largest static metadata component length, used for diagnostics-free bounded admission.</summary>
-    internal int MetadataComponentLength { get; }
+    /// <summary>Privacy-safe discriminator for the complete instrument identity.</summary>
+    internal string IdentityDiscriminator { get; }
 
     /// <summary>Stable lowercase token for the instrument kind, used inside series identity text.</summary>
     internal string KindName => KindToken(Kind);
 
-    internal bool HasComponentLengthsAtMost(int maximum)
+    internal bool HasNameComponentsAtMost(int maximum)
     {
         return MeterName.Length <= maximum
             && (MeterVersion is null || MeterVersion.Length <= maximum)
-            && InstrumentName.Length <= maximum
-            && MetadataComponentLengthsValid
-            && MetadataComponentLength <= maximum;
+            && InstrumentName.Length <= maximum;
     }
 
     internal static InstrumentIdentity FromInstrument(Instrument instrument)
@@ -107,39 +104,52 @@ internal readonly struct InstrumentIdentity : IEquatable<InstrumentIdentity>
     {
         Meter meter = instrument.Meter;
         string? measurementTypeName = FindMeasurementTypeName(instrument);
-        bool metadataComplete = measurementTypeName is not null
-            && measurementTypeName.Length <= MaxStaticMetadataComponentLength;
-        // The closed measurement type comes from the finite BCL instrument type surface and is always retained as
-        // a bounded framework-owned token. MaxInstrumentIdentityLength limits caller-controlled names and text.
-        int metadataComponentLength = 0;
-        bool componentLengthsValid = true;
+        StaticMetadataFailure metadataFailures = StaticMetadataFailure.None;
+        if (measurementTypeName is null || measurementTypeName.Length > MaxStaticMetadataTextLength)
+        {
+            metadataFailures |= StaticMetadataFailure.MeasurementType;
+        }
 
+        // MaxInstrumentIdentityLength applies to names. Static metadata has separate caller options and fixed hard
+        // ceilings so a delivery-tag limit can never silently reject a published instrument.
         string? unit = instrument.Unit;
         string? description = instrument.Description;
-        metadataComponentLength = Math.Max(metadataComponentLength, unit?.Length ?? 0);
-        metadataComponentLength = Math.Max(metadataComponentLength, description?.Length ?? 0);
         int maximumTextLength = Math.Min(
-            options.MaxInstrumentIdentityLength,
-            MaxStaticMetadataComponentLength);
-        componentLengthsValid &= (unit?.Length ?? 0) <= maximumTextLength
+            options.MaxStaticMetadataTextLength,
+            MaxStaticMetadataTextLength);
+        bool componentLengthsValid = (unit?.Length ?? 0) <= maximumTextLength
             && (description?.Length ?? 0) <= maximumTextLength;
+        if (!componentLengthsValid)
+        {
+            metadataFailures |= StaticMetadataFailure.TextLength;
+        }
 
-        bool meterTagsComplete = TryDigestTags(
+        metadataFailures |= TryDigestTags(
             meter.Tags,
-            Math.Min(options.MaxTagCount, MaxStaticMetadataTagCount),
-            Math.Min(options.MaxTagKeyLength, Math.Min(options.MaxInstrumentIdentityLength, MaxStaticMetadataTagKeyLength)),
-            Math.Min(options.MaxTagValueLength, MaxStaticMetadataTagValueLength),
+            Math.Min(options.MaxStaticMetadataTagCount, MaxStaticMetadataTagCount),
+            Math.Min(options.MaxStaticMetadataTagKeyLength, MaxStaticMetadataTagKeyLength),
+            Math.Min(options.MaxStaticMetadataTagValueLength, MaxStaticMetadataTagValueLength),
+            StaticMetadataFailure.MeterTagCount,
+            StaticMetadataFailure.MeterTagKeyLength,
+            StaticMetadataFailure.MeterTagValueLength,
+            StaticMetadataFailure.MeterTagValue,
+            StaticMetadataFailure.MeterTagEnumeration,
             out Sha256Digest meterTagsDigest);
-        bool instrumentTagsComplete = TryDigestTags(
+        metadataFailures |= TryDigestTags(
             instrument.Tags,
-            Math.Min(options.MaxTagCount, MaxStaticMetadataTagCount),
-            Math.Min(options.MaxTagKeyLength, Math.Min(options.MaxInstrumentIdentityLength, MaxStaticMetadataTagKeyLength)),
-            Math.Min(options.MaxTagValueLength, MaxStaticMetadataTagValueLength),
+            Math.Min(options.MaxStaticMetadataTagCount, MaxStaticMetadataTagCount),
+            Math.Min(options.MaxStaticMetadataTagKeyLength, MaxStaticMetadataTagKeyLength),
+            Math.Min(options.MaxStaticMetadataTagValueLength, MaxStaticMetadataTagValueLength),
+            StaticMetadataFailure.InstrumentTagCount,
+            StaticMetadataFailure.InstrumentTagKeyLength,
+            StaticMetadataFailure.InstrumentTagValueLength,
+            StaticMetadataFailure.InstrumentTagValue,
+            StaticMetadataFailure.InstrumentTagEnumeration,
             out Sha256Digest instrumentTagsDigest);
-        metadataComplete &= meterTagsComplete && instrumentTagsComplete;
+        bool metadataComplete = metadataFailures == StaticMetadataFailure.None;
 
         Sha256Digest metadataDigest = default;
-        if (metadataComplete && componentLengthsValid)
+        if (metadataComplete)
         {
             StringBuilder canonical = new StringBuilder();
             AppendComponent(canonical, "unit", unit);
@@ -157,8 +167,7 @@ internal readonly struct InstrumentIdentity : IEquatable<InstrumentIdentity>
             DetectKind(instrument),
             metadataDigest,
             metadataComplete,
-            componentLengthsValid,
-            metadataComponentLength);
+            metadataFailures);
     }
 
     /// <summary>
@@ -170,23 +179,30 @@ internal readonly struct InstrumentIdentity : IEquatable<InstrumentIdentity>
             ? string.Empty
             : " version " + MeterVersion;
 
-        return "meter \"" + MeterName + "\"" + version + ", " + KindToken(Kind) + " \"" + InstrumentName + "\"";
+        return "meter \"" + MeterName + "\"" + version + ", " + KindToken(Kind) + " \"" + InstrumentName
+            + "\" (identity discriminator " + IdentityDiscriminator + ")";
     }
 
-    private static bool TryDigestTags(
+    private static StaticMetadataFailure TryDigestTags(
         IEnumerable<KeyValuePair<string, object?>>? tags,
         int maximumTagCount,
         int maximumTagKeyLength,
         int maximumTagValueLength,
+        StaticMetadataFailure tagCountFailure,
+        StaticMetadataFailure tagKeyLengthFailure,
+        StaticMetadataFailure tagValueLengthFailure,
+        StaticMetadataFailure tagValueFailure,
+        StaticMetadataFailure enumerationFailure,
         out Sha256Digest digest)
     {
         if (tags is null)
         {
             digest = Sha256TextHash.Digest(string.Empty);
-            return true;
+            return StaticMetadataFailure.None;
         }
 
         List<KeyValuePair<string, object?>> values = new List<KeyValuePair<string, object?>>();
+        StaticMetadataFailure failure = StaticMetadataFailure.None;
         try
         {
             using IEnumerator<KeyValuePair<string, object?>> enumerator = tags.GetEnumerator();
@@ -194,17 +210,35 @@ internal readonly struct InstrumentIdentity : IEquatable<InstrumentIdentity>
             {
                 if (values.Count >= maximumTagCount)
                 {
-                    digest = default;
-                    return false;
+                    failure |= tagCountFailure;
+                    break;
                 }
 
-                values.Add(enumerator.Current);
+                KeyValuePair<string, object?> value = enumerator.Current;
+                values.Add(value);
+                if (value.Key is not null && value.Key.Length > maximumTagKeyLength)
+                {
+                    failure |= tagKeyLengthFailure;
+                }
+
+                if (!TagIdentity.IsSupportedValueWithinLength(value.Value, maximumTagValueLength))
+                {
+                    failure |= value.Value is string text && text.Length > maximumTagValueLength
+                        ? tagValueLengthFailure
+                        : tagValueFailure;
+                }
             }
         }
         catch
         {
             digest = default;
-            return false;
+            return failure | enumerationFailure;
+        }
+
+        if (failure != StaticMetadataFailure.None)
+        {
+            digest = default;
+            return failure;
         }
 
         if (!TagIdentity.TryCreateTagSetKey(
@@ -216,11 +250,22 @@ internal readonly struct InstrumentIdentity : IEquatable<InstrumentIdentity>
                 out _))
         {
             digest = default;
-            return false;
+            return enumerationFailure;
         }
 
         digest = Sha256TextHash.Digest(canonical);
-        return true;
+        return StaticMetadataFailure.None;
+    }
+
+    private string CreateIdentityDiscriminator()
+    {
+        StringBuilder canonical = new StringBuilder();
+        AppendComponent(canonical, "meter", MeterName);
+        AppendComponent(canonical, "version", MeterVersion);
+        AppendComponent(canonical, "instrument", InstrumentName);
+        AppendComponent(canonical, "kind", KindName);
+        AppendComponent(canonical, "metadata", MetadataDigest.ToHex());
+        return Sha256TextHash.Digest(canonical.ToString()).ToHex();
     }
 
     private static void AppendComponent(StringBuilder builder, string name, string? value)
@@ -247,7 +292,14 @@ internal readonly struct InstrumentIdentity : IEquatable<InstrumentIdentity>
                     || genericDefinition == typeof(ObservableInstrument<>))
                 {
                     Type measurementType = current.GetGenericArguments()[0];
-                    return measurementType.AssemblyQualifiedName ?? measurementType.FullName;
+                    string typeName = measurementType.FullName ?? measurementType.Name;
+                    string? assemblyName = measurementType.Assembly.GetName().Name;
+                    // Core framework types use different implementation assembly names on net8.0 and .NET
+                    // Framework. Their full names are the stable contract; retain the simple assembly name for
+                    // application types so two types with the same full name cannot merge accidentally.
+                    return assemblyName is "System.Private.CoreLib" or "mscorlib"
+                        ? typeName
+                        : (assemblyName is null ? typeName : assemblyName + ":" + typeName);
                 }
             }
 
@@ -321,7 +373,7 @@ internal readonly struct InstrumentIdentity : IEquatable<InstrumentIdentity>
             && string.Equals(InstrumentName, other.InstrumentName, StringComparison.Ordinal)
             && Kind == other.Kind
             && MetadataComplete == other.MetadataComplete
-            && MetadataComponentLengthsValid == other.MetadataComponentLengthsValid
+            && MetadataFailures == other.MetadataFailures
             && MetadataDigest.Equals(other.MetadataDigest);
     }
 
@@ -340,7 +392,7 @@ internal readonly struct InstrumentIdentity : IEquatable<InstrumentIdentity>
             hash = (hash * 397) ^ (int)Kind;
             hash = (hash * 397) ^ MetadataDigest.GetHashCode();
             hash = (hash * 397) ^ (MetadataComplete ? 1 : 0);
-            hash = (hash * 397) ^ (MetadataComponentLengthsValid ? 1 : 0);
+            hash = (hash * 397) ^ (int)MetadataFailures;
             return hash;
         }
     }
@@ -349,4 +401,22 @@ internal readonly struct InstrumentIdentity : IEquatable<InstrumentIdentity>
     {
         return Describe();
     }
+}
+
+[Flags]
+internal enum StaticMetadataFailure
+{
+    None = 0,
+    TextLength = 1 << 0,
+    MeasurementType = 1 << 1,
+    MeterTagCount = 1 << 2,
+    MeterTagKeyLength = 1 << 3,
+    MeterTagValueLength = 1 << 4,
+    MeterTagValue = 1 << 5,
+    MeterTagEnumeration = 1 << 6,
+    InstrumentTagCount = 1 << 7,
+    InstrumentTagKeyLength = 1 << 8,
+    InstrumentTagValueLength = 1 << 9,
+    InstrumentTagValue = 1 << 10,
+    InstrumentTagEnumeration = 1 << 11,
 }

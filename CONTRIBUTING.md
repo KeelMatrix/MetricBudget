@@ -27,7 +27,8 @@ the consumer documentation set.
 - **Observed cardinality language.** Documentation and diagnostics describe what the exercised workload produced.
   They never claim to prove production cardinality or observability cost.
 - **Privacy.** Reports, diagnostics, and assertion messages contain meter and instrument identity, limits, counts,
-  and tag keys. They never contain tag values, metric values, or samples of the workload.
+  tag keys, and privacy-safe discriminators for complete identities. They never contain static metadata values, tag
+  values, metric values, or samples of the workload.
 - **Bounded memory.** Series and per-tag value accounting stay inside explicit safety bounds, and a bounded run is
   reported as incomplete rather than as a pass.
 - **Explicit containment.** A session disables measurement events for every instrument it enabled, because

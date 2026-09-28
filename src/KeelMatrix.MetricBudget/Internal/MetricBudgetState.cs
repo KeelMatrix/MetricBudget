@@ -35,9 +35,12 @@ internal sealed class MetricBudgetState
     private long untrackedInstrumentInstances;
     private long untrackedInstrumentIdentityLengths;
     private long untrackedConflicts;
+    private readonly long[] untrackedStaticMetadataFailures =
+        new long[(int)MetricBudgetStaticMetadataFailureKind.InstrumentTagEnumeration + 1];
     private bool instrumentIdentityTrackingIncomplete;
     private bool instrumentInstanceTrackingIncomplete;
     private bool instrumentIdentityLengthTrackingIncomplete;
+    private bool staticMetadataTrackingIncomplete;
     private bool untrackedNameOnlyIdentityIndexOverflowed;
     private bool conflictTrackingIncomplete;
     private bool knownSelectorConflict;
@@ -94,14 +97,24 @@ internal sealed class MetricBudgetState
                 knownSelectorConflict = true;
             }
 
-            if (!identity.MetadataComplete
-                || !identity.HasComponentLengthsAtMost(options.MaxInstrumentIdentityLength))
+            bool nameComponentsTooLong = !identity.HasNameComponentsAtMost(options.MaxInstrumentIdentityLength);
+            if (!identity.MetadataComplete || nameComponentsTooLong)
             {
                 RememberUntrackedName(identity);
                 MarkKnownAccountsWithSameName(identity);
                 MarkMatchingRulesIncomplete(identity);
-                instrumentIdentityLengthTrackingIncomplete = true;
-                untrackedInstrumentIdentityLengths++;
+                if (nameComponentsTooLong)
+                {
+                    instrumentIdentityLengthTrackingIncomplete = true;
+                    untrackedInstrumentIdentityLengths++;
+                }
+
+                if (!identity.MetadataComplete)
+                {
+                    staticMetadataTrackingIncomplete = true;
+                    RecordStaticMetadataFailures(identity.MetadataFailures);
+                }
+
                 if (matchCount > 1)
                 {
                     conflictTrackingIncomplete = true;
@@ -356,7 +369,13 @@ internal sealed class MetricBudgetState
                 options.MaxInstrumentIdentityLength,
                 options.MaxTagKeyLength,
                 (bool[])ruleTrackingIncomplete.Clone(),
-                knownSelectorConflict);
+                knownSelectorConflict,
+                (long[])untrackedStaticMetadataFailures.Clone(),
+                staticMetadataTrackingIncomplete,
+                options.MaxStaticMetadataTagCount,
+                options.MaxStaticMetadataTagKeyLength,
+                options.MaxStaticMetadataTagValueLength,
+                options.MaxStaticMetadataTextLength);
         }
     }
 
@@ -368,6 +387,69 @@ internal sealed class MetricBudgetState
             {
                 ruleTrackingIncomplete[i] = true;
             }
+        }
+    }
+
+    private void RecordStaticMetadataFailures(StaticMetadataFailure failures)
+    {
+        RecordStaticMetadataFailure(
+            failures,
+            StaticMetadataFailure.TextLength,
+            MetricBudgetStaticMetadataFailureKind.TextLength);
+        RecordStaticMetadataFailure(
+            failures,
+            StaticMetadataFailure.MeasurementType,
+            MetricBudgetStaticMetadataFailureKind.MeasurementType);
+        RecordStaticMetadataFailure(
+            failures,
+            StaticMetadataFailure.MeterTagCount,
+            MetricBudgetStaticMetadataFailureKind.MeterTagCount);
+        RecordStaticMetadataFailure(
+            failures,
+            StaticMetadataFailure.MeterTagKeyLength,
+            MetricBudgetStaticMetadataFailureKind.MeterTagKeyLength);
+        RecordStaticMetadataFailure(
+            failures,
+            StaticMetadataFailure.MeterTagValueLength,
+            MetricBudgetStaticMetadataFailureKind.MeterTagValueLength);
+        RecordStaticMetadataFailure(
+            failures,
+            StaticMetadataFailure.MeterTagValue,
+            MetricBudgetStaticMetadataFailureKind.MeterTagValue);
+        RecordStaticMetadataFailure(
+            failures,
+            StaticMetadataFailure.MeterTagEnumeration,
+            MetricBudgetStaticMetadataFailureKind.MeterTagEnumeration);
+        RecordStaticMetadataFailure(
+            failures,
+            StaticMetadataFailure.InstrumentTagCount,
+            MetricBudgetStaticMetadataFailureKind.InstrumentTagCount);
+        RecordStaticMetadataFailure(
+            failures,
+            StaticMetadataFailure.InstrumentTagKeyLength,
+            MetricBudgetStaticMetadataFailureKind.InstrumentTagKeyLength);
+        RecordStaticMetadataFailure(
+            failures,
+            StaticMetadataFailure.InstrumentTagValueLength,
+            MetricBudgetStaticMetadataFailureKind.InstrumentTagValueLength);
+        RecordStaticMetadataFailure(
+            failures,
+            StaticMetadataFailure.InstrumentTagValue,
+            MetricBudgetStaticMetadataFailureKind.InstrumentTagValue);
+        RecordStaticMetadataFailure(
+            failures,
+            StaticMetadataFailure.InstrumentTagEnumeration,
+            MetricBudgetStaticMetadataFailureKind.InstrumentTagEnumeration);
+    }
+
+    private void RecordStaticMetadataFailure(
+        StaticMetadataFailure failures,
+        StaticMetadataFailure failure,
+        MetricBudgetStaticMetadataFailureKind kind)
+    {
+        if ((failures & failure) != 0)
+        {
+            untrackedStaticMetadataFailures[(int)kind]++;
         }
     }
 

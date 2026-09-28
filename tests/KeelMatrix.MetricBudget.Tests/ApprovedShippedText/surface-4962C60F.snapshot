@@ -89,6 +89,18 @@
             <exception cref="T:System.ArgumentNullException">A parameter is null.</exception>
             <exception cref="T:KeelMatrix.MetricBudget.Assertions.MetricBudgetAssertionException">The instrument was not observed with measurements.</exception>
         </member>
+        <member name="M:KeelMatrix.MetricBudget.Assertions.MetricBudgetReportAssertions.AssertInstrumentObserved(KeelMatrix.MetricBudget.MetricBudgetReport,System.String,System.String,System.String)">
+            <summary>
+            Asserts one instrument identity was observed, selecting it with its privacy-safe identity discriminator.
+            </summary>
+            <param name="report">Report to assert against.</param>
+            <param name="meterName">Exact meter name.</param>
+            <param name="instrumentName">Exact instrument name.</param>
+            <param name="identityDiscriminator">Complete identity discriminator from the instrument result.</param>
+            <returns>The same report, for chaining.</returns>
+            <exception cref="T:System.ArgumentNullException">A parameter is null.</exception>
+            <exception cref="T:KeelMatrix.MetricBudget.Assertions.MetricBudgetAssertionException">The instrument was not observed with measurements.</exception>
+        </member>
         <member name="M:KeelMatrix.MetricBudget.Assertions.MetricBudgetReportAssertions.AssertObservedSeriesAtMost(KeelMatrix.MetricBudget.MetricBudgetReport,System.String,System.String,System.Int32)">
             <summary>
             Asserts that one instrument identity stayed within a specific observed-series limit.
@@ -101,6 +113,21 @@
             <exception cref="T:System.ArgumentNullException">A parameter is null.</exception>
             <exception cref="T:System.ArgumentOutOfRangeException"><paramref name="maxObservedSeries"/> is negative.</exception>
             <exception cref="T:KeelMatrix.MetricBudget.Assertions.MetricBudgetAssertionException">The instrument delivered no measurements, the observed count exceeds the limit, or tracking was incomplete.</exception>
+        </member>
+        <member name="M:KeelMatrix.MetricBudget.Assertions.MetricBudgetReportAssertions.AssertObservedSeriesAtMost(KeelMatrix.MetricBudget.MetricBudgetReport,System.String,System.String,System.String,System.Int32)">
+            <summary>
+            Asserts one instrument identity stayed within a series limit, selecting it with its privacy-safe identity
+            discriminator.
+            </summary>
+            <param name="report">Report to assert against.</param>
+            <param name="meterName">Exact meter name.</param>
+            <param name="instrumentName">Exact instrument name.</param>
+            <param name="identityDiscriminator">Complete identity discriminator from the instrument result.</param>
+            <param name="maxObservedSeries">Maximum distinct observed series allowed.</param>
+            <returns>The same report, for chaining.</returns>
+            <exception cref="T:System.ArgumentNullException">A parameter is null.</exception>
+            <exception cref="T:System.ArgumentOutOfRangeException"><paramref name="maxObservedSeries"/> is negative.</exception>
+            <exception cref="T:KeelMatrix.MetricBudget.Assertions.MetricBudgetAssertionException">The selected identity exceeded the limit or was incomplete.</exception>
         </member>
         <member name="M:KeelMatrix.MetricBudget.Assertions.MetricBudgetReportAssertions.AssertTagDistinctValuesAtMost(KeelMatrix.MetricBudget.MetricBudgetReport,System.String,System.String,System.String,System.Int32)">
             <summary>
@@ -115,6 +142,21 @@
             <exception cref="T:System.ArgumentNullException">A parameter is null.</exception>
             <exception cref="T:System.ArgumentOutOfRangeException"><paramref name="maxDistinctValues"/> is negative.</exception>
             <exception cref="T:KeelMatrix.MetricBudget.Assertions.MetricBudgetAssertionException">The observed count exceeds the limit, the tag was not observed, or tracking was incomplete.</exception>
+        </member>
+        <member name="M:KeelMatrix.MetricBudget.Assertions.MetricBudgetReportAssertions.AssertTagDistinctValuesAtMost(KeelMatrix.MetricBudget.MetricBudgetReport,System.String,System.String,System.String,System.String,System.Int32)">
+            <summary>
+            Asserts one tag key stayed within a distinct-value limit on an identity selected by discriminator.
+            </summary>
+            <param name="report">Report to assert against.</param>
+            <param name="meterName">Exact meter name.</param>
+            <param name="instrumentName">Exact instrument name.</param>
+            <param name="identityDiscriminator">Complete identity discriminator from the instrument result.</param>
+            <param name="tagKey">Exact tag key.</param>
+            <param name="maxDistinctValues">Maximum distinct values allowed.</param>
+            <returns>The same report, for chaining.</returns>
+            <exception cref="T:System.ArgumentNullException">A parameter is null.</exception>
+            <exception cref="T:System.ArgumentOutOfRangeException"><paramref name="maxDistinctValues"/> is negative.</exception>
+            <exception cref="T:KeelMatrix.MetricBudget.Assertions.MetricBudgetAssertionException">The selected tag exceeded the limit or was incomplete.</exception>
         </member>
         <member name="T:KeelMatrix.MetricBudget.InstrumentBudget">
             <summary>
@@ -315,11 +357,11 @@
         <member name="P:KeelMatrix.MetricBudget.Internal.InstrumentIdentity.MetadataComplete">
             <summary>Whether static metadata was fully enumerable and supported by the identity contract.</summary>
         </member>
-        <member name="P:KeelMatrix.MetricBudget.Internal.InstrumentIdentity.MetadataComponentLengthsValid">
-            <summary>Whether every retained static metadata component is within the configured length bound.</summary>
+        <member name="P:KeelMatrix.MetricBudget.Internal.InstrumentIdentity.MetadataFailures">
+            <summary>Static metadata admission failures, when the identity could not be fully represented.</summary>
         </member>
-        <member name="P:KeelMatrix.MetricBudget.Internal.InstrumentIdentity.MetadataComponentLength">
-            <summary>Largest static metadata component length, used for diagnostics-free bounded admission.</summary>
+        <member name="P:KeelMatrix.MetricBudget.Internal.InstrumentIdentity.IdentityDiscriminator">
+            <summary>Privacy-safe discriminator for the complete instrument identity.</summary>
         </member>
         <member name="P:KeelMatrix.MetricBudget.Internal.InstrumentIdentity.KindName">
             <summary>Stable lowercase token for the instrument kind, used inside series identity text.</summary>
@@ -520,6 +562,13 @@
             key was <see langword="null"/>.
             </summary>
         </member>
+        <member name="M:KeelMatrix.MetricBudget.Internal.TagIdentity.IsSupportedValueWithinLength(System.Object,System.Int32)">
+            <summary>
+            Checks the same supported value surface as delivered tags, but rejects an oversized string instead of
+            replacing it with a digest. Static metadata has its own length contract and cannot reuse delivery-tag
+            truncation semantics.
+            </summary>
+        </member>
         <member name="M:KeelMatrix.MetricBudget.Internal.TagIdentity.CreateSeriesKey(KeelMatrix.MetricBudget.Internal.InstrumentIdentity,System.String)">
             <summary>
             Canonical observed-series identity for one instrument identity and one canonical tag set.
@@ -682,9 +731,10 @@
             Observed-cardinality accounting for one instrument identity within a session.
             </summary>
             <remarks>
-            One result covers one combination of meter name, meter version, instrument name, and instrument kind. Counts
-            describe the exercised workload only. If selected physical instances or same-name identities were rejected by
-            an admission bound, or a bounded name-only rejection index overflowed before this identity was admitted,
+            One result covers one complete public instrument identity: meter name, meter version, instrument name, instrument
+            kind, and the privacy-safe identity discriminator for static metadata. Counts describe the exercised workload
+            only. If selected physical instances or same-name identities were rejected by an admission bound, or a bounded
+            name-only rejection index overflowed before this identity was admitted,
             <see cref="P:KeelMatrix.MetricBudget.MetricBudgetInstrumentResult.InstrumentTrackingIncomplete"/> is set and no within-budget conclusion is drawn from this result.
             </remarks>
         </member>
@@ -706,6 +756,12 @@
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetInstrumentResult.InstrumentKind">
             <summary>
             Kind of the observed instrument.
+            </summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetInstrumentResult.IdentityDiscriminator">
+            <summary>
+            Privacy-safe discriminator for the complete instrument identity, including unit, description, measurement
+            type, meter tags, and instrument tags. It is a lowercase SHA-256 token and never contains static metadata.
             </summary>
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetInstrumentResult.MeasurementCount">
@@ -837,6 +893,18 @@
         <member name="F:KeelMatrix.MetricBudget.MetricBudgetOptions.DefaultMaxTagKeyLength">
             <summary>Default maximum length of a delivered tag key.</summary>
         </member>
+        <member name="F:KeelMatrix.MetricBudget.MetricBudgetOptions.DefaultMaxStaticMetadataTagCount">
+            <summary>Default number of tags accepted from one meter or instrument static metadata collection.</summary>
+        </member>
+        <member name="F:KeelMatrix.MetricBudget.MetricBudgetOptions.DefaultMaxStaticMetadataTagKeyLength">
+            <summary>Default maximum length of a meter or instrument static metadata tag key.</summary>
+        </member>
+        <member name="F:KeelMatrix.MetricBudget.MetricBudgetOptions.DefaultMaxStaticMetadataTagValueLength">
+            <summary>Default maximum length of a meter or instrument static metadata tag value.</summary>
+        </member>
+        <member name="F:KeelMatrix.MetricBudget.MetricBudgetOptions.DefaultMaxStaticMetadataTextLength">
+            <summary>Default maximum length of a unit or description in static instrument metadata.</summary>
+        </member>
         <member name="M:KeelMatrix.MetricBudget.MetricBudgetOptions.#ctor">
             <summary>
             Initializes a new set of options with no rules and the default safety bounds.
@@ -917,12 +985,36 @@
             <remarks>A larger tag set is not canonicalized or retained and makes the report explicitly incomplete.</remarks>
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetOptions.MaxInstrumentIdentityLength">
-            <summary>Maximum length of each caller-supplied identity and static metadata text component.</summary>
-            <remarks>An identity with a longer or unsupported caller-supplied component is not retained or enabled.</remarks>
+            <summary>Maximum length of each meter name, meter version, and instrument name.</summary>
+            <remarks>An identity with a longer name component is not retained or enabled.</remarks>
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetOptions.MaxTagKeyLength">
             <summary>Maximum length of a delivered tag key retained in tag accounting state.</summary>
             <remarks>A measurement containing a longer key is not canonicalized or retained.</remarks>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetOptions.MaxStaticMetadataTagCount">
+            <summary>
+            Maximum number of tags accepted from one meter or instrument static metadata collection. The effective bound
+            is the lower of this value and the fixed hard ceiling of 256.
+            </summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetOptions.MaxStaticMetadataTagKeyLength">
+            <summary>
+            Maximum length of a key in meter or instrument static metadata. The effective bound is the lower of this value
+            and the fixed hard ceiling of 256.
+            </summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetOptions.MaxStaticMetadataTagValueLength">
+            <summary>
+            Maximum length of a value in meter or instrument static metadata. The effective bound is the lower of this
+            value and the fixed hard ceiling of 256.
+            </summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetOptions.MaxStaticMetadataTextLength">
+            <summary>
+            Maximum length of a unit or description in static instrument metadata. The effective bound is the lower of
+            this value and the fixed hard ceiling of 256.
+            </summary>
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetOptions.Rules">
             <summary>
@@ -1266,7 +1358,7 @@
             <summary>Configured bound on tags accepted from one measurement.</summary>
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.MaxInstrumentIdentityLength">
-            <summary>Configured bound on each caller-supplied identity and static metadata text component.</summary>
+            <summary>Configured bound on each meter name, meter version, and instrument name.</summary>
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.MaxTagKeyLength">
             <summary>Configured bound on a delivered tag key.</summary>
@@ -1285,13 +1377,13 @@
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.InstrumentIdentityLengthTrackingIncomplete">
             <summary>
-            Whether selected instrument identities were rejected because an identity or static metadata component was
-            unsupported or exceeded <see cref="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.MaxInstrumentIdentityLength"/>.
+            Whether selected instrument identities were rejected because a name component exceeded
+            <see cref="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.MaxInstrumentIdentityLength"/>.
             </summary>
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.UntrackedInstrumentIdentityLengths">
             <summary>
-            Selected published identities rejected by the instrument identity or static metadata bound.
+            Selected published identities rejected by the instrument-name bound.
             </summary>
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.ConflictTrackingIncomplete">
@@ -1311,6 +1403,24 @@
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.UntrackedTagKeyObservations">
             <summary>Delivered tag keys that were not retained after the key bound was full.</summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.MaxStaticMetadataTagCount">
+            <summary>Configured maximum number of tags accepted from one static metadata collection.</summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.MaxStaticMetadataTagKeyLength">
+            <summary>Configured maximum length of a static metadata tag key.</summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.MaxStaticMetadataTagValueLength">
+            <summary>Configured maximum length of a static metadata tag value.</summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.MaxStaticMetadataTextLength">
+            <summary>Configured maximum length of static metadata unit or description text.</summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.StaticMetadataFailures">
+            <summary>
+            Static metadata dimensions that rejected selected instrument identities. Empty when all selected identities
+            were representable within the separate static metadata bounds.
+            </summary>
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetSafetyReport.IsComplete">
             <summary>
@@ -1405,6 +1515,68 @@
             Disposal stops the session and disables every instrument it enabled, but it does not produce a report. Call
             <see cref="M:KeelMatrix.MetricBudget.MetricBudgetSession.Complete"/> before disposing to keep the verification result.
             </remarks>
+        </member>
+        <member name="T:KeelMatrix.MetricBudget.MetricBudgetStaticMetadataFailureKind">
+            <summary>
+            Identifies the static metadata dimension that prevented an instrument identity from being admitted.
+            </summary>
+        </member>
+        <member name="F:KeelMatrix.MetricBudget.MetricBudgetStaticMetadataFailureKind.TextLength">
+            <summary>A unit or description exceeded the effective static metadata text bound.</summary>
+        </member>
+        <member name="F:KeelMatrix.MetricBudget.MetricBudgetStaticMetadataFailureKind.MeasurementType">
+            <summary>The instrument measurement type could not be represented by the identity contract.</summary>
+        </member>
+        <member name="F:KeelMatrix.MetricBudget.MetricBudgetStaticMetadataFailureKind.MeterTagCount">
+            <summary>The meter tag collection exceeded its effective static metadata tag-count bound.</summary>
+        </member>
+        <member name="F:KeelMatrix.MetricBudget.MetricBudgetStaticMetadataFailureKind.MeterTagKeyLength">
+            <summary>A meter tag key exceeded its effective static metadata key-length bound.</summary>
+        </member>
+        <member name="F:KeelMatrix.MetricBudget.MetricBudgetStaticMetadataFailureKind.MeterTagValueLength">
+            <summary>A meter tag value exceeded its effective static metadata value-length bound.</summary>
+        </member>
+        <member name="F:KeelMatrix.MetricBudget.MetricBudgetStaticMetadataFailureKind.MeterTagValue">
+            <summary>A meter tag value used an unsupported type.</summary>
+        </member>
+        <member name="F:KeelMatrix.MetricBudget.MetricBudgetStaticMetadataFailureKind.MeterTagEnumeration">
+            <summary>The meter tag collection could not be enumerated safely.</summary>
+        </member>
+        <member name="F:KeelMatrix.MetricBudget.MetricBudgetStaticMetadataFailureKind.InstrumentTagCount">
+            <summary>The instrument tag collection exceeded its effective static metadata tag-count bound.</summary>
+        </member>
+        <member name="F:KeelMatrix.MetricBudget.MetricBudgetStaticMetadataFailureKind.InstrumentTagKeyLength">
+            <summary>An instrument tag key exceeded its effective static metadata key-length bound.</summary>
+        </member>
+        <member name="F:KeelMatrix.MetricBudget.MetricBudgetStaticMetadataFailureKind.InstrumentTagValueLength">
+            <summary>An instrument tag value exceeded its effective static metadata value-length bound.</summary>
+        </member>
+        <member name="F:KeelMatrix.MetricBudget.MetricBudgetStaticMetadataFailureKind.InstrumentTagValue">
+            <summary>An instrument tag value used an unsupported type.</summary>
+        </member>
+        <member name="F:KeelMatrix.MetricBudget.MetricBudgetStaticMetadataFailureKind.InstrumentTagEnumeration">
+            <summary>The instrument tag collection could not be enumerated safely.</summary>
+        </member>
+        <member name="T:KeelMatrix.MetricBudget.MetricBudgetStaticMetadataFailure">
+            <summary>
+            One static-metadata admission failure observed while selecting instruments.
+            </summary>
+            <remarks>
+            Static metadata is bounded separately from delivered measurement tags. A failure means the affected identity was
+            not retained or enabled, so the report is incomplete. Values are never included in this record.
+            </remarks>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetStaticMetadataFailure.Kind">
+            <summary>The static metadata dimension that caused the rejection.</summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetStaticMetadataFailure.RejectedInstrumentCount">
+            <summary>Number of selected instrument identities rejected for this dimension.</summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetStaticMetadataFailure.EffectiveLimit">
+            <summary>
+            Effective bound when the failure is a length or count failure, including the fixed hard ceiling; otherwise
+            <see langword="null"/> for unsupported values or enumeration failures.
+            </summary>
         </member>
         <member name="T:KeelMatrix.MetricBudget.MetricBudgetTagResult">
             <summary>
@@ -1564,6 +1736,12 @@
             <summary>
             Instrument kind when the record refers to an instrument identity, otherwise
             <see cref="F:KeelMatrix.MetricBudget.MetricInstrumentKind.Unknown"/>.
+            </summary>
+        </member>
+        <member name="P:KeelMatrix.MetricBudget.MetricBudgetViolation.IdentityDiscriminator">
+            <summary>
+            Privacy-safe discriminator for the complete instrument identity, or <see langword="null"/> when the record
+            does not refer to a retained instrument identity.
             </summary>
         </member>
         <member name="P:KeelMatrix.MetricBudget.MetricBudgetViolation.TagKey">

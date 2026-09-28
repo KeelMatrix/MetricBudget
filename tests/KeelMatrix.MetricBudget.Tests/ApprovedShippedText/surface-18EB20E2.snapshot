@@ -64,7 +64,10 @@ the API and safety docs, privacy and telemetry in the privacy guide, and recurri
 - the distinct **values** each configured tag key produced;
 - tag-set identity that is order-independent and deterministic, so the same combination never counts twice;
 - instrument identity that includes unit, description, measurement type, meter tags, and instrument tags while
-  excluding `Meter.Scope` from the stream key;
+  excluding `Meter.Scope` from the stream key. Retained results expose a privacy-safe `IdentityDiscriminator` so
+  focused assertions can select same-name streams without exposing static metadata values;
+- static metadata admission through dedicated bounded options, with rejected dimensions reported in
+  `Safety.StaticMetadataFailures` rather than being attributed to delivered-tag limits;
 - explicit outcomes for a budget breach, invalid configuration, an instrument that was never observed, and a
   session that observed no measurements at all.
 
@@ -122,9 +125,10 @@ Package validation, including archive inspection and clean package-backed smoke 
 pwsh -NoProfile -File scripts/verify-package.ps1
 ```
 
-The provenance-aware gate builds both archives with the exact candidate commit and explicit `refs/heads/main`
-metadata, then restores both package-backed projects from `artifacts/packages`; neither references a project in this
-repository. See [docs/DEV.md](docs/DEV.md) for the complete reproducible validation sequence.
+The provenance-aware gate first fetches `origin/main` and fails closed unless the checked-out `HEAD` is exactly that
+commit. It then builds both archives with the exact commit and explicit `refs/heads/main` metadata, and restores both
+package-backed projects from `artifacts/packages`; neither references a project in this repository. See
+[docs/DEV.md](docs/DEV.md) for the complete reproducible validation sequence.
 
 ## License
 

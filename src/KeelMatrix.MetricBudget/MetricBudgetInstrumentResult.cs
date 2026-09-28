@@ -9,9 +9,10 @@ namespace KeelMatrix.MetricBudget;
 /// Observed-cardinality accounting for one instrument identity within a session.
 /// </summary>
 /// <remarks>
-/// One result covers one combination of meter name, meter version, instrument name, and instrument kind. Counts
-/// describe the exercised workload only. If selected physical instances or same-name identities were rejected by
-/// an admission bound, or a bounded name-only rejection index overflowed before this identity was admitted,
+/// One result covers one complete public instrument identity: meter name, meter version, instrument name, instrument
+/// kind, and the privacy-safe identity discriminator for static metadata. Counts describe the exercised workload
+/// only. If selected physical instances or same-name identities were rejected by an admission bound, or a bounded
+/// name-only rejection index overflowed before this identity was admitted,
 /// <see cref="InstrumentTrackingIncomplete"/> is set and no within-budget conclusion is drawn from this result.
 /// </remarks>
 public sealed class MetricBudgetInstrumentResult
@@ -21,6 +22,7 @@ public sealed class MetricBudgetInstrumentResult
         string? meterVersion,
         string instrumentName,
         MetricInstrumentKind instrumentKind,
+        string identityDiscriminator,
         long measurementCount,
         int observedSeriesCount,
         int? configuredMaxObservedSeries,
@@ -37,6 +39,7 @@ public sealed class MetricBudgetInstrumentResult
         MeterVersion = meterVersion;
         InstrumentName = instrumentName;
         InstrumentKind = instrumentKind;
+        IdentityDiscriminator = identityDiscriminator;
         MeasurementCount = measurementCount;
         ObservedSeriesCount = observedSeriesCount;
         ConfiguredMaxObservedSeries = configuredMaxObservedSeries;
@@ -75,6 +78,12 @@ public sealed class MetricBudgetInstrumentResult
     /// Kind of the observed instrument.
     /// </summary>
     public MetricInstrumentKind InstrumentKind { get; }
+
+    /// <summary>
+    /// Privacy-safe discriminator for the complete instrument identity, including unit, description, measurement
+    /// type, meter tags, and instrument tags. It is a lowercase SHA-256 token and never contains static metadata.
+    /// </summary>
+    public string IdentityDiscriminator { get; }
 
     /// <summary>
     /// Measurements delivered by this instrument identity during the session.
@@ -182,6 +191,7 @@ public sealed class MetricBudgetInstrumentResult
             + (MeterVersion is null ? string.Empty : "@" + MeterVersion)
             + "/" + InstrumentName
             + " (" + InstrumentKind.ToString().ToLowerInvariant() + ")"
+            + " [identity " + IdentityDiscriminator + "]"
             + ": " + MeasurementCount.ToString(CultureInfo.InvariantCulture) + " measurements, "
             + ObservedSeriesCount.ToString(CultureInfo.InvariantCulture) + " observed series, configured max "
             + limit

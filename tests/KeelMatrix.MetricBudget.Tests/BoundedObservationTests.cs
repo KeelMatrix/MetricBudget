@@ -212,8 +212,200 @@ public sealed class BoundedObservationTests
         Assert.Equal(MetricBudgetOutcome.Passed, report.Outcome);
         Assert.Equal(6, report.ObservedInstrumentCount);
         Assert.Equal(6, report.Rules[0].Instruments.Count);
+        Assert.Equal(6, report.Rules[0].Instruments.Select(instrument => instrument.IdentityDiscriminator).Distinct().Count());
         Assert.Equal(7, report.TotalMeasurementsObserved);
-        Assert.Equal(2, report.Rules[0].Instruments.Single(instrument => instrument.MeasurementCount == 2).MeasurementCount);
+        MetricBudgetInstrumentResult equivalent = report.Rules[0].Instruments.Single(instrument => instrument.MeasurementCount == 2);
+        Assert.Equal(64, equivalent.IdentityDiscriminator.Length);
+        Assert.Equal(2, equivalent.MeasurementCount);
+    }
+
+    [Fact]
+    public void StaticMetadataDoesNotReuseDeliveredTagSafetyBounds()
+    {
+        string meterName = TestNames.Meter(nameof(StaticMetadataDoesNotReuseDeliveredTagSafetyBounds));
+        using Meter meter = new Meter(new MeterOptions(meterName)
+        {
+            Version = "1.0.0",
+            Tags = new[]
+            {
+                new KeyValuePair<string, object?>("static-one", "value-one"),
+                new KeyValuePair<string, object?>("static-two", "value-two"),
+            },
+        });
+        Counter<long> counter = meter.CreateCounter<long>(
+            "requests",
+            unit: "milliseconds",
+            description: "description",
+            tags: new[] { new KeyValuePair<string, object?>("instrument-static", "instrument-value") });
+        MetricBudgetOptions options = new MetricBudgetOptions
+        {
+            MaxTagCount = 1,
+            MaxTagKeyLength = 1,
+            MaxTagValueLength = 1,
+        };
+        options.ForInstrument(meterName, "requests", budget => budget.MaxObservedSeries = 1);
+
+        using MetricBudgetSession session = MetricBudgetSession.Start(options);
+        counter.Add(1, new KeyValuePair<string, object?>("x", "y"));
+        MetricBudgetReport report = session.Complete();
+
+        Assert.Equal(MetricBudgetOutcome.Passed, report.Outcome);
+        Assert.Empty(report.Safety.StaticMetadataFailures);
+    }
+
+    [Fact]
+    public void StaticMetadataBoundFailureNamesTheActualDimension()
+    {
+        string meterName = TestNames.Meter(nameof(StaticMetadataBoundFailureNamesTheActualDimension));
+        using Meter meter = new Meter(new MeterOptions(meterName)
+        {
+            Version = "1.0.0",
+            Tags = new[]
+            {
+                new KeyValuePair<string, object?>("one", "one"),
+                new KeyValuePair<string, object?>("two", "two"),
+            },
+        });
+        Counter<long> counter = meter.CreateCounter<long>("requests");
+        MetricBudgetOptions options = new MetricBudgetOptions
+        {
+            MaxStaticMetadataTagCount = 1,
+            MaxTagCount = 64,
+            MaxTagKeyLength = 256,
+            MaxTagValueLength = 256,
+        };
+        options.ForInstrument(meterName, "requests", budget => budget.MaxObservedSeries = 1);
+
+        using MetricBudgetSession session = MetricBudgetSession.Start(options);
+        counter.Add(1);
+        MetricBudgetReport report = session.Complete();
+
+        MetricBudgetStaticMetadataFailure failure = Assert.Single(report.Safety.StaticMetadataFailures);
+        Assert.Equal(MetricBudgetStaticMetadataFailureKind.MeterTagCount, failure.Kind);
+        Assert.Equal(1, failure.EffectiveLimit);
+        Assert.Equal(MetricBudgetOutcome.ObservationIncomplete, report.Outcome);
+        Assert.Contains("MaxStaticMetadataTagCount", report.ToDiagnosticString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("MaxInstrumentIdentityLength", report.ToDiagnosticString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void StaticMetadataKeyValueAndTextBoundsRemainIndependent()
+    {
+        string meterName = TestNames.Meter(nameof(StaticMetadataKeyValueAndTextBoundsRemainIndependent));
+        using Meter meter = new Meter(new MeterOptions(meterName)
+        {
+            Version = "1.0.0",
+            Tags = new[] { new KeyValuePair<string, object?>("meter-key", "meter-value") },
+        });
+        Counter<long> counter = meter.CreateCounter<long>(
+            "requests",
+            unit: "unit-value",
+            description: "description-value",
+            tags: new[] { new KeyValuePair<string, object?>("instrument-key", "instrument-value") });
+        MetricBudgetOptions options = new MetricBudgetOptions
+        {
+            MaxStaticMetadataTagKeyLength = 3,
+            MaxStaticMetadataTagValueLength = 3,
+            MaxStaticMetadataTextLength = 3,
+        };
+        options.ForInstrument(meterName, "requests", budget => budget.MaxObservedSeries = 1);
+
+        using MetricBudgetSession session = MetricBudgetSession.Start(options);
+        counter.Add(1);
+        MetricBudgetReport report = session.Complete();
+        MetricBudgetStaticMetadataFailureKind[] kinds = report.Safety.StaticMetadataFailures
+            .Select(failure => failure.Kind)
+            .ToArray();
+
+        Assert.Equal(MetricBudgetOutcome.ObservationIncomplete, report.Outcome);
+        Assert.Contains(MetricBudgetStaticMetadataFailureKind.TextLength, kinds);
+        Assert.Contains(MetricBudgetStaticMetadataFailureKind.MeterTagKeyLength, kinds);
+        Assert.Contains(MetricBudgetStaticMetadataFailureKind.MeterTagValueLength, kinds);
+        Assert.Contains(MetricBudgetStaticMetadataFailureKind.InstrumentTagKeyLength, kinds);
+        Assert.Contains(MetricBudgetStaticMetadataFailureKind.InstrumentTagValueLength, kinds);
+        Assert.DoesNotContain("meter-value", report.ToDiagnosticString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("instrument-value", report.ToDiagnosticString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void StaticMetadataHardCeilingIsAppliedWhenCallerRaisesOption()
+    {
+        string meterName = TestNames.Meter(nameof(StaticMetadataHardCeilingIsAppliedWhenCallerRaisesOption));
+        using Meter meter = new Meter(new MeterOptions(meterName)
+        {
+            Version = "1.0.0",
+            Tags = Enumerable.Range(0, 257)
+                .Select(index => new KeyValuePair<string, object?>("tag-" + index, index))
+                .ToArray(),
+        });
+        Counter<long> counter = meter.CreateCounter<long>("requests");
+        MetricBudgetOptions options = new MetricBudgetOptions
+        {
+            MaxStaticMetadataTagCount = 1000,
+        };
+        options.ForInstrument(meterName, "requests", budget => budget.MaxObservedSeries = 1);
+
+        using MetricBudgetSession session = MetricBudgetSession.Start(options);
+        counter.Add(1);
+        MetricBudgetReport report = session.Complete();
+        MetricBudgetStaticMetadataFailure failure = Assert.Single(report.Safety.StaticMetadataFailures);
+
+        Assert.Equal(MetricBudgetStaticMetadataFailureKind.MeterTagCount, failure.Kind);
+        Assert.Equal(256, failure.EffectiveLimit);
+        Assert.Equal(MetricBudgetOutcome.ObservationIncomplete, report.Outcome);
+    }
+
+    [Fact]
+    public void FocusedAssertionCanSelectCompleteIdentityDiscriminator()
+    {
+        string meterName = TestNames.Meter(nameof(FocusedAssertionCanSelectCompleteIdentityDiscriminator));
+        using Meter firstMeter = new Meter(new MeterOptions(meterName)
+        {
+            Version = "1.0.0",
+            Tags = new[] { new KeyValuePair<string, object?>("stream", "first-secret") },
+        });
+        using Meter secondMeter = new Meter(new MeterOptions(meterName)
+        {
+            Version = "1.0.0",
+            Tags = new[] { new KeyValuePair<string, object?>("stream", "second-secret") },
+        });
+        Counter<long> first = firstMeter.CreateCounter<long>("requests");
+        Counter<long> second = secondMeter.CreateCounter<long>("requests");
+        MetricBudgetOptions options = new MetricBudgetOptions();
+        options.ForInstrument(meterName, "requests", budget => budget.MaxObservedSeries = 1);
+
+        using MetricBudgetSession session = MetricBudgetSession.Start(options);
+        first.Add(1, new KeyValuePair<string, object?>("route", "/first"));
+        second.Add(1, new KeyValuePair<string, object?>("route", "/second-a"));
+        second.Add(1, new KeyValuePair<string, object?>("route", "/second-b"));
+        MetricBudgetReport report = session.Complete();
+        IReadOnlyList<MetricBudgetInstrumentResult> instruments = report.Rules[0].Instruments;
+        Assert.Equal(2, instruments.Count);
+        Assert.Equal(1, report.Violations.Count(violation => violation.Kind == MetricBudgetViolationKind.ObservedSeriesBudgetExceeded));
+        Assert.All(
+            report.Violations.Where(violation => violation.Kind == MetricBudgetViolationKind.ObservedSeriesBudgetExceeded),
+            violation => Assert.NotNull(violation.IdentityDiscriminator));
+
+        MetricBudgetInstrumentResult firstResult = instruments.Single(instrument => instrument.ObservedSeriesCount == 1);
+        MetricBudgetInstrumentResult secondResult = instruments.Single(instrument => instrument.ObservedSeriesCount == 2);
+        Assert.Throws<MetricBudgetAssertionException>(
+            () => report.AssertObservedSeriesAtMost(meterName, "requests", 1));
+        _ = report.AssertObservedSeriesAtMost(
+            meterName,
+            "requests",
+            firstResult.IdentityDiscriminator,
+            1);
+        MetricBudgetAssertionException exception = Assert.Throws<MetricBudgetAssertionException>(
+            () => report.AssertObservedSeriesAtMost(
+                meterName,
+                "requests",
+                secondResult.IdentityDiscriminator,
+                1));
+        Assert.Contains(secondResult.IdentityDiscriminator, exception.Message, StringComparison.Ordinal);
+        Assert.Contains(firstResult.IdentityDiscriminator, report.ToDiagnosticString(), StringComparison.Ordinal);
+        Assert.Contains(secondResult.IdentityDiscriminator, report.ToDiagnosticString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("first-secret", report.ToDiagnosticString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("second-secret", report.ToDiagnosticString(), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -226,7 +418,7 @@ public sealed class BoundedObservationTests
             Tags = new[] { new KeyValuePair<string, object?>("scope", new ThrowingValue()) },
         });
         Counter<long> counter = meter.CreateCounter<long>("requests");
-        MetricBudgetOptions options = new MetricBudgetOptions { MaxInstrumentIdentityLength = 64 };
+        MetricBudgetOptions options = new MetricBudgetOptions();
         options.ForInstrument(meterName, "requests", budget => budget.MaxObservedSeries = 1);
 
         using MetricBudgetSession session = MetricBudgetSession.Start(options);
@@ -236,8 +428,9 @@ public sealed class BoundedObservationTests
         Assert.Equal(MetricBudgetOutcome.ObservationIncomplete, report.Outcome);
         Assert.Empty(report.Rules[0].Instruments);
         Assert.Equal(0, report.ObservedInstrumentCount);
-        Assert.True(report.Safety.InstrumentIdentityLengthTrackingIncomplete);
-        Assert.Equal(1, report.Safety.UntrackedInstrumentIdentityLengths);
+        MetricBudgetStaticMetadataFailure failure = Assert.Single(report.Safety.StaticMetadataFailures);
+        Assert.Equal(MetricBudgetStaticMetadataFailureKind.MeterTagValue, failure.Kind);
+        Assert.Null(failure.EffectiveLimit);
     }
 
     [Fact]
@@ -246,7 +439,7 @@ public sealed class BoundedObservationTests
         string meterName = TestNames.Meter(nameof(OverlongStaticDescriptionIsRejectedBeforeAdmission));
         using Meter meter = new Meter(meterName, "1.0.0");
         Counter<long> counter = meter.CreateCounter<long>("requests", description: new string('d', 65));
-        MetricBudgetOptions options = new MetricBudgetOptions { MaxInstrumentIdentityLength = 64 };
+        MetricBudgetOptions options = new MetricBudgetOptions { MaxStaticMetadataTextLength = 64 };
         options.ForInstrument(meterName, "requests", budget => budget.MaxObservedSeries = 1);
 
         using MetricBudgetSession session = MetricBudgetSession.Start(options);
@@ -255,8 +448,9 @@ public sealed class BoundedObservationTests
 
         Assert.Equal(MetricBudgetOutcome.ObservationIncomplete, report.Outcome);
         Assert.Empty(report.Rules[0].Instruments);
-        Assert.True(report.Safety.InstrumentIdentityLengthTrackingIncomplete);
-        Assert.Equal(1, report.Safety.UntrackedInstrumentIdentityLengths);
+        MetricBudgetStaticMetadataFailure failure = Assert.Single(report.Safety.StaticMetadataFailures);
+        Assert.Equal(MetricBudgetStaticMetadataFailureKind.TextLength, failure.Kind);
+        Assert.Equal(64, failure.EffectiveLimit);
     }
 
     [Fact]
@@ -1420,4 +1614,5 @@ public sealed class BoundedObservationTests
     {
         public override string ToString() => throw new InvalidOperationException("must not be called");
     }
+
 }

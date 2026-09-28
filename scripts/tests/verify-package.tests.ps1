@@ -77,15 +77,6 @@ $rawPackSurfaces = @($documentedMarkdownFiles | ForEach-Object {
 Assert-True ($rawPackSurfaces.Count -eq 0) `
     "release-facing Markdown must route package validation through scripts/verify-package.ps1; raw dotnet pack found in: $($rawPackSurfaces -join ', ')"
 
-$knownCommit = "0123456789abcdef0123456789abcdef01234567"
-$knownProperties = @(Get-PackageRepositoryProperties -ExpectedCommit $knownCommit)
-Assert-True ($knownProperties -contains "-p:RepositoryBranch=refs/heads/main") `
-    "package provenance must set the release branch explicitly"
-Assert-True ($knownProperties -contains "-p:RepositoryCommit=$knownCommit") `
-    "package provenance must set the exact checked-out commit"
-Assert-Throws { Get-PackageRepositoryProperties -ExpectedCommit "" } `
-    "package provenance must reject an absent commit"
-
 $provenanceTestRoot = Join-Path ([IO.Path]::GetTempPath()) ("metricbudget-package-provenance-tests-" + [Guid]::NewGuid().ToString("N"))
 try
 {
@@ -96,15 +87,68 @@ try
     [IO.File]::WriteAllText((Join-Path $provenanceTestRoot "state.txt"), "candidate")
     Invoke-TestGit $provenanceTestRoot @("add", "state.txt") | Out-Null
     Invoke-TestGit $provenanceTestRoot @("commit", "-m", "candidate") | Out-Null
+    $origin = Join-Path $provenanceTestRoot "origin.git"
+    Invoke-TestGit $provenanceTestRoot @("init", "--bare", $origin) | Out-Null
+    Invoke-TestGit $provenanceTestRoot @("remote", "add", "origin", $origin) | Out-Null
+    Invoke-TestGit $provenanceTestRoot @("push", "-u", "origin", "main") | Out-Null
+
     $mainCommit = Get-RepositoryCommit -RepositoryRoot $provenanceTestRoot
-    $mainProperties = @(Get-PackageRepositoryProperties -ExpectedCommit $mainCommit)
+    $mainProperties = @(Get-PackageRepositoryProperties -ExpectedCommit $mainCommit -RepositoryRoot $provenanceTestRoot)
+    Assert-True ($mainProperties -contains "-p:RepositoryBranch=refs/heads/main") `
+        "package provenance must set the release branch explicitly"
+    Assert-True ($mainProperties -contains "-p:RepositoryCommit=$mainCommit") `
+        "package provenance must set the exact verified checked-out commit"
+    Assert-Throws { Get-PackageRepositoryProperties -ExpectedCommit "" -RepositoryRoot $provenanceTestRoot } `
+        "package provenance must reject an absent commit"
 
     Invoke-TestGit $provenanceTestRoot @("checkout", "--detach", "--quiet", "HEAD") | Out-Null
     $detachedCommit = Get-RepositoryCommit -RepositoryRoot $provenanceTestRoot
-    $detachedProperties = @(Get-PackageRepositoryProperties -ExpectedCommit $detachedCommit)
+    $detachedProperties = @(Get-PackageRepositoryProperties -ExpectedCommit $detachedCommit -RepositoryRoot $provenanceTestRoot)
     Assert-True ($detachedCommit -eq $mainCommit) "detached checkouts must retain the exact candidate commit"
     Assert-True (($detachedProperties -join "`n") -eq ($mainProperties -join "`n")) `
         "main and detached checkouts must receive identical package provenance properties"
+
+    $advancer = Join-Path $provenanceTestRoot "advancer"
+    Invoke-TestGit $provenanceTestRoot @("clone", $origin, $advancer) | Out-Null
+    Invoke-TestGit $advancer @("config", "user.email", "package-provenance-tests@example.invalid") | Out-Null
+    Invoke-TestGit $advancer @("config", "user.name", "Package Provenance Tests") | Out-Null
+    [IO.File]::WriteAllText((Join-Path $advancer "state.txt"), "advanced")
+    Invoke-TestGit $advancer @("add", "state.txt") | Out-Null
+    Invoke-TestGit $advancer @("commit", "-m", "advance main") | Out-Null
+    Invoke-TestGit $advancer @("push", "origin", "main") | Out-Null
+
+    Assert-Throws { Get-PackageRepositoryProperties -ExpectedCommit $detachedCommit -RepositoryRoot $provenanceTestRoot } `
+        "a stale ancestor must not synthesize main provenance"
+
+    Invoke-TestGit $provenanceTestRoot @("checkout", "-b", "feature") | Out-Null
+    [IO.File]::WriteAllText((Join-Path $provenanceTestRoot "state.txt"), "feature")
+    Invoke-TestGit $provenanceTestRoot @("add", "state.txt") | Out-Null
+    Invoke-TestGit $provenanceTestRoot @("commit", "-m", "feature") | Out-Null
+    $featureCommit = Get-RepositoryCommit -RepositoryRoot $provenanceTestRoot
+    Assert-Throws { Get-PackageRepositoryProperties -ExpectedCommit $featureCommit -RepositoryRoot $provenanceTestRoot } `
+        "a non-main feature commit must not synthesize main provenance"
+
+    Invoke-TestGit $provenanceTestRoot @("checkout", "--detach", "origin/main") | Out-Null
+    $currentMainCommit = Get-RepositoryCommit -RepositoryRoot $provenanceTestRoot
+    $currentMainProperties = @(Get-PackageRepositoryProperties -ExpectedCommit $currentMainCommit -RepositoryRoot $provenanceTestRoot)
+    Assert-True (($currentMainProperties -join "`n") -match "-p:RepositoryCommit=$currentMainCommit") `
+        "a detached checkout of current origin/main must retain exact provenance"
+
+    $withoutOrigin = Join-Path $provenanceTestRoot "without-origin"
+    New-Item -ItemType Directory -Path $withoutOrigin -Force | Out-Null
+    Invoke-TestGit $withoutOrigin @("init", "--initial-branch=main") | Out-Null
+    Invoke-TestGit $withoutOrigin @("config", "user.email", "package-provenance-tests@example.invalid") | Out-Null
+    Invoke-TestGit $withoutOrigin @("config", "user.name", "Package Provenance Tests") | Out-Null
+    [IO.File]::WriteAllText((Join-Path $withoutOrigin "state.txt"), "no origin")
+    Invoke-TestGit $withoutOrigin @("add", "state.txt") | Out-Null
+    Invoke-TestGit $withoutOrigin @("commit", "-m", "no origin") | Out-Null
+    $withoutOriginCommit = Get-RepositoryCommit -RepositoryRoot $withoutOrigin
+    Assert-Throws { Get-PackageRepositoryProperties -ExpectedCommit $withoutOriginCommit -RepositoryRoot $withoutOrigin } `
+        "a repository without an origin must fail closed"
+
+    Invoke-TestGit $provenanceTestRoot @("remote", "set-url", "origin", (Join-Path $provenanceTestRoot "missing.git")) | Out-Null
+    Assert-Throws { Get-PackageRepositoryProperties -ExpectedCommit $currentMainCommit -RepositoryRoot $provenanceTestRoot } `
+        "a broken origin must fail closed"
 }
 finally
 {

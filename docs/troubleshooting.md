@@ -62,10 +62,11 @@ Reports exclude tag and metric values but retain application-supplied meter name
 keys. Review those identifiers before sharing diagnostics outside their intended audience; see
 [privacy-and-telemetry.md](privacy-and-telemetry.md).
 
-Instrument identity admission and identity component/static-metadata bounds are distinct cases. An oversized instrument
-that no rule selects is ignored and does not invalidate the session. An oversized selected instrument, or a selected
-instrument with unsupported or unenumerable static metadata, is rejected and the diagnostic names
-`MaxInstrumentIdentityLength`; a selected identity or physical instance rejected by an admission
+Instrument identity admission and identity-name/static-metadata bounds are distinct cases. An oversized instrument
+that no rule selects is ignored and does not invalidate the session. An oversized selected instrument is rejected and
+the diagnostic names `MaxInstrumentIdentityLength`; a selected instrument with unsupported, overlong, or unenumerable
+static metadata is rejected and the diagnostic names the corresponding `MaxStaticMetadata...` option or static
+metadata failure kind in `Safety.StaticMetadataFailures`. A selected identity or physical instance rejected by an admission
 bound names `MaxTrackedInstrumentIdentities` or `MaxTrackedInstrumentInstances` instead. A retained result affected
 by a rejected same-name identity or physical instance has `InstrumentTrackingIncomplete = true`, so focused budget
 assertions fail closed for that target. The bounded rejected-name index records overflow uncertainty; every identity

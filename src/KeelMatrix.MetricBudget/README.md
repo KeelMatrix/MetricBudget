@@ -49,8 +49,13 @@ and tag keys, but never prints tag or metric values.
   [observed-vs-production-cardinality.md](https://github.com/KeelMatrix/MetricBudget/blob/main/docs/observed-vs-production-cardinality.md).
 - **Deterministic multiset identity.** Tag order does not change a series, but duplicate keys are retained. The CLR
   type of a tag value is part of identity. Instrument identity also includes unit, description, measurement type,
-  meter tags, and instrument tags; `Meter.Scope` is excluded. See
+  meter tags, and instrument tags; `Meter.Scope` is excluded. Retained results expose a privacy-safe
+  `IdentityDiscriminator` for the complete identity without exposing static metadata values. See
   [series-identity.md](https://github.com/KeelMatrix/MetricBudget/blob/main/docs/series-identity.md).
+- **Static metadata bounds.** Published unit, description, measurement type, meter tags, and instrument tags use
+  dedicated bounded options (`MaxStaticMetadataTagCount`, `MaxStaticMetadataTagKeyLength`,
+  `MaxStaticMetadataTagValueLength`, and `MaxStaticMetadataTextLength`). Rejected dimensions appear in
+  `Safety.StaticMetadataFailures`; delivered-tag bounds never reject static metadata.
 - **Completeness is explicit.** Filling a safety bound is not itself incomplete; incompleteness begins when an
   additional observation or state entry is rejected. `InvalidConfiguration` and a proven `Violation` have higher
   outcome precedence than `ObservationIncomplete`, so inspect `report.Safety`, the per-result completeness flags,

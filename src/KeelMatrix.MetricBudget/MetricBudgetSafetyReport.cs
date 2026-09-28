@@ -1,5 +1,7 @@
 // Copyright (c) KeelMatrix
 
+using System.Collections.ObjectModel;
+
 namespace KeelMatrix.MetricBudget;
 
 /// <summary>
@@ -38,7 +40,12 @@ public sealed class MetricBudgetSafetyReport
         bool tagSetTrackingIncomplete,
         long untrackedTagSetObservations,
         bool tagKeyTrackingIncomplete,
-        long untrackedTagKeyObservations)
+        long untrackedTagKeyObservations,
+        int maxStaticMetadataTagCount,
+        int maxStaticMetadataTagKeyLength,
+        int maxStaticMetadataTagValueLength,
+        int maxStaticMetadataTextLength,
+        IReadOnlyList<MetricBudgetStaticMetadataFailure> staticMetadataFailures)
     {
         MaxTrackedSeries = maxTrackedSeries;
         MaxTrackedValuesPerTag = maxTrackedValuesPerTag;
@@ -65,6 +72,17 @@ public sealed class MetricBudgetSafetyReport
         UntrackedTagSetObservations = untrackedTagSetObservations;
         TagKeyTrackingIncomplete = tagKeyTrackingIncomplete;
         UntrackedTagKeyObservations = untrackedTagKeyObservations;
+        MaxStaticMetadataTagCount = maxStaticMetadataTagCount;
+        MaxStaticMetadataTagKeyLength = maxStaticMetadataTagKeyLength;
+        MaxStaticMetadataTagValueLength = maxStaticMetadataTagValueLength;
+        MaxStaticMetadataTextLength = maxStaticMetadataTextLength;
+        MetricBudgetStaticMetadataFailure[] failures = new MetricBudgetStaticMetadataFailure[staticMetadataFailures.Count];
+        for (int i = 0; i < failures.Length; i++)
+        {
+            failures[i] = staticMetadataFailures[i];
+        }
+
+        StaticMetadataFailures = new ReadOnlyCollection<MetricBudgetStaticMetadataFailure>(failures);
     }
 
     /// <summary>
@@ -125,7 +143,7 @@ public sealed class MetricBudgetSafetyReport
     /// <summary>Configured bound on tags accepted from one measurement.</summary>
     public int MaxTagCount { get; }
 
-    /// <summary>Configured bound on each caller-supplied identity and static metadata text component.</summary>
+    /// <summary>Configured bound on each meter name, meter version, and instrument name.</summary>
     public int MaxInstrumentIdentityLength { get; }
 
     /// <summary>Configured bound on a delivered tag key.</summary>
@@ -144,13 +162,13 @@ public sealed class MetricBudgetSafetyReport
     public long UntrackedInstrumentInstances { get; }
 
     /// <summary>
-    /// Whether selected instrument identities were rejected because an identity or static metadata component was
-    /// unsupported or exceeded <see cref="MaxInstrumentIdentityLength"/>.
+    /// Whether selected instrument identities were rejected because a name component exceeded
+    /// <see cref="MaxInstrumentIdentityLength"/>.
     /// </summary>
     public bool InstrumentIdentityLengthTrackingIncomplete { get; }
 
     /// <summary>
-    /// Selected published identities rejected by the instrument identity or static metadata bound.
+    /// Selected published identities rejected by the instrument-name bound.
     /// </summary>
     public long UntrackedInstrumentIdentityLengths { get; }
 
@@ -172,6 +190,24 @@ public sealed class MetricBudgetSafetyReport
     /// <summary>Delivered tag keys that were not retained after the key bound was full.</summary>
     public long UntrackedTagKeyObservations { get; }
 
+    /// <summary>Configured maximum number of tags accepted from one static metadata collection.</summary>
+    public int MaxStaticMetadataTagCount { get; }
+
+    /// <summary>Configured maximum length of a static metadata tag key.</summary>
+    public int MaxStaticMetadataTagKeyLength { get; }
+
+    /// <summary>Configured maximum length of a static metadata tag value.</summary>
+    public int MaxStaticMetadataTagValueLength { get; }
+
+    /// <summary>Configured maximum length of static metadata unit or description text.</summary>
+    public int MaxStaticMetadataTextLength { get; }
+
+    /// <summary>
+    /// Static metadata dimensions that rejected selected instrument identities. Empty when all selected identities
+    /// were representable within the separate static metadata bounds.
+    /// </summary>
+    public IReadOnlyList<MetricBudgetStaticMetadataFailure> StaticMetadataFailures { get; }
+
     /// <summary>
     /// Whether all accounting completed inside the configured safety bounds.
     /// </summary>
@@ -180,5 +216,6 @@ public sealed class MetricBudgetSafetyReport
         && !InstrumentTrackingIncomplete
         && !ConflictTrackingIncomplete
         && !TagSetTrackingIncomplete
-        && !TagKeyTrackingIncomplete;
+        && !TagKeyTrackingIncomplete
+        && StaticMetadataFailures.Count == 0;
 }

@@ -70,7 +70,13 @@ internal sealed class SessionSnapshot
         int maxInstrumentIdentityLength,
         int maxTagKeyLength,
         bool[] ruleTrackingIncomplete,
-        bool knownSelectorConflict = false)
+        bool knownSelectorConflict = false,
+        long[]? untrackedStaticMetadataFailures = null,
+        bool staticMetadataTrackingIncomplete = false,
+        int maxStaticMetadataTagCount = MetricBudgetOptions.DefaultMaxStaticMetadataTagCount,
+        int maxStaticMetadataTagKeyLength = MetricBudgetOptions.DefaultMaxStaticMetadataTagKeyLength,
+        int maxStaticMetadataTagValueLength = MetricBudgetOptions.DefaultMaxStaticMetadataTagValueLength,
+        int maxStaticMetadataTextLength = MetricBudgetOptions.DefaultMaxStaticMetadataTextLength)
     {
         Instruments = instruments;
         Conflicts = conflicts;
@@ -96,6 +102,12 @@ internal sealed class SessionSnapshot
         MaxTagKeyLength = maxTagKeyLength;
         RuleTrackingIncomplete = ruleTrackingIncomplete;
         KnownSelectorConflict = knownSelectorConflict;
+        UntrackedStaticMetadataFailures = untrackedStaticMetadataFailures ?? Array.Empty<long>();
+        StaticMetadataTrackingIncomplete = staticMetadataTrackingIncomplete;
+        MaxStaticMetadataTagCount = maxStaticMetadataTagCount;
+        MaxStaticMetadataTagKeyLength = maxStaticMetadataTagKeyLength;
+        MaxStaticMetadataTagValueLength = maxStaticMetadataTagValueLength;
+        MaxStaticMetadataTextLength = maxStaticMetadataTextLength;
     }
 
     internal InstrumentAccountSnapshot[] Instruments { get; }
@@ -146,6 +158,18 @@ internal sealed class SessionSnapshot
     internal int MaxInstrumentIdentityLength { get; }
 
     internal int MaxTagKeyLength { get; }
+
+    internal int MaxStaticMetadataTagCount { get; }
+
+    internal int MaxStaticMetadataTagKeyLength { get; }
+
+    internal int MaxStaticMetadataTagValueLength { get; }
+
+    internal int MaxStaticMetadataTextLength { get; }
+
+    internal long[] UntrackedStaticMetadataFailures { get; }
+
+    internal bool StaticMetadataTrackingIncomplete { get; }
 
     /// <summary>Whether admission or selector ambiguity made accounting incomplete for each configured rule.</summary>
     internal bool[] RuleTrackingIncomplete { get; }
@@ -205,6 +229,7 @@ internal sealed class SessionSnapshot
         InstrumentIdentityTrackingIncomplete
         || InstrumentInstanceTrackingIncomplete
         || InstrumentIdentityLengthTrackingIncomplete
+        || StaticMetadataTrackingIncomplete
         || ConflictTrackingIncomplete;
 }
 

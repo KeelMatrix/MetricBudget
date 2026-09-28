@@ -191,16 +191,55 @@ function Get-RepositoryCommit {
     return $commit
 }
 
+function Get-VerifiedMainCommit {
+    param([Parameter(Mandatory = $true)][string] $RepositoryRoot)
+
+    $head = Get-RepositoryCommit -RepositoryRoot $RepositoryRoot
+    $fetchOutput = @(& git -C $RepositoryRoot fetch --no-tags --prune origin '+refs/heads/main:refs/remotes/origin/main' 2>&1)
+    if ($LASTEXITCODE -ne 0)
+    {
+        throw "Could not fetch authoritative origin/main for package provenance: $($fetchOutput -join ' ')"
+    }
+
+    $mainOutput = @(& git -C $RepositoryRoot rev-parse --verify 'refs/remotes/origin/main^{commit}' 2>&1)
+    if ($LASTEXITCODE -ne 0)
+    {
+        throw "Could not resolve the fetched authoritative origin/main commit: $($mainOutput -join ' ')"
+    }
+
+    $main = ($mainOutput -join "`n").Trim()
+    if ($main -notmatch '^[0-9a-fA-F]{40}$')
+    {
+        throw "Fetched origin/main did not resolve to a full commit id: '$main'."
+    }
+
+    if ($head -ne $main)
+    {
+        throw "Package provenance requires the checked-out HEAD '$head' to equal the fetched origin/main commit '$main'."
+    }
+
+    return $head
+}
+
 function Get-PackageRepositoryProperties {
-    param([Parameter(Mandatory = $true)][string] $ExpectedCommit)
+    param(
+        [Parameter(Mandatory = $true)][string] $ExpectedCommit,
+        [Parameter(Mandatory = $true)][string] $RepositoryRoot
+    )
 
     if ($ExpectedCommit -notmatch '^[0-9a-fA-F]{40}$')
     {
         throw "Package repository commit must be a full commit id: '$ExpectedCommit'."
     }
 
-    # The package contract describes the release branch. Pass it explicitly so pack metadata is
-    # reproducible from both a normal main checkout and a detached candidate checkout.
+    $verifiedCommit = Get-VerifiedMainCommit -RepositoryRoot $RepositoryRoot
+    if ($verifiedCommit -ne $ExpectedCommit)
+    {
+        throw "Package repository commit '$ExpectedCommit' is not the verified checked-out origin/main commit '$verifiedCommit'."
+    }
+
+    # The package contract describes the release branch. It is supplied only after the exact checked-out commit has
+    # been proven equal to the freshly fetched authoritative origin/main ref.
     return @(
         "-p:RepositoryBranch=refs/heads/main",
         "-p:RepositoryCommit=$ExpectedCommit"
@@ -988,7 +1027,7 @@ if ($FunctionsOnly)
     return
 }
 
-$expectedCommit = Get-RepositoryCommit -RepositoryRoot $repositoryRoot
+$expectedCommit = Get-VerifiedMainCommit -RepositoryRoot $repositoryRoot
 
 if (-not $InspectOnly)
 {
@@ -1010,7 +1049,7 @@ if (-not $InspectOnly)
     $packArguments = @(
         "pack", $projectPath, "-c", "Release", "-o", $packageDirectory, "--no-restore", "-p:Version=$ExpectedVersion"
     )
-    $packArguments += Get-PackageRepositoryProperties -ExpectedCommit $expectedCommit
+    $packArguments += Get-PackageRepositoryProperties -ExpectedCommit $expectedCommit -RepositoryRoot $repositoryRoot
     Invoke-Dotnet -Step "Release package build" -Arguments $packArguments | Out-Null
 }
 else

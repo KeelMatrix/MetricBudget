@@ -68,15 +68,22 @@ Notes that the implementation, the diagnostics, and this document share:
   A difference in any of those supported fields produces a different identity, so same-name streams cannot merge.
   `Meter.Scope` is not part of identity, matching the instrumentation-scope model the BCL metrics APIs and the
   OpenTelemetry .NET SDK use; two meters that differ only by scope share one observed identity.
+- **Public identity selection.** Each retained instrument result and instrument-specific violation exposes an
+  `IdentityDiscriminator`: a lowercase SHA-256 token derived from the complete meter/version/name/kind and metadata
+  identity. It contains no raw unit, description, measurement type, tag key, or tag value. Use the discriminator in
+  the focused assertion overloads when same-name streams differ by static metadata; name-only focused assertions
+  fail with an ambiguity message that lists the available discriminators.
 - **Static metadata is fail-closed and bounded.** Metadata tag enumeration is limited by
-  `MaxInstrumentIdentityLength`, uses the same supported lossless tag descriptors as delivered tags, and retains only
-  fixed-size digests. A throwing or unsupported metadata tag, an overlong caller-supplied unit or description, or an
-  overlong metadata tag key rejects the selected identity and marks the report incomplete; static metadata has a
-  fixed 256-component/tag-count ceiling even when caller safety options are raised. The finite framework
-  measurement-type token is bounded independently and never falls back to a name-only merge. Selector matching still
-  happens before identity admission, so rejected unselected instruments do not affect
-  a scoped session. A selected identity or physical instance rejected by an admission bound also makes any affected
-  retained result incomplete. Focused assertions do not draw a pass conclusion from those results.
+  dedicated `MaxStaticMetadataTagCount`, `MaxStaticMetadataTagKeyLength`, `MaxStaticMetadataTagValueLength`, and
+  `MaxStaticMetadataTextLength` options, uses the same supported lossless tag descriptors as delivered tags, and
+  retains only fixed-size digests. Their effective bounds are the lower of the caller option and a fixed 256 ceiling.
+  A throwing or unsupported metadata tag, an overlong caller-supplied unit or description, or an overlong metadata tag
+  key rejects the selected identity and marks the report incomplete. `MetricBudgetSafetyReport.StaticMetadataFailures`
+  names the rejected dimension and effective bound; delivered-tag options never reject static metadata. The finite
+  framework measurement-type token is bounded independently and never falls back to a name-only merge. Selector
+  matching still happens before identity admission, so rejected unselected instruments do not affect a scoped session.
+  A selected identity or physical instance rejected by an admission bound also makes any affected retained result
+  incomplete. Focused assertions do not draw a pass conclusion from those results.
 
 The rule is implemented by `TagIdentity` in the library. If the code and this document ever disagree, the code is
 wrong: the product documentation, the printed diagnostics, and the implementation are required to agree.

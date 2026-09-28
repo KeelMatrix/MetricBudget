@@ -13,8 +13,12 @@ has to be bounded and honest. Every session applies explicit bounds to every ret
 | `MaxTrackedConflicts` | 1,024 | Ambiguous identity detail records retained; a conflict requiring more rule indexes than this is dropped, while the known invalid-configuration fact remains bounded and retained. |
 | `MaxTrackedTagKeysPerInstrument` | 256 | Distinct delivered tag keys retained per instrument identity. |
 | `MaxTagCount` | 64 | Delivered tags admitted from one measurement. |
-| `MaxInstrumentIdentityLength` | 256 | Length bound for meter name, meter version, instrument name, caller-supplied unit/description, and static metadata tag keys after selector matching. Static metadata also has a fixed 256-component/tag-count ceiling; the finite framework measurement-type token is bounded independently. Oversized unselected identities are ignored; selected identities with overlong or unsupported metadata are rejected and counted separately. |
+| `MaxInstrumentIdentityLength` | 256 | Length bound for meter name, meter version, and instrument name after selector matching. Oversized unselected identities are ignored; selected identities with overlong names are rejected. |
 | `MaxTagKeyLength` | 256 | Length of a delivered tag key admitted to identity construction. |
+| `MaxStaticMetadataTagCount` | 256 | Number of tags accepted from one meter or instrument static metadata collection. The effective bound is the lower of this option and the fixed 256 ceiling. |
+| `MaxStaticMetadataTagKeyLength` | 256 | Length of a key in meter or instrument static metadata. The effective bound is the lower of this option and the fixed 256 ceiling. |
+| `MaxStaticMetadataTagValueLength` | 256 | Length of a value in meter or instrument static metadata. The effective bound is the lower of this option and the fixed 256 ceiling; oversized static values are rejected rather than digested. |
+| `MaxStaticMetadataTextLength` | 256 | Length of a unit or description in static instrument metadata. The effective bound is the lower of this option and the fixed 256 ceiling. |
 
 The defaults exist so an accidentally explosive workload cannot make the verifier unbounded. They are not budgets,
 they are not recommendations for an application, and a full retained set never turns a failing workload into a
@@ -52,10 +56,12 @@ values to be recognized; only a later distinct entry that cannot be retained mak
   overflow without retaining another name. Every later newly admitted identity is marked incomplete because its
   name may be one of the forgotten rejected names; a rejected name that fits in the index remains scoped to its own
   same-name identity.
-- Identity admission loss is separate from identity component or static-metadata rejection. The safety report exposes
-  `InstrumentIdentityLengthTrackingIncomplete` and `UntrackedInstrumentIdentityLengths` for the latter, and the
-  diagnostic recommends `MaxInstrumentIdentityLength`; it recommends `MaxTrackedInstrumentIdentities` or
-  `MaxTrackedInstrumentInstances` for the corresponding admission bound.
+- Identity admission loss is separate from identity-name and static-metadata rejection. The safety report exposes
+  `InstrumentIdentityLengthTrackingIncomplete` and `UntrackedInstrumentIdentityLengths` for overlong names, while
+  `StaticMetadataFailures` lists each rejected static dimension, its rejected identity count, and its effective bound.
+  The diagnostic names the relevant static option (or reports unsupported values/enumeration failures) instead of
+  folding the cause into `MaxInstrumentIdentityLength`. It recommends `MaxTrackedInstrumentIdentities` or
+  `MaxTrackedInstrumentInstances` only for the corresponding admission bound.
 - The outcome ladder is the order implemented by `ReportBuilder`: `InvalidConfiguration` for a selector conflict,
   then `Violation` for a proven budget breach, then `ObservationIncomplete` for rejected state or inconsistent
   accounting, then `NoMatchingInstrument`, `NoMeasurementsObserved`, and finally `Passed`. A conflict or proven

@@ -22,6 +22,10 @@ internal sealed class FrozenOptions
         int maxTagCount,
         int maxInstrumentIdentityLength,
         int maxTagKeyLength,
+        int maxStaticMetadataTagCount,
+        int maxStaticMetadataTagKeyLength,
+        int maxStaticMetadataTagValueLength,
+        int maxStaticMetadataTextLength,
         FrozenRule[] rules)
     {
         MaxTrackedSeries = maxTrackedSeries;
@@ -34,6 +38,10 @@ internal sealed class FrozenOptions
         MaxTagCount = maxTagCount;
         MaxInstrumentIdentityLength = maxInstrumentIdentityLength;
         MaxTagKeyLength = maxTagKeyLength;
+        MaxStaticMetadataTagCount = maxStaticMetadataTagCount;
+        MaxStaticMetadataTagKeyLength = maxStaticMetadataTagKeyLength;
+        MaxStaticMetadataTagValueLength = maxStaticMetadataTagValueLength;
+        MaxStaticMetadataTextLength = maxStaticMetadataTextLength;
         Rules = rules;
     }
 
@@ -56,6 +64,14 @@ internal sealed class FrozenOptions
     internal int MaxInstrumentIdentityLength { get; }
 
     internal int MaxTagKeyLength { get; }
+
+    internal int MaxStaticMetadataTagCount { get; }
+
+    internal int MaxStaticMetadataTagKeyLength { get; }
+
+    internal int MaxStaticMetadataTagValueLength { get; }
+
+    internal int MaxStaticMetadataTextLength { get; }
 
     internal FrozenRule[] Rules { get; }
 }

@@ -101,7 +101,7 @@ public static class MetricBudgetReportAssertions
             throw new ArgumentNullException(nameof(report));
         }
 
-        MetricBudgetInstrumentResult? instrument = FindInstrument(report, meterName, instrumentName);
+        MetricBudgetInstrumentResult? instrument = FindInstrument(report, meterName, instrumentName, identityDiscriminator: null);
         if (instrument is not null && instrument.WasObserved)
         {
             return report;
@@ -109,6 +109,46 @@ public static class MetricBudgetReportAssertions
 
         throw new MetricBudgetAssertionException(
             "Expected instrument \"" + instrumentName + "\" in meter \"" + meterName
+            + "\" to deliver at least one measurement, but "
+            + (instrument is null ? "it was not selected." : "it delivered none.") + Environment.NewLine
+            + report.ToDiagnosticString());
+    }
+
+    /// <summary>
+    /// Asserts one instrument identity was observed, selecting it with its privacy-safe identity discriminator.
+    /// </summary>
+    /// <param name="report">Report to assert against.</param>
+    /// <param name="meterName">Exact meter name.</param>
+    /// <param name="instrumentName">Exact instrument name.</param>
+    /// <param name="identityDiscriminator">Complete identity discriminator from the instrument result.</param>
+    /// <returns>The same report, for chaining.</returns>
+    /// <exception cref="ArgumentNullException">A parameter is null.</exception>
+    /// <exception cref="MetricBudgetAssertionException">The instrument was not observed with measurements.</exception>
+    public static MetricBudgetReport AssertInstrumentObserved(
+        this MetricBudgetReport report,
+        string meterName,
+        string instrumentName,
+        string identityDiscriminator)
+    {
+        if (report is null)
+        {
+            throw new ArgumentNullException(nameof(report));
+        }
+
+        ValidateIdentityDiscriminator(identityDiscriminator);
+        MetricBudgetInstrumentResult? instrument = FindInstrument(
+            report,
+            meterName,
+            instrumentName,
+            identityDiscriminator);
+        if (instrument is not null && instrument.WasObserved)
+        {
+            return report;
+        }
+
+        throw new MetricBudgetAssertionException(
+            "Expected instrument \"" + instrumentName + "\" in meter \"" + meterName
+            + "\" with identity discriminator \"" + identityDiscriminator
             + "\" to deliver at least one measurement, but "
             + (instrument is null ? "it was not selected." : "it delivered none.") + Environment.NewLine
             + report.ToDiagnosticString());
@@ -141,7 +181,7 @@ public static class MetricBudgetReportAssertions
             throw new ArgumentOutOfRangeException(nameof(maxObservedSeries));
         }
 
-        MetricBudgetInstrumentResult? instrument = FindInstrument(report, meterName, instrumentName);
+        MetricBudgetInstrumentResult? instrument = FindInstrument(report, meterName, instrumentName, identityDiscriminator: null);
         if (instrument is not null
             && instrument.WasObserved
             && !InstrumentTrackingIncomplete(instrument)
@@ -152,6 +192,65 @@ public static class MetricBudgetReportAssertions
 
         throw new MetricBudgetAssertionException(
             "Expected instrument \"" + instrumentName + "\" in meter \"" + meterName + "\" to stay at or below "
+            + maxObservedSeries.ToString(CultureInfo.InvariantCulture) + " observed series, but "
+            + (instrument is null
+                ? "it was not selected."
+                : !instrument.WasObserved
+                    ? "it delivered no measurements."
+                : instrument.ObservedSeriesCount.ToString(CultureInfo.InvariantCulture)
+                    + " were observed"
+                    + (InstrumentTrackingIncomplete(instrument) ? " and tracking was incomplete." : "."))
+            + Environment.NewLine
+            + report.ToDiagnosticString());
+    }
+
+    /// <summary>
+    /// Asserts one instrument identity stayed within a series limit, selecting it with its privacy-safe identity
+    /// discriminator.
+    /// </summary>
+    /// <param name="report">Report to assert against.</param>
+    /// <param name="meterName">Exact meter name.</param>
+    /// <param name="instrumentName">Exact instrument name.</param>
+    /// <param name="identityDiscriminator">Complete identity discriminator from the instrument result.</param>
+    /// <param name="maxObservedSeries">Maximum distinct observed series allowed.</param>
+    /// <returns>The same report, for chaining.</returns>
+    /// <exception cref="ArgumentNullException">A parameter is null.</exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="maxObservedSeries"/> is negative.</exception>
+    /// <exception cref="MetricBudgetAssertionException">The selected identity exceeded the limit or was incomplete.</exception>
+    public static MetricBudgetReport AssertObservedSeriesAtMost(
+        this MetricBudgetReport report,
+        string meterName,
+        string instrumentName,
+        string identityDiscriminator,
+        int maxObservedSeries)
+    {
+        if (report is null)
+        {
+            throw new ArgumentNullException(nameof(report));
+        }
+
+        ValidateIdentityDiscriminator(identityDiscriminator);
+        if (maxObservedSeries < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(maxObservedSeries));
+        }
+
+        MetricBudgetInstrumentResult? instrument = FindInstrument(
+            report,
+            meterName,
+            instrumentName,
+            identityDiscriminator);
+        if (instrument is not null
+            && instrument.WasObserved
+            && !InstrumentTrackingIncomplete(instrument)
+            && instrument.ObservedSeriesCount <= maxObservedSeries)
+        {
+            return report;
+        }
+
+        throw new MetricBudgetAssertionException(
+            "Expected instrument \"" + instrumentName + "\" in meter \"" + meterName
+            + "\" with identity discriminator \"" + identityDiscriminator + "\" to stay at or below "
             + maxObservedSeries.ToString(CultureInfo.InvariantCulture) + " observed series, but "
             + (instrument is null
                 ? "it was not selected."
@@ -198,7 +297,7 @@ public static class MetricBudgetReportAssertions
             throw new ArgumentOutOfRangeException(nameof(maxDistinctValues));
         }
 
-        MetricBudgetInstrumentResult? instrument = FindInstrument(report, meterName, instrumentName);
+        MetricBudgetInstrumentResult? instrument = FindInstrument(report, meterName, instrumentName, identityDiscriminator: null);
         MetricBudgetTagResult? tag = FindTag(instrument, tagKey);
         if (tag is not null
             && tag.WasObserved
@@ -225,6 +324,68 @@ public static class MetricBudgetReportAssertions
             + report.ToDiagnosticString());
     }
 
+    /// <summary>
+    /// Asserts one tag key stayed within a distinct-value limit on an identity selected by discriminator.
+    /// </summary>
+    /// <param name="report">Report to assert against.</param>
+    /// <param name="meterName">Exact meter name.</param>
+    /// <param name="instrumentName">Exact instrument name.</param>
+    /// <param name="identityDiscriminator">Complete identity discriminator from the instrument result.</param>
+    /// <param name="tagKey">Exact tag key.</param>
+    /// <param name="maxDistinctValues">Maximum distinct values allowed.</param>
+    /// <returns>The same report, for chaining.</returns>
+    /// <exception cref="ArgumentNullException">A parameter is null.</exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="maxDistinctValues"/> is negative.</exception>
+    /// <exception cref="MetricBudgetAssertionException">The selected tag exceeded the limit or was incomplete.</exception>
+    public static MetricBudgetReport AssertTagDistinctValuesAtMost(
+        this MetricBudgetReport report,
+        string meterName,
+        string instrumentName,
+        string identityDiscriminator,
+        string tagKey,
+        int maxDistinctValues)
+    {
+        if (report is null)
+        {
+            throw new ArgumentNullException(nameof(report));
+        }
+
+        ValidateIdentityDiscriminator(identityDiscriminator);
+        if (tagKey is null)
+        {
+            throw new ArgumentNullException(nameof(tagKey));
+        }
+
+        if (maxDistinctValues < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(maxDistinctValues));
+        }
+
+        MetricBudgetInstrumentResult? instrument = FindInstrument(
+            report,
+            meterName,
+            instrumentName,
+            identityDiscriminator);
+        MetricBudgetTagResult? tag = FindTag(instrument, tagKey);
+        if (tag is not null
+            && tag.WasObserved
+            && instrument is not null
+            && !InstrumentTrackingIncomplete(instrument)
+            && !TagTrackingIncomplete(tag)
+            && tag.ObservedDistinctValueCount <= maxDistinctValues)
+        {
+            return report;
+        }
+
+        throw new MetricBudgetAssertionException(
+            "Expected tag \"" + tagKey + "\" on instrument \"" + instrumentName + "\" in meter \"" + meterName
+            + "\" with identity discriminator \"" + identityDiscriminator + "\" to stay at or below "
+            + maxDistinctValues.ToString(CultureInfo.InvariantCulture)
+            + " observed distinct values, but the selected identity did not satisfy the assertion."
+            + Environment.NewLine
+            + report.ToDiagnosticString());
+    }
+
     private static bool InstrumentTrackingIncomplete(MetricBudgetInstrumentResult instrument)
     {
         return instrument.SeriesTrackingIncomplete
@@ -245,7 +406,8 @@ public static class MetricBudgetReportAssertions
     private static MetricBudgetInstrumentResult? FindInstrument(
         MetricBudgetReport report,
         string meterName,
-        string instrumentName)
+        string instrumentName,
+        string? identityDiscriminator)
     {
         if (meterName is null)
         {
@@ -268,6 +430,15 @@ public static class MetricBudgetReportAssertions
                 if (string.Equals(candidate.MeterName, meterName, StringComparison.Ordinal)
                     && string.Equals(candidate.InstrumentName, instrumentName, StringComparison.Ordinal))
                 {
+                    if (identityDiscriminator is not null
+                        && !string.Equals(
+                            candidate.IdentityDiscriminator,
+                            identityDiscriminator,
+                            StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
                     if (match is null)
                     {
                         match = candidate;
@@ -303,7 +474,37 @@ public static class MetricBudgetReportAssertions
     private static string DescribeIdentity(MetricBudgetInstrumentResult instrument)
     {
         return "meter version " + (instrument.MeterVersion ?? "<none>")
-            + ", kind " + instrument.InstrumentKind;
+            + ", kind " + instrument.InstrumentKind
+            + ", identity discriminator " + instrument.IdentityDiscriminator;
+    }
+
+    private static void ValidateIdentityDiscriminator(string identityDiscriminator)
+    {
+        if (identityDiscriminator is null)
+        {
+            throw new ArgumentNullException(nameof(identityDiscriminator));
+        }
+
+        if (identityDiscriminator.Length != 64)
+        {
+            throw new ArgumentException(
+                "An identity discriminator must be the 64-character token exposed by a metric instrument result.",
+                nameof(identityDiscriminator));
+        }
+
+        for (int i = 0; i < identityDiscriminator.Length; i++)
+        {
+            char character = identityDiscriminator[i];
+            bool hexadecimal = character is >= '0' and <= '9'
+                or >= 'a' and <= 'f'
+                or >= 'A' and <= 'F';
+            if (!hexadecimal)
+            {
+                throw new ArgumentException(
+                    "An identity discriminator must be the 64-character token exposed by a metric instrument result.",
+                    nameof(identityDiscriminator));
+            }
+        }
     }
 
     private static MetricBudgetTagResult? FindTag(MetricBudgetInstrumentResult? instrument, string tagKey)

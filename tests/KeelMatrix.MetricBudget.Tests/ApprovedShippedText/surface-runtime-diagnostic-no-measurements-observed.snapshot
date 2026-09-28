@@ -2,6 +2,6 @@ MetricBudget observed-cardinality report: NO MEASUREMENTS OBSERVED (nothing was 
   rules: 1; instruments observed: 0; observed series: 0; measurements: 0
   safety bounds per instrument identity: series 100000, values per tag 5000, tag value length 256; accounting complete: True; accounting consistent: True
   rule 1: instrument "requests" in meter "tests.metricbudget.documentation-scope.no-measurements-observed" -> NoMeasurements
-    tests.metricbudget.documentation-scope.no-measurements-observed@1.0.0/requests (counter): 0 measurements, 0 observed series, configured max 1
+    tests.metricbudget.documentation-scope.no-measurements-observed@1.0.0/requests (counter) [identity 3413B29E9559732E7973F65676D95F59BC5D0A592765FA950037E7E493891BF8]: 0 measurements, 0 observed series, configured max 1
   problems:
-    - selected instrument meter "tests.metricbudget.documentation-scope.no-measurements-observed" version 1.0.0, counter "requests" was published but delivered no measurements during this session, so nothing was verified for it. Exercise the instrument in the workload, or call RecordObservableInstruments for observable instruments.
+    - selected instrument meter "tests.metricbudget.documentation-scope.no-measurements-observed" version 1.0.0, counter "requests" (identity discriminator 3413B29E9559732E7973F65676D95F59BC5D0A592765FA950037E7E493891BF8) was published but delivered no measurements during this session, so nothing was verified for it. Exercise the instrument in the workload, or call RecordObservableInstruments for observable instruments.

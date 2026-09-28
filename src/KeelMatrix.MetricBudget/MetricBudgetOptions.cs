@@ -65,6 +65,18 @@ public sealed class MetricBudgetOptions
     /// <summary>Default maximum length of a delivered tag key.</summary>
     public const int DefaultMaxTagKeyLength = 256;
 
+    /// <summary>Default number of tags accepted from one meter or instrument static metadata collection.</summary>
+    public const int DefaultMaxStaticMetadataTagCount = 256;
+
+    /// <summary>Default maximum length of a meter or instrument static metadata tag key.</summary>
+    public const int DefaultMaxStaticMetadataTagKeyLength = 256;
+
+    /// <summary>Default maximum length of a meter or instrument static metadata tag value.</summary>
+    public const int DefaultMaxStaticMetadataTagValueLength = 256;
+
+    /// <summary>Default maximum length of a unit or description in static instrument metadata.</summary>
+    public const int DefaultMaxStaticMetadataTextLength = 256;
+
     private readonly List<MetricBudgetRule> rules = new();
     private readonly ReadOnlyCollection<MetricBudgetRule> rulesView;
 
@@ -150,13 +162,37 @@ public sealed class MetricBudgetOptions
     /// <remarks>A larger tag set is not canonicalized or retained and makes the report explicitly incomplete.</remarks>
     public int MaxTagCount { get; set; } = DefaultMaxTagCount;
 
-    /// <summary>Maximum length of each caller-supplied identity and static metadata text component.</summary>
-    /// <remarks>An identity with a longer or unsupported caller-supplied component is not retained or enabled.</remarks>
+    /// <summary>Maximum length of each meter name, meter version, and instrument name.</summary>
+    /// <remarks>An identity with a longer name component is not retained or enabled.</remarks>
     public int MaxInstrumentIdentityLength { get; set; } = DefaultMaxInstrumentIdentityLength;
 
     /// <summary>Maximum length of a delivered tag key retained in tag accounting state.</summary>
     /// <remarks>A measurement containing a longer key is not canonicalized or retained.</remarks>
     public int MaxTagKeyLength { get; set; } = DefaultMaxTagKeyLength;
+
+    /// <summary>
+    /// Maximum number of tags accepted from one meter or instrument static metadata collection. The effective bound
+    /// is the lower of this value and the fixed hard ceiling of 256.
+    /// </summary>
+    public int MaxStaticMetadataTagCount { get; set; } = DefaultMaxStaticMetadataTagCount;
+
+    /// <summary>
+    /// Maximum length of a key in meter or instrument static metadata. The effective bound is the lower of this value
+    /// and the fixed hard ceiling of 256.
+    /// </summary>
+    public int MaxStaticMetadataTagKeyLength { get; set; } = DefaultMaxStaticMetadataTagKeyLength;
+
+    /// <summary>
+    /// Maximum length of a value in meter or instrument static metadata. The effective bound is the lower of this
+    /// value and the fixed hard ceiling of 256.
+    /// </summary>
+    public int MaxStaticMetadataTagValueLength { get; set; } = DefaultMaxStaticMetadataTagValueLength;
+
+    /// <summary>
+    /// Maximum length of a unit or description in static instrument metadata. The effective bound is the lower of
+    /// this value and the fixed hard ceiling of 256.
+    /// </summary>
+    public int MaxStaticMetadataTextLength { get; set; } = DefaultMaxStaticMetadataTextLength;
 
     /// <summary>
     /// Instrument-selection rules and their budgets, in declaration order.
@@ -252,6 +288,10 @@ public sealed class MetricBudgetOptions
         ValidatePositive(MaxTagCount, nameof(MaxTagCount), problems);
         ValidatePositive(MaxInstrumentIdentityLength, nameof(MaxInstrumentIdentityLength), problems);
         ValidatePositive(MaxTagKeyLength, nameof(MaxTagKeyLength), problems);
+        ValidatePositive(MaxStaticMetadataTagCount, nameof(MaxStaticMetadataTagCount), problems);
+        ValidatePositive(MaxStaticMetadataTagKeyLength, nameof(MaxStaticMetadataTagKeyLength), problems);
+        ValidatePositive(MaxStaticMetadataTagValueLength, nameof(MaxStaticMetadataTagValueLength), problems);
+        ValidatePositive(MaxStaticMetadataTextLength, nameof(MaxStaticMetadataTextLength), problems);
 
         FrozenRule[] frozenRules = new FrozenRule[rules.Count];
         for (int i = 0; i < rules.Count; i++)
@@ -306,6 +346,10 @@ public sealed class MetricBudgetOptions
             MaxTagCount,
             MaxInstrumentIdentityLength,
             MaxTagKeyLength,
+            MaxStaticMetadataTagCount,
+            MaxStaticMetadataTagKeyLength,
+            MaxStaticMetadataTagValueLength,
+            MaxStaticMetadataTextLength,
             frozenRules);
     }
 

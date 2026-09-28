@@ -115,7 +115,7 @@ internal static class TagIdentity
                 return false;
             }
 
-            if (!TryDescribeValue(tags[i].Value, maxValueLength, out string descriptor))
+            if (!TryDescribeValue(tags[i].Value, maxValueLength, allowOversizedTextDigest: true, out string descriptor))
             {
                 fields = NoTagFields;
                 tagSetKey = string.Empty;
@@ -169,12 +169,26 @@ internal static class TagIdentity
 
     internal static string DescribeValue(object? value, int maxValueLength)
     {
-        return TryDescribeValue(value, maxValueLength, out string descriptor)
+        return TryDescribeValue(value, maxValueLength, allowOversizedTextDigest: true, out string descriptor)
             ? descriptor
             : "unsupported";
     }
 
-    private static bool TryDescribeValue(object? value, int maxValueLength, out string descriptor)
+    /// <summary>
+    /// Checks the same supported value surface as delivered tags, but rejects an oversized string instead of
+    /// replacing it with a digest. Static metadata has its own length contract and cannot reuse delivery-tag
+    /// truncation semantics.
+    /// </summary>
+    internal static bool IsSupportedValueWithinLength(object? value, int maxValueLength)
+    {
+        return TryDescribeValue(value, maxValueLength, allowOversizedTextDigest: false, out _);
+    }
+
+    private static bool TryDescribeValue(
+        object? value,
+        int maxValueLength,
+        bool allowOversizedTextDigest,
+        out string descriptor)
     {
         if (value is null)
         {
@@ -185,7 +199,12 @@ internal static class TagIdentity
         switch (value)
         {
             case string text:
-                return DescribeText(typeof(string).FullName!, text, maxValueLength, out descriptor);
+                return DescribeText(
+                    typeof(string).FullName!,
+                    text,
+                    maxValueLength,
+                    allowOversizedTextDigest,
+                    out descriptor);
             case bool boolean:
                 descriptor = typeof(bool).FullName + ":" + (boolean ? "true" : "false");
                 return true;
@@ -260,10 +279,21 @@ internal static class TagIdentity
         }
     }
 
-    private static bool DescribeText(string typeName, string text, int maxValueLength, out string descriptor)
+    private static bool DescribeText(
+        string typeName,
+        string text,
+        int maxValueLength,
+        bool allowOversizedTextDigest,
+        out string descriptor)
     {
         if (maxValueLength > 0 && text.Length > maxValueLength)
         {
+            if (!allowOversizedTextDigest)
+            {
+                descriptor = string.Empty;
+                return false;
+            }
+
             descriptor = typeName
                 + "#chars=" + text.Length.ToString(CultureInfo.InvariantCulture)
                 + "#sha256=" + Sha256TextHash.HexDigest(text);
