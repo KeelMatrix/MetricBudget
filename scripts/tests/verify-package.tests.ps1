@@ -109,7 +109,7 @@ try
         "main and detached checkouts must receive identical package provenance properties"
 
     $advancer = Join-Path $provenanceTestRoot "advancer"
-    Invoke-TestGit $provenanceTestRoot @("clone", $origin, $advancer) | Out-Null
+    Invoke-TestGit $provenanceTestRoot @("clone", "--branch", "main", $origin, $advancer) | Out-Null
     Invoke-TestGit $advancer @("config", "user.email", "package-provenance-tests@example.invalid") | Out-Null
     Invoke-TestGit $advancer @("config", "user.name", "Package Provenance Tests") | Out-Null
     [IO.File]::WriteAllText((Join-Path $advancer "state.txt"), "advanced")

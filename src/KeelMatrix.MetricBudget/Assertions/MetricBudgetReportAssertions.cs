@@ -16,7 +16,7 @@ namespace KeelMatrix.MetricBudget.Assertions;
 /// identifiers before sharing an assertion message outside its intended audience.
 /// </para>
 /// <para>
-/// Focused budget helpers fail closed when their target delivered no measurements or its accounting was incomplete.
+/// Focused budget and observation helpers fail closed when their target delivered no measurements or its accounting was incomplete.
 /// A name-only focused check also fails when selected identity admission loss makes that name ambiguous or when the
 /// bounded rejected-name index overflowed before the target was admitted, while unrelated instruments' incomplete
 /// accounting does not invalidate a target that was fully tracked when the index did not overflow.
@@ -90,7 +90,7 @@ public static class MetricBudgetReportAssertions
     /// <param name="instrumentName">Exact instrument name.</param>
     /// <returns>The same report, for chaining.</returns>
     /// <exception cref="ArgumentNullException">A parameter is null.</exception>
-    /// <exception cref="MetricBudgetAssertionException">The instrument was not observed with measurements.</exception>
+    /// <exception cref="MetricBudgetAssertionException">The instrument was not observed with measurements or its tracking was incomplete.</exception>
     public static MetricBudgetReport AssertInstrumentObserved(
         this MetricBudgetReport report,
         string meterName,
@@ -102,7 +102,9 @@ public static class MetricBudgetReportAssertions
         }
 
         MetricBudgetInstrumentResult? instrument = FindInstrument(report, meterName, instrumentName, identityDiscriminator: null);
-        if (instrument is not null && instrument.WasObserved)
+        if (instrument is not null
+            && instrument.WasObserved
+            && !InstrumentTrackingIncomplete(instrument))
         {
             return report;
         }
@@ -110,7 +112,11 @@ public static class MetricBudgetReportAssertions
         throw new MetricBudgetAssertionException(
             "Expected instrument \"" + instrumentName + "\" in meter \"" + meterName
             + "\" to deliver at least one measurement, but "
-            + (instrument is null ? "it was not selected." : "it delivered none.") + Environment.NewLine
+            + (instrument is null
+                ? "it was not selected."
+                : !instrument.WasObserved
+                    ? "it delivered none."
+                    : "its tracking was incomplete.") + Environment.NewLine
             + report.ToDiagnosticString());
     }
 
@@ -123,7 +129,7 @@ public static class MetricBudgetReportAssertions
     /// <param name="identityDiscriminator">Complete identity discriminator from the instrument result.</param>
     /// <returns>The same report, for chaining.</returns>
     /// <exception cref="ArgumentNullException">A parameter is null.</exception>
-    /// <exception cref="MetricBudgetAssertionException">The instrument was not observed with measurements.</exception>
+    /// <exception cref="MetricBudgetAssertionException">The instrument was not observed with measurements or its tracking was incomplete.</exception>
     public static MetricBudgetReport AssertInstrumentObserved(
         this MetricBudgetReport report,
         string meterName,
@@ -141,7 +147,9 @@ public static class MetricBudgetReportAssertions
             meterName,
             instrumentName,
             identityDiscriminator);
-        if (instrument is not null && instrument.WasObserved)
+        if (instrument is not null
+            && instrument.WasObserved
+            && !InstrumentTrackingIncomplete(instrument))
         {
             return report;
         }
@@ -150,7 +158,11 @@ public static class MetricBudgetReportAssertions
             "Expected instrument \"" + instrumentName + "\" in meter \"" + meterName
             + "\" with identity discriminator \"" + identityDiscriminator
             + "\" to deliver at least one measurement, but "
-            + (instrument is null ? "it was not selected." : "it delivered none.") + Environment.NewLine
+            + (instrument is null
+                ? "it was not selected."
+                : !instrument.WasObserved
+                    ? "it delivered none."
+                    : "its tracking was incomplete.") + Environment.NewLine
             + report.ToDiagnosticString());
     }
 

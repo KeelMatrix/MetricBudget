@@ -45,7 +45,7 @@
             identifiers before sharing an assertion message outside its intended audience.
             </para>
             <para>
-            Focused budget helpers fail closed when their target delivered no measurements or its accounting was incomplete.
+            Focused budget and observation helpers fail closed when their target delivered no measurements or its accounting was incomplete.
             A name-only focused check also fails when selected identity admission loss makes that name ambiguous or when the
             bounded rejected-name index overflowed before the target was admitted, while unrelated instruments' incomplete
             accounting does not invalidate a target that was fully tracked when the index did not overflow.
@@ -87,7 +87,7 @@
             <param name="instrumentName">Exact instrument name.</param>
             <returns>The same report, for chaining.</returns>
             <exception cref="T:System.ArgumentNullException">A parameter is null.</exception>
-            <exception cref="T:KeelMatrix.MetricBudget.Assertions.MetricBudgetAssertionException">The instrument was not observed with measurements.</exception>
+            <exception cref="T:KeelMatrix.MetricBudget.Assertions.MetricBudgetAssertionException">The instrument was not observed with measurements or its tracking was incomplete.</exception>
         </member>
         <member name="M:KeelMatrix.MetricBudget.Assertions.MetricBudgetReportAssertions.AssertInstrumentObserved(KeelMatrix.MetricBudget.MetricBudgetReport,System.String,System.String,System.String)">
             <summary>
@@ -99,7 +99,7 @@
             <param name="identityDiscriminator">Complete identity discriminator from the instrument result.</param>
             <returns>The same report, for chaining.</returns>
             <exception cref="T:System.ArgumentNullException">A parameter is null.</exception>
-            <exception cref="T:KeelMatrix.MetricBudget.Assertions.MetricBudgetAssertionException">The instrument was not observed with measurements.</exception>
+            <exception cref="T:KeelMatrix.MetricBudget.Assertions.MetricBudgetAssertionException">The instrument was not observed with measurements or its tracking was incomplete.</exception>
         </member>
         <member name="M:KeelMatrix.MetricBudget.Assertions.MetricBudgetReportAssertions.AssertObservedSeriesAtMost(KeelMatrix.MetricBudget.MetricBudgetReport,System.String,System.String,System.Int32)">
             <summary>

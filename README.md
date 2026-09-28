@@ -43,11 +43,12 @@ Per-tag results also expose whether their counts may be incomplete because of se
 set, tag-key-cap exhaustion, instrument admission loss, or the per-key value cap. Such counts are lower bounds and
 `MetricBudgetTagResult.IsWithinBudget` is `false` whenever any of those loss paths could affect the key.
 
-Focused budget assertions fail closed when their target delivered no measurements or when selected physical
-instances or same-name identities were not admitted. The bounded name-only rejection index records overflow
-uncertainty: every identity admitted after that overflow is marked incomplete. A name-only focused assertion does not
-pass when that loss could make the target ambiguous; unrelated instruments' incomplete accounting does not invalidate
-a fully tracked target when the index did not overflow.
+Focused budget and observation assertions fail closed when their target delivered no measurements or when any affected
+accounting is incomplete, including rejected physical instances, same-name identities, series, tag sets, tag keys, or
+tag values. The bounded name-only rejection index records overflow uncertainty: every identity admitted after that
+overflow is marked incomplete. A focused assertion does not pass when that loss could make the target incomplete or
+ambiguous; unrelated instruments' incomplete accounting does not invalidate a fully tracked target when the index did
+not overflow.
 
 Rule results list only selected instrument identities that were retained and enabled. If an admission or selector
 bound rejects part of a rule's selected population, those identities are omitted and the affected rule's

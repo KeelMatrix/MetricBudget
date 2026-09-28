@@ -17,6 +17,7 @@ int exitCode = 0;
 exitCode += RunPassingBudget();
 exitCode += RunFailingBudget();
 exitCode += RunRuleLevelIncompleteAdmission();
+exitCode += RunFocusedObservationIncompleteAdmission();
 exitCode += RunDateTimeIdentityBudget();
 exitCode += RunConflictPrecedence();
 
@@ -148,6 +149,66 @@ static int RunRuleLevelIncompleteAdmission()
     }
 
     Console.WriteLine("rule-level admission loss failed the rule result as expected.");
+    return 0;
+}
+
+static int RunFocusedObservationIncompleteAdmission()
+{
+    Console.WriteLine("--- focused observation incomplete admission ---");
+
+    const string meterName = "Smoke.Consumer.FocusedObservationAdmission";
+    using Meter firstMeter = new Meter(meterName, "1.0.0");
+    using Meter secondMeter = new Meter(meterName, "1.0.0");
+    Counter<long> retained = firstMeter.CreateCounter<long>("requests", unit: "milliseconds", description: "first");
+    Counter<long> rejected = secondMeter.CreateCounter<long>("requests", unit: "seconds", description: "second");
+    MetricBudgetOptions options = new MetricBudgetOptions
+    {
+        MaxTrackedInstrumentIdentities = 1,
+    };
+    options.ForInstrument(meterName, "requests", budget => budget.MaxObservedSeries = 1);
+
+    using MetricBudgetSession session = MetricBudgetSession.Start(options);
+    retained.Add(1);
+    rejected.Add(1);
+
+    MetricBudgetReport report = session.Complete();
+    MetricBudgetInstrumentResult retainedResult = report.Rules[0].Instruments.Single();
+    Console.WriteLine(report.ToDiagnosticString());
+
+    if (report.Outcome != MetricBudgetOutcome.ObservationIncomplete
+        || !retainedResult.WasObserved
+        || !retainedResult.InstrumentTrackingIncomplete)
+    {
+        Console.WriteLine("UNEXPECTED: focused observation admission loss was not surfaced: " + report);
+        return 1;
+    }
+
+    int failures = 0;
+    try
+    {
+        _ = report.AssertInstrumentObserved(meterName, "requests");
+    }
+    catch (MetricBudgetAssertionException)
+    {
+        failures++;
+    }
+
+    try
+    {
+        _ = report.AssertInstrumentObserved(meterName, "requests", retainedResult.IdentityDiscriminator);
+    }
+    catch (MetricBudgetAssertionException)
+    {
+        failures++;
+    }
+
+    if (failures != 2)
+    {
+        Console.WriteLine("UNEXPECTED: focused observation assertions did not fail closed: " + report);
+        return 1;
+    }
+
+    Console.WriteLine("both focused observation overloads failed closed for incomplete identity admission.");
     return 0;
 }
 

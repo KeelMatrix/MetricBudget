@@ -10,8 +10,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   admitted shutdown callbacks commit before completion returns.
 - Expose a privacy-safe identity discriminator for complete retained identities and make focused assertions able to
   select same-name streams by that discriminator.
+- Make focused observation assertions fail closed for incomplete identity, series, and tag accounting, including
+  identity-cap and physical-instance admission loss.
 - Give static metadata its own bounded options and dimension-specific safety failures; delivered-tag bounds no longer
   reject published metadata.
+- Make provenance fixture tests independent of the host Git default branch.
 - Require release validation to run from the exact current `origin/main` commit.
 - Make local package archive provenance reproducible from normal and detached candidate checkouts.
 - Route documented package validation through the provenance-aware gate and guard against raw pack bypasses.
