@@ -112,7 +112,7 @@ try {
         "manual validation from a non-main ref must fail. Output: $($wrongManualRef.Output)"
 
     $malformed = Invoke-Validator 'push' 'release-0.1.2' 'refs/tags/release-0.1.2'
-    Assert-True ($malformed.ExitCode -ne 0 -and $malformed.Output -match 'stable release tag') `
+    Assert-True ($malformed.ExitCode -ne 0 -and $malformed.Output -match 'stable\s+release\s+tag') `
         "a malformed tag ref must fail. Output: $($malformed.Output)"
 
     Write-Output "RELEASE_PROVENANCE_TEST=PASS cases=6"
