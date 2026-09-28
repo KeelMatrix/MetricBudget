@@ -173,6 +173,40 @@ function Invoke-Dotnet {
     return $result
 }
 
+function Get-RepositoryCommit {
+    param([Parameter(Mandatory = $true)][string] $RepositoryRoot)
+
+    $output = @(& git -C $RepositoryRoot rev-parse --verify 'HEAD^{commit}' 2>&1)
+    if ($LASTEXITCODE -ne 0)
+    {
+        throw "Could not resolve the package repository HEAD commit: $($output -join ' ')"
+    }
+
+    $commit = ($output -join "`n").Trim()
+    if ($commit -notmatch '^[0-9a-fA-F]{40}$')
+    {
+        throw "Package repository HEAD is not a full commit id: '$commit'."
+    }
+
+    return $commit
+}
+
+function Get-PackageRepositoryProperties {
+    param([Parameter(Mandatory = $true)][string] $ExpectedCommit)
+
+    if ($ExpectedCommit -notmatch '^[0-9a-fA-F]{40}$')
+    {
+        throw "Package repository commit must be a full commit id: '$ExpectedCommit'."
+    }
+
+    # The package contract describes the release branch. Pass it explicitly so pack metadata is
+    # reproducible from both a normal main checkout and a detached candidate checkout.
+    return @(
+        "-p:RepositoryBranch=refs/heads/main",
+        "-p:RepositoryCommit=$ExpectedCommit"
+    )
+}
+
 function Assert-Equal {
     param(
         [Parameter(Mandatory = $true)] $Actual,
@@ -954,6 +988,8 @@ if ($FunctionsOnly)
     return
 }
 
+$expectedCommit = Get-RepositoryCommit -RepositoryRoot $repositoryRoot
+
 if (-not $InspectOnly)
 {
     if (-not (Test-Path -LiteralPath $packageDirectory))
@@ -971,7 +1007,11 @@ if (-not $InspectOnly)
         "--force-evaluate", "--no-cache", "--disable-build-servers"
     )
     Invoke-Dotnet -Step "Package project restore" -Arguments $restoreArguments | Out-Null
-    Invoke-Dotnet -Step "Release package build" -Arguments @("pack", $projectPath, "-c", "Release", "-o", $packageDirectory, "--no-restore", "-p:Version=$ExpectedVersion") | Out-Null
+    $packArguments = @(
+        "pack", $projectPath, "-c", "Release", "-o", $packageDirectory, "--no-restore", "-p:Version=$ExpectedVersion"
+    )
+    $packArguments += Get-PackageRepositoryProperties -ExpectedCommit $expectedCommit
+    Invoke-Dotnet -Step "Release package build" -Arguments $packArguments | Out-Null
 }
 else
 {
@@ -1007,7 +1047,6 @@ Assert-Equal @((Get-ChildItem -LiteralPath $packageDirectory -File | Sort-Object
     "KeelMatrix.MetricBudget.$ExpectedVersion.nupkg",
     "KeelMatrix.MetricBudget.$ExpectedVersion.snupkg") "Package directory contains an unexpected artifact."
 
-$expectedCommit = (git -C $repositoryRoot rev-parse HEAD).Trim()
 Assert-PackageMetadata $nupkg $ExpectedVersion $expectedCommit
 Assert-SymbolPackageMetadata $snupkg $ExpectedVersion $expectedCommit
 Assert-Icon $nupkg

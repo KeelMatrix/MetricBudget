@@ -46,6 +46,58 @@ function New-AuditAttempt {
     }
 }
 
+function Invoke-TestGit {
+    param(
+        [Parameter(Mandatory = $true)][string] $Root,
+        [Parameter(Mandatory = $true)][string[]] $Arguments
+    )
+
+    $output = @(& git -C $Root @Arguments 2>&1)
+    if ($LASTEXITCODE -ne 0)
+    {
+        throw "Test git command failed: git -C $Root $($Arguments -join ' ')`n$($output -join "`n")"
+    }
+
+    return ($output -join "`n").Trim()
+}
+
+$knownCommit = "0123456789abcdef0123456789abcdef01234567"
+$knownProperties = @(Get-PackageRepositoryProperties -ExpectedCommit $knownCommit)
+Assert-True ($knownProperties -contains "-p:RepositoryBranch=refs/heads/main") `
+    "package provenance must set the release branch explicitly"
+Assert-True ($knownProperties -contains "-p:RepositoryCommit=$knownCommit") `
+    "package provenance must set the exact checked-out commit"
+Assert-Throws { Get-PackageRepositoryProperties -ExpectedCommit "" } `
+    "package provenance must reject an absent commit"
+
+$provenanceTestRoot = Join-Path ([IO.Path]::GetTempPath()) ("metricbudget-package-provenance-tests-" + [Guid]::NewGuid().ToString("N"))
+try
+{
+    New-Item -ItemType Directory -Path $provenanceTestRoot -Force | Out-Null
+    Invoke-TestGit $provenanceTestRoot @("init", "--initial-branch=main") | Out-Null
+    Invoke-TestGit $provenanceTestRoot @("config", "user.email", "package-provenance-tests@example.invalid") | Out-Null
+    Invoke-TestGit $provenanceTestRoot @("config", "user.name", "Package Provenance Tests") | Out-Null
+    [IO.File]::WriteAllText((Join-Path $provenanceTestRoot "state.txt"), "candidate")
+    Invoke-TestGit $provenanceTestRoot @("add", "state.txt") | Out-Null
+    Invoke-TestGit $provenanceTestRoot @("commit", "-m", "candidate") | Out-Null
+    $mainCommit = Get-RepositoryCommit -RepositoryRoot $provenanceTestRoot
+    $mainProperties = @(Get-PackageRepositoryProperties -ExpectedCommit $mainCommit)
+
+    Invoke-TestGit $provenanceTestRoot @("checkout", "--detach", "--quiet", "HEAD") | Out-Null
+    $detachedCommit = Get-RepositoryCommit -RepositoryRoot $provenanceTestRoot
+    $detachedProperties = @(Get-PackageRepositoryProperties -ExpectedCommit $detachedCommit)
+    Assert-True ($detachedCommit -eq $mainCommit) "detached checkouts must retain the exact candidate commit"
+    Assert-True (($detachedProperties -join "`n") -eq ($mainProperties -join "`n")) `
+        "main and detached checkouts must receive identical package provenance properties"
+}
+finally
+{
+    if (Test-Path -LiteralPath $provenanceTestRoot)
+    {
+        Remove-Item -LiteralPath $provenanceTestRoot -Recurse -Force
+    }
+}
+
 $expectedProjects = @("src/lib/MyProject.csproj")
 $cleanReport = @'
 {
@@ -202,4 +254,4 @@ Assert-Throws {
 } "a second advisory-service failure must fail the gate"
 Assert-True ($persistentFailureCount -eq 2) "advisory-service failure retry must remain bounded"
 
-Write-Output "VERIFY_PACKAGE_TEST=PASS cases=19"
+Write-Output "VERIFY_PACKAGE_TEST=PASS cases=24"

@@ -25,7 +25,8 @@ pwsh -NoProfile -File scripts/verify-package.ps1
 
 The solution intentionally excludes those two projects because their `NuGet.config` files map the package under test
 to `artifacts/packages`. The package gate performs deterministic archive inspection, clean-cache consumer and sample
-proof, and the transitive vulnerability audit.
+proof, and the transitive vulnerability audit. Its pack step supplies `refs/heads/main` and the checked-out Git `HEAD`
+commit explicitly, so the documented command is self-contained in both normal and detached candidate checkouts.
 
 The environment assignment above is required for repository-owned development and validation runs. Keep it in the
 shell that invokes `dotnet`, or use the equivalent process-environment setting on another platform.
