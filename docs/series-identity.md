@@ -71,7 +71,8 @@ Notes that the implementation, the diagnostics, and this document share:
 - **Static metadata is fail-closed and bounded.** Metadata tag enumeration is limited by
   `MaxInstrumentIdentityLength`, uses the same supported lossless tag descriptors as delivered tags, and retains only
   fixed-size digests. A throwing or unsupported metadata tag, an overlong caller-supplied unit or description, or an
-  overlong metadata tag key rejects the selected identity and marks the report incomplete; the finite framework
+  overlong metadata tag key rejects the selected identity and marks the report incomplete; static metadata has a
+  fixed 256-component/tag-count ceiling even when caller safety options are raised. The finite framework
   measurement-type token is bounded independently and never falls back to a name-only merge. Selector matching still
   happens before identity admission, so rejected unselected instruments do not affect
   a scoped session. A selected identity or physical instance rejected by an admission bound also makes any affected

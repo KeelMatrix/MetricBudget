@@ -22,6 +22,11 @@ namespace KeelMatrix.MetricBudget.Internal;
 /// </remarks>
 internal readonly struct InstrumentIdentity : IEquatable<InstrumentIdentity>
 {
+    private const int MaxStaticMetadataComponentLength = 256;
+    private const int MaxStaticMetadataTagCount = 256;
+    private const int MaxStaticMetadataTagKeyLength = 256;
+    private const int MaxStaticMetadataTagValueLength = 256;
+
     internal InstrumentIdentity(
         string meterName,
         string? meterVersion,
@@ -102,7 +107,8 @@ internal readonly struct InstrumentIdentity : IEquatable<InstrumentIdentity>
     {
         Meter meter = instrument.Meter;
         string? measurementTypeName = FindMeasurementTypeName(instrument);
-        bool metadataComplete = measurementTypeName is not null;
+        bool metadataComplete = measurementTypeName is not null
+            && measurementTypeName.Length <= MaxStaticMetadataComponentLength;
         // The closed measurement type comes from the finite BCL instrument type surface and is always retained as
         // a bounded framework-owned token. MaxInstrumentIdentityLength limits caller-controlled names and text.
         int metadataComponentLength = 0;
@@ -112,16 +118,23 @@ internal readonly struct InstrumentIdentity : IEquatable<InstrumentIdentity>
         string? description = instrument.Description;
         metadataComponentLength = Math.Max(metadataComponentLength, unit?.Length ?? 0);
         metadataComponentLength = Math.Max(metadataComponentLength, description?.Length ?? 0);
-        componentLengthsValid &= (unit?.Length ?? 0) <= options.MaxInstrumentIdentityLength
-            && (description?.Length ?? 0) <= options.MaxInstrumentIdentityLength;
+        int maximumTextLength = Math.Min(
+            options.MaxInstrumentIdentityLength,
+            MaxStaticMetadataComponentLength);
+        componentLengthsValid &= (unit?.Length ?? 0) <= maximumTextLength
+            && (description?.Length ?? 0) <= maximumTextLength;
 
         bool meterTagsComplete = TryDigestTags(
             meter.Tags,
-            options.MaxInstrumentIdentityLength,
+            Math.Min(options.MaxTagCount, MaxStaticMetadataTagCount),
+            Math.Min(options.MaxTagKeyLength, Math.Min(options.MaxInstrumentIdentityLength, MaxStaticMetadataTagKeyLength)),
+            Math.Min(options.MaxTagValueLength, MaxStaticMetadataTagValueLength),
             out Sha256Digest meterTagsDigest);
         bool instrumentTagsComplete = TryDigestTags(
             instrument.Tags,
-            options.MaxInstrumentIdentityLength,
+            Math.Min(options.MaxTagCount, MaxStaticMetadataTagCount),
+            Math.Min(options.MaxTagKeyLength, Math.Min(options.MaxInstrumentIdentityLength, MaxStaticMetadataTagKeyLength)),
+            Math.Min(options.MaxTagValueLength, MaxStaticMetadataTagValueLength),
             out Sha256Digest instrumentTagsDigest);
         metadataComplete &= meterTagsComplete && instrumentTagsComplete;
 
@@ -162,7 +175,9 @@ internal readonly struct InstrumentIdentity : IEquatable<InstrumentIdentity>
 
     private static bool TryDigestTags(
         IEnumerable<KeyValuePair<string, object?>>? tags,
-        int maximumComponentLength,
+        int maximumTagCount,
+        int maximumTagKeyLength,
+        int maximumTagValueLength,
         out Sha256Digest digest)
     {
         if (tags is null)
@@ -177,7 +192,7 @@ internal readonly struct InstrumentIdentity : IEquatable<InstrumentIdentity>
             using IEnumerator<KeyValuePair<string, object?>> enumerator = tags.GetEnumerator();
             while (enumerator.MoveNext())
             {
-                if (values.Count >= maximumComponentLength)
+                if (values.Count >= maximumTagCount)
                 {
                     digest = default;
                     return false;
@@ -194,9 +209,9 @@ internal readonly struct InstrumentIdentity : IEquatable<InstrumentIdentity>
 
         if (!TagIdentity.TryCreateTagSetKey(
                 values.ToArray(),
-                maximumComponentLength,
-                maximumComponentLength,
-                maximumComponentLength,
+                maximumTagValueLength,
+                maximumTagCount,
+                maximumTagKeyLength,
                 out string canonical,
                 out _))
         {

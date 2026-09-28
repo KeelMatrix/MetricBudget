@@ -13,7 +13,7 @@ has to be bounded and honest. Every session applies explicit bounds to every ret
 | `MaxTrackedConflicts` | 1,024 | Ambiguous identity detail records retained; a conflict requiring more rule indexes than this is dropped, while the known invalid-configuration fact remains bounded and retained. |
 | `MaxTrackedTagKeysPerInstrument` | 256 | Distinct delivered tag keys retained per instrument identity. |
 | `MaxTagCount` | 64 | Delivered tags admitted from one measurement. |
-| `MaxInstrumentIdentityLength` | 256 | Length bound for meter name, meter version, instrument name, caller-supplied unit/description, and static metadata tag keys after selector matching. The finite framework measurement-type token is bounded independently. Oversized unselected identities are ignored; selected identities with overlong or unsupported metadata are rejected and counted separately. |
+| `MaxInstrumentIdentityLength` | 256 | Length bound for meter name, meter version, instrument name, caller-supplied unit/description, and static metadata tag keys after selector matching. Static metadata also has a fixed 256-component/tag-count ceiling; the finite framework measurement-type token is bounded independently. Oversized unselected identities are ignored; selected identities with overlong or unsupported metadata are rejected and counted separately. |
 | `MaxTagKeyLength` | 256 | Length of a delivered tag key admitted to identity construction. |
 
 The defaults exist so an accidentally explosive workload cannot make the verifier unbounded. They are not budgets,
