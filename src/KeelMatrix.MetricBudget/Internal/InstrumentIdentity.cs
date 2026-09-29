@@ -51,8 +51,11 @@ internal readonly struct InstrumentIdentity : IEquatable<InstrumentIdentity>
         Sha256Digest metadataDigest,
         bool metadataComplete,
         StaticMetadataFailure metadataFailures)
-        : this(meterName, meterVersion, instrumentName, kind)
     {
+        MeterName = meterName;
+        MeterVersion = meterVersion;
+        InstrumentName = instrumentName;
+        Kind = kind;
         MetadataDigest = metadataDigest;
         MetadataComplete = metadataComplete;
         MetadataFailures = metadataFailures;
@@ -84,9 +87,18 @@ internal readonly struct InstrumentIdentity : IEquatable<InstrumentIdentity>
 
     internal bool HasNameComponentsAtMost(int maximum)
     {
-        return MeterName.Length <= maximum
-            && (MeterVersion is null || MeterVersion.Length <= maximum)
-            && InstrumentName.Length <= maximum;
+        return HasNameComponentsAtMost(MeterName, MeterVersion, InstrumentName, maximum);
+    }
+
+    internal static bool HasNameComponentsAtMost(
+        string meterName,
+        string? meterVersion,
+        string instrumentName,
+        int maximum)
+    {
+        return meterName.Length <= maximum
+            && (meterVersion is null || meterVersion.Length <= maximum)
+            && instrumentName.Length <= maximum;
     }
 
     internal static InstrumentIdentity FromInstrument(Instrument instrument)

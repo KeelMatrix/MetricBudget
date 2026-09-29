@@ -106,6 +106,11 @@ internal sealed class FrozenRule
         return Selector.Matches(identity);
     }
 
+    internal bool Matches(string meterName, string instrumentName)
+    {
+        return Selector.Matches(meterName, instrumentName);
+    }
+
     internal bool TryGetTagBudget(string tagKey, out int maxDistinctValues)
     {
         return tagBudgets.TryGetValue(tagKey, out maxDistinctValues);

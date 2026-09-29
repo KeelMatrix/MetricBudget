@@ -64,6 +64,6 @@ if ($head -ne $main) {
 }
 
 Write-Output "RELEASE_SOURCE ref=$Ref sha=$head exact_main=PASS"
-if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_ENV)) {
-    "RELEASE_COMMIT=$head" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_OUTPUT)) {
+    "commit=$head" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
 }

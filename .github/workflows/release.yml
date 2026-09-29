@@ -47,6 +47,7 @@ jobs:
         run: sh .githooks/check-history
 
       - name: Verify release source provenance
+        id: release-provenance
         shell: pwsh
         env:
           RELEASE_EVENT_NAME: ${{ github.event_name }}
@@ -164,11 +165,12 @@ jobs:
       - name: Pack release artifacts
         env:
           RELEASE_VERSION: ${{ steps.release-version.outputs.version }}
+          RELEASE_COMMIT: ${{ steps.release-provenance.outputs.commit }}
         run: dotnet pack src/KeelMatrix.MetricBudget/KeelMatrix.MetricBudget.csproj --configuration Release --no-build --no-restore --include-symbols -p:SymbolPackageFormat=snupkg -p:Version=$env:RELEASE_VERSION -p:RepositoryBranch=refs/heads/main -p:RepositoryCommit=$env:RELEASE_COMMIT --output artifacts/packages
 
       - name: Run exact package gate
         shell: pwsh
-        run: pwsh -NoProfile -File scripts/verify-package.ps1 -InspectOnly -ExpectedVersion $env:RELEASE_VERSION
+        run: pwsh -NoProfile -File scripts/verify-package.ps1 -InspectOnly -RequireMainProvenance -ExpectedVersion $env:RELEASE_VERSION
 
       - name: Upload exact validated artifact set
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

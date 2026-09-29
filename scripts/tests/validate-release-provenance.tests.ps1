@@ -36,8 +36,18 @@ function Invoke-Validator {
     param(
         [Parameter(Mandatory = $true)][string] $EventName,
         [Parameter(Mandatory = $true)][string] $RefName,
-        [Parameter(Mandatory = $true)][string] $Ref
+        [Parameter(Mandatory = $true)][string] $Ref,
+        [switch] $UseWorkflowCommandFiles
     )
+
+    $previousGithubEnv = $env:GITHUB_ENV
+    $previousGithubOutput = $env:GITHUB_OUTPUT
+    $fixtureGithubEnv = Join-Path $testRoot ("fixture-github-env-" + [Guid]::NewGuid().ToString("N"))
+    $fixtureGithubOutput = Join-Path $testRoot ("fixture-github-output-" + [Guid]::NewGuid().ToString("N"))
+    if (-not $UseWorkflowCommandFiles) {
+        $env:GITHUB_ENV = $fixtureGithubEnv
+        $env:GITHUB_OUTPUT = $fixtureGithubOutput
+    }
 
     Push-Location $candidate
     try {
@@ -46,13 +56,31 @@ function Invoke-Validator {
             -ScriptPath (Join-Path $repositoryRoot "scripts/validate-release-provenance.ps1") `
             -ScriptArguments @('-EventName', $EventName, '-RefName', $RefName, '-Ref', $Ref)
         $output = @(Invoke-NestedPwsh -ArgumentList $arguments 2>&1)
-        return [pscustomobject]@{
+        $currentGithubEnv = $env:GITHUB_ENV
+        $currentGithubOutput = $env:GITHUB_OUTPUT
+        $result = [pscustomobject]@{
             ExitCode = $LASTEXITCODE
             Output = ($output -join "`n")
+            GithubEnv = if (-not [string]::IsNullOrWhiteSpace($currentGithubEnv) -and (Test-Path -LiteralPath $currentGithubEnv)) { Get-Content -Raw $currentGithubEnv } else { "" }
+            GithubOutput = if (-not [string]::IsNullOrWhiteSpace($currentGithubOutput) -and (Test-Path -LiteralPath $currentGithubOutput)) { Get-Content -Raw $currentGithubOutput } else { "" }
         }
+        return $result
     }
     finally {
         Pop-Location
+        if ($null -eq $previousGithubEnv) {
+            Remove-Item Env:GITHUB_ENV -ErrorAction SilentlyContinue
+        }
+        else {
+            $env:GITHUB_ENV = $previousGithubEnv
+        }
+
+        if ($null -eq $previousGithubOutput) {
+            Remove-Item Env:GITHUB_OUTPUT -ErrorAction SilentlyContinue
+        }
+        else {
+            $env:GITHUB_OUTPUT = $previousGithubOutput
+        }
     }
 }
 
@@ -79,6 +107,49 @@ try {
     Invoke-Git $candidate @('config', 'user.email', 'release-provenance-tests@example.invalid') | Out-Null
     Invoke-Git $candidate @('config', 'user.name', 'Release Provenance Tests') | Out-Null
     Invoke-Git $candidate @('tag', '-a', 'v0.1.0', '-m', 'release') | Out-Null
+
+    # Reproduce the workflow boundary: the real validator writes one immutable step output, then the fixture
+    # runner executes validators in child processes with private command files. Fixture commits must not reach the
+    # surrounding workflow command files that the later pack step consumes.
+    $workflowGithubEnv = Join-Path $testRoot "workflow-github-env"
+    $workflowGithubOutput = Join-Path $testRoot "workflow-github-output"
+    $previousGithubEnv = $env:GITHUB_ENV
+    $previousGithubOutput = $env:GITHUB_OUTPUT
+    try {
+        $env:GITHUB_ENV = $workflowGithubEnv
+        $env:GITHUB_OUTPUT = $workflowGithubOutput
+        $realValidation = Invoke-Validator 'push' 'v0.1.0' 'refs/tags/v0.1.0' -UseWorkflowCommandFiles
+        Assert-True ($realValidation.ExitCode -eq 0) `
+            "the real workflow provenance step must pass before fixture tests run. Output: $($realValidation.Output)"
+        $realOutput = Get-Content -Raw $workflowGithubOutput
+        Assert-True ($realOutput -match '^commit=[0-9a-f]{40}\s*$') `
+            "the real validator must emit exactly one candidate commit step output. Actual: $realOutput"
+        Assert-True (-not (Test-Path -LiteralPath $workflowGithubEnv)) `
+            "the provenance validator must not mutate the job-wide environment command file."
+
+        $fixtureValidation = Invoke-Validator 'push' 'v0.1.0' 'refs/tags/v0.1.0'
+        Assert-True ($fixtureValidation.ExitCode -eq 0) `
+            "fixture provenance validation must pass in its isolated command files. Output: $($fixtureValidation.Output)"
+        Assert-True ($fixtureValidation.GithubOutput -match '^commit=[0-9a-f]{40}\s*$') `
+            "fixture validation must write its result to its private output file. Actual: $($fixtureValidation.GithubOutput)"
+        Assert-True ((Get-Content -Raw $workflowGithubOutput) -eq $realOutput) `
+            "fixture validation must not overwrite the real workflow's verified commit output."
+    }
+    finally {
+        if ($null -eq $previousGithubEnv) {
+            Remove-Item Env:GITHUB_ENV -ErrorAction SilentlyContinue
+        }
+        else {
+            $env:GITHUB_ENV = $previousGithubEnv
+        }
+
+        if ($null -eq $previousGithubOutput) {
+            Remove-Item Env:GITHUB_OUTPUT -ErrorAction SilentlyContinue
+        }
+        else {
+            $env:GITHUB_OUTPUT = $previousGithubOutput
+        }
+    }
 
     $positive = Invoke-Validator 'push' 'v0.1.0' 'refs/tags/v0.1.0'
     Assert-True ($positive.ExitCode -eq 0 -and $positive.Output -match 'exact_main=PASS') `

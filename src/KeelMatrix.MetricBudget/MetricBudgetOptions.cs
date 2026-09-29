@@ -297,20 +297,19 @@ public sealed class MetricBudgetOptions
         for (int i = 0; i < rules.Count; i++)
         {
             MetricBudgetRule rule = rules[i];
-            string prefix = "Rule " + (i + 1).ToString(CultureInfo.InvariantCulture) + " (" + rule.Selector + "): ";
 
             InstrumentBudget configurationBudget = rule.ConfigurationBudget!;
 
             if (!configurationBudget.HasLimit())
             {
-                problems.Add(prefix + "no budget is configured. Set MaxObservedSeries or declare at least one tag budget with MaxDistinctValues.");
+                problems.Add(GetRulePrefix(rule, i) + "no budget is configured. Set MaxObservedSeries or declare at least one tag budget with MaxDistinctValues.");
             }
 
             if (configurationBudget.MaxObservedSeries is int maxSeries)
             {
                 if (maxSeries <= 0)
                 {
-                    problems.Add(prefix + "MaxObservedSeries must be greater than zero.");
+                    problems.Add(GetRulePrefix(rule, i) + "MaxObservedSeries must be greater than zero.");
                 }
             }
 
@@ -318,11 +317,11 @@ public sealed class MetricBudgetOptions
             {
                 if (!tag.MaxDistinctValues.HasValue)
                 {
-                    problems.Add(prefix + "tag \"" + tag.Key + "\" has no MaxDistinctValues. Set a limit or remove the tag.");
+                    problems.Add(GetRulePrefix(rule, i) + "tag \"" + tag.Key + "\" has no MaxDistinctValues. Set a limit or remove the tag.");
                 }
                 else if (tag.MaxDistinctValues.Value <= 0)
                 {
-                    problems.Add(prefix + "tag \"" + tag.Key + "\" MaxDistinctValues must be greater than zero.");
+                    problems.Add(GetRulePrefix(rule, i) + "tag \"" + tag.Key + "\" MaxDistinctValues must be greater than zero.");
                 }
             }
 
@@ -359,5 +358,10 @@ public sealed class MetricBudgetOptions
         {
             problems.Add(name + " must be greater than zero because it is a hard safety bound.");
         }
+    }
+
+    private static string GetRulePrefix(MetricBudgetRule rule, int index)
+    {
+        return "Rule " + (index + 1).ToString(CultureInfo.InvariantCulture) + " (" + rule.Selector + "): ";
     }
 }

@@ -15,6 +15,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   including identity-cap and physical-instance admission loss.
 - Give static metadata its own bounded options and dimension-specific safety failures; delivered-tag bounds no longer
   reject published metadata.
+- Check selected instrument name bounds before full identity canonicalization, and avoid identity construction for
+  unselected instruments so rejected names remain bounded in publication/startup paths.
+- Verify ordinary feature and pull-request package candidates from their checked-out commit, while keeping strict
+  `origin/main` provenance for release packaging and restricting cleanup to the canonical package-output directory.
 - Make provenance fixture tests independent of the host Git default branch.
 - Require release validation to run from the exact current `origin/main` commit.
 - Make local package archive provenance reproducible from normal and detached candidate checkouts.

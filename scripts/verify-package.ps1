@@ -2,6 +2,7 @@
 param(
     [switch] $InspectOnly,
     [switch] $FunctionsOnly,
+    [switch] $RequireMainProvenance,
     [string] $PackageDirectory = "",
     [string] $ExpectedVersion = ""
 )
@@ -39,19 +40,76 @@ if ($ExpectedVersion -ne $configuredVersion)
     throw "Expected package version '$ExpectedVersion' does not match Directory.Build.props version '$configuredVersion'."
 }
 
-if ([string]::IsNullOrWhiteSpace($PackageDirectory))
-{
-    $PackageDirectory = Join-Path $repositoryRoot "artifacts/packages"
+function Assert-NoReparsePoint {
+    param([Parameter(Mandatory = $true)][string] $Path)
+
+    if (-not (Test-Path -LiteralPath $Path))
+    {
+        return
+    }
+
+    $item = Get-Item -LiteralPath $Path -Force
+    if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)
+    {
+        throw "Package output cannot use a symbolic link, junction, or other reparse point: $Path"
+    }
 }
 
-$packageDirectory = [IO.Path]::GetFullPath($PackageDirectory)
-$repositoryPrefix = $repositoryRoot.TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
-$packageDirectoryIsScoped = $packageDirectory.StartsWith($repositoryPrefix, [StringComparison]::OrdinalIgnoreCase) -and
-    [IO.Path]::GetFileName($packageDirectory) -eq "packages"
-if (-not $packageDirectoryIsScoped)
-{
-    throw "Package output must be the repository's artifacts/packages directory: $packageDirectory"
+function Normalize-DirectoryPath {
+    param([Parameter(Mandatory = $true)][string] $Path)
+
+    $fullPath = [IO.Path]::GetFullPath($Path)
+    $root = [IO.Path]::GetPathRoot($fullPath)
+    if ($fullPath.Length -gt $root.Length)
+    {
+        $fullPath = $fullPath.TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+    }
+
+    return $fullPath
 }
+
+function Resolve-PackageDirectory {
+    param(
+        [Parameter(Mandatory = $true)][string] $RepositoryRoot,
+        [AllowEmptyString()][string] $RequestedPath = ""
+    )
+
+    $canonicalPath = Normalize-DirectoryPath (Join-Path $RepositoryRoot "artifacts/packages")
+    $candidatePath = if ([string]::IsNullOrWhiteSpace($RequestedPath))
+    {
+        $canonicalPath
+    }
+    elseif ([IO.Path]::IsPathRooted($RequestedPath))
+    {
+        Normalize-DirectoryPath $RequestedPath
+    }
+    else
+    {
+        Normalize-DirectoryPath (Join-Path $RepositoryRoot $RequestedPath)
+    }
+
+    # The package gate owns one exact directory. Ordinal comparison rejects case-only aliases instead of assuming
+    # that every filesystem has Windows case-insensitive containment semantics.
+    if (-not [string]::Equals($candidatePath, $canonicalPath, [StringComparison]::Ordinal))
+    {
+        throw "Package output must be the repository's artifacts/packages directory: $candidatePath"
+    }
+
+    $artifactsDirectory = Join-Path $RepositoryRoot "artifacts"
+    Assert-NoReparsePoint -Path $artifactsDirectory
+    Assert-NoReparsePoint -Path $candidatePath
+    if (Test-Path -LiteralPath $candidatePath)
+    {
+        foreach ($child in @(Get-ChildItem -LiteralPath $candidatePath -Force))
+        {
+            Assert-NoReparsePoint -Path $child.FullName
+        }
+    }
+
+    return $canonicalPath
+}
+
+$packageDirectory = Resolve-PackageDirectory -RepositoryRoot $repositoryRoot -RequestedPath $PackageDirectory
 
 function Format-DotnetCommand {
     param([Parameter(Mandatory = $true)][string[]] $Arguments)
@@ -191,6 +249,28 @@ function Get-RepositoryCommit {
     return $commit
 }
 
+function Get-RepositoryBranch {
+    param([Parameter(Mandatory = $true)][string] $RepositoryRoot)
+
+    $workflowRef = ([string]$env:GITHUB_REF).Trim()
+    if ($workflowRef -match '^refs/(?:heads|pull|tags)/.+$')
+    {
+        return $workflowRef
+    }
+
+    $branchOutput = @(& git -C $RepositoryRoot symbolic-ref --quiet --short HEAD 2>$null)
+    if ($LASTEXITCODE -eq 0)
+    {
+        $branch = ($branchOutput -join "`n").Trim()
+        if (-not [string]::IsNullOrWhiteSpace($branch))
+        {
+            return "refs/heads/$branch"
+        }
+    }
+
+    return "detached"
+}
+
 function Get-VerifiedMainCommit {
     param([Parameter(Mandatory = $true)][string] $RepositoryRoot)
 
@@ -224,7 +304,8 @@ function Get-VerifiedMainCommit {
 function Get-PackageRepositoryProperties {
     param(
         [Parameter(Mandatory = $true)][string] $ExpectedCommit,
-        [Parameter(Mandatory = $true)][string] $RepositoryRoot
+        [Parameter(Mandatory = $true)][string] $RepositoryRoot,
+        [switch] $RequireMainProvenance
     )
 
     if ($ExpectedCommit -notmatch '^[0-9a-fA-F]{40}$')
@@ -232,16 +313,24 @@ function Get-PackageRepositoryProperties {
         throw "Package repository commit must be a full commit id: '$ExpectedCommit'."
     }
 
-    $verifiedCommit = Get-VerifiedMainCommit -RepositoryRoot $RepositoryRoot
-    if ($verifiedCommit -ne $ExpectedCommit)
+    $repositoryCommit = if ($RequireMainProvenance)
     {
-        throw "Package repository commit '$ExpectedCommit' is not the verified checked-out origin/main commit '$verifiedCommit'."
+        Get-VerifiedMainCommit -RepositoryRoot $RepositoryRoot
+    }
+    else
+    {
+        Get-RepositoryCommit -RepositoryRoot $RepositoryRoot
     }
 
-    # The package contract describes the release branch. It is supplied only after the exact checked-out commit has
-    # been proven equal to the freshly fetched authoritative origin/main ref.
+    if ($repositoryCommit -ne $ExpectedCommit)
+    {
+        $description = if ($RequireMainProvenance) { "verified checked-out origin/main" } else { "checked-out candidate" }
+        throw "Package repository commit '$ExpectedCommit' is not the $description '$repositoryCommit'."
+    }
+
+    $repositoryBranch = if ($RequireMainProvenance) { "refs/heads/main" } else { Get-RepositoryBranch -RepositoryRoot $RepositoryRoot }
     return @(
-        "-p:RepositoryBranch=refs/heads/main",
+        "-p:RepositoryBranch=$repositoryBranch",
         "-p:RepositoryCommit=$ExpectedCommit"
     )
 }
@@ -1027,7 +1116,14 @@ if ($FunctionsOnly)
     return
 }
 
-$expectedCommit = Get-VerifiedMainCommit -RepositoryRoot $repositoryRoot
+$expectedCommit = if ($RequireMainProvenance)
+{
+    Get-VerifiedMainCommit -RepositoryRoot $repositoryRoot
+}
+else
+{
+    Get-RepositoryCommit -RepositoryRoot $repositoryRoot
+}
 
 if (-not $InspectOnly)
 {
@@ -1049,7 +1145,10 @@ if (-not $InspectOnly)
     $packArguments = @(
         "pack", $projectPath, "-c", "Release", "-o", $packageDirectory, "--no-restore", "-p:Version=$ExpectedVersion"
     )
-    $packArguments += Get-PackageRepositoryProperties -ExpectedCommit $expectedCommit -RepositoryRoot $repositoryRoot
+    $packArguments += Get-PackageRepositoryProperties `
+        -ExpectedCommit $expectedCommit `
+        -RepositoryRoot $repositoryRoot `
+        -RequireMainProvenance:$RequireMainProvenance
     Invoke-Dotnet -Step "Release package build" -Arguments $packArguments | Out-Null
 }
 else

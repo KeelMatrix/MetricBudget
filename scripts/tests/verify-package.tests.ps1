@@ -77,6 +77,85 @@ $rawPackSurfaces = @($documentedMarkdownFiles | ForEach-Object {
 Assert-True ($rawPackSurfaces.Count -eq 0) `
     "release-facing Markdown must route package validation through scripts/verify-package.ps1; raw dotnet pack found in: $($rawPackSurfaces -join ', ')"
 
+$pathTestRoot = Join-Path ([IO.Path]::GetTempPath()) ("metricbudget-package-path-tests-" + [Guid]::NewGuid().ToString("N"))
+try
+{
+    $canonicalPackages = Join-Path $pathTestRoot "artifacts/packages"
+    New-Item -ItemType Directory -Path $canonicalPackages -Force | Out-Null
+    $canonicalSentinel = Join-Path $canonicalPackages "canonical.sentinel"
+    [IO.File]::WriteAllText($canonicalSentinel, "keep-canonical")
+    $otherPackages = Join-Path $pathTestRoot "tests/packages"
+    New-Item -ItemType Directory -Path $otherPackages -Force | Out-Null
+    $otherSentinel = Join-Path $otherPackages "other.sentinel"
+    [IO.File]::WriteAllText($otherSentinel, "keep-other")
+
+    Assert-True ((Resolve-PackageDirectory -RepositoryRoot $pathTestRoot -RequestedPath "artifacts/./packages/") -eq
+        [IO.Path]::GetFullPath($canonicalPackages)) `
+        "dot-segment and trailing-separator forms of the owned output path must resolve to the canonical directory"
+    Assert-Throws { Resolve-PackageDirectory -RepositoryRoot $pathTestRoot -RequestedPath "tests/packages" } `
+        "a different repository subdirectory named packages must be rejected"
+    Assert-Throws { Resolve-PackageDirectory -RepositoryRoot $pathTestRoot -RequestedPath "artifacts/../tests/packages" } `
+        "a dot-segment path outside the owned output directory must be rejected"
+    Assert-Throws { Resolve-PackageDirectory -RepositoryRoot $pathTestRoot -RequestedPath "artifacts/Packages" } `
+        "a case-only alias must be rejected rather than relying on case-insensitive containment"
+    Assert-Throws { Resolve-PackageDirectory -RepositoryRoot $pathTestRoot -RequestedPath ([IO.Path]::GetFullPath((Join-Path $pathTestRoot "sibling/packages"))) } `
+        "a sibling output directory must be rejected"
+    Assert-True ([IO.File]::ReadAllText($canonicalSentinel) -eq "keep-canonical" -and
+        [IO.File]::ReadAllText($otherSentinel) -eq "keep-other") `
+        "rejected package destinations must not modify sentinel files"
+
+    $linkRoot = Join-Path $pathTestRoot "link-root"
+    $outsideArtifacts = Join-Path $pathTestRoot "outside-artifacts"
+    New-Item -ItemType Directory -Path $linkRoot,$outsideArtifacts -Force | Out-Null
+    New-Item -ItemType Directory -Path (Join-Path $outsideArtifacts "packages") -Force | Out-Null
+    $linkCreated = $false
+    try
+    {
+        New-Item -ItemType Junction -Path (Join-Path $linkRoot "artifacts") -Target $outsideArtifacts -Force | Out-Null
+        $linkCreated = $true
+    }
+    catch
+    {
+        try
+        {
+            New-Item -ItemType SymbolicLink -Path (Join-Path $linkRoot "artifacts") -Target $outsideArtifacts -Force | Out-Null
+            $linkCreated = $true
+        }
+        catch
+        {
+            throw "The path-safety regression could not create a test reparse point: $($_.Exception.Message)"
+        }
+    }
+
+    if ($linkCreated)
+    {
+        Assert-Throws { Resolve-PackageDirectory -RepositoryRoot $linkRoot } `
+            "an artifacts junction or symbolic link must be rejected before package output access"
+    }
+
+    $childLinkRoot = Join-Path $pathTestRoot "child-link-root"
+    $childPackages = Join-Path $childLinkRoot "artifacts/packages"
+    $childOutside = Join-Path $pathTestRoot "child-outside"
+    New-Item -ItemType Directory -Path $childPackages,$childOutside -Force | Out-Null
+    try
+    {
+        New-Item -ItemType Junction -Path (Join-Path $childPackages "escape") -Target $childOutside -Force | Out-Null
+    }
+    catch
+    {
+        New-Item -ItemType SymbolicLink -Path (Join-Path $childPackages "escape") -Target $childOutside -Force | Out-Null
+    }
+    Assert-Throws { Resolve-PackageDirectory -RepositoryRoot $childLinkRoot } `
+        "a reparse-point child must be rejected before cleanup enumerates package output"
+}
+finally
+{
+    if (Test-Path -LiteralPath $pathTestRoot)
+    {
+        Remove-Item -LiteralPath $pathTestRoot -Recurse -Force
+    }
+}
+
 $provenanceTestRoot = Join-Path ([IO.Path]::GetTempPath()) ("metricbudget-package-provenance-tests-" + [Guid]::NewGuid().ToString("N"))
 try
 {
@@ -93,17 +172,17 @@ try
     Invoke-TestGit $provenanceTestRoot @("push", "-u", "origin", "main") | Out-Null
 
     $mainCommit = Get-RepositoryCommit -RepositoryRoot $provenanceTestRoot
-    $mainProperties = @(Get-PackageRepositoryProperties -ExpectedCommit $mainCommit -RepositoryRoot $provenanceTestRoot)
+    $mainProperties = @(Get-PackageRepositoryProperties -ExpectedCommit $mainCommit -RepositoryRoot $provenanceTestRoot -RequireMainProvenance)
     Assert-True ($mainProperties -contains "-p:RepositoryBranch=refs/heads/main") `
         "package provenance must set the release branch explicitly"
     Assert-True ($mainProperties -contains "-p:RepositoryCommit=$mainCommit") `
         "package provenance must set the exact verified checked-out commit"
-    Assert-Throws { Get-PackageRepositoryProperties -ExpectedCommit "" -RepositoryRoot $provenanceTestRoot } `
+    Assert-Throws { Get-PackageRepositoryProperties -ExpectedCommit "" -RepositoryRoot $provenanceTestRoot -RequireMainProvenance } `
         "package provenance must reject an absent commit"
 
     Invoke-TestGit $provenanceTestRoot @("checkout", "--detach", "--quiet", "HEAD") | Out-Null
     $detachedCommit = Get-RepositoryCommit -RepositoryRoot $provenanceTestRoot
-    $detachedProperties = @(Get-PackageRepositoryProperties -ExpectedCommit $detachedCommit -RepositoryRoot $provenanceTestRoot)
+    $detachedProperties = @(Get-PackageRepositoryProperties -ExpectedCommit $detachedCommit -RepositoryRoot $provenanceTestRoot -RequireMainProvenance)
     Assert-True ($detachedCommit -eq $mainCommit) "detached checkouts must retain the exact candidate commit"
     Assert-True (($detachedProperties -join "`n") -eq ($mainProperties -join "`n")) `
         "main and detached checkouts must receive identical package provenance properties"
@@ -117,7 +196,7 @@ try
     Invoke-TestGit $advancer @("commit", "-m", "advance main") | Out-Null
     Invoke-TestGit $advancer @("push", "origin", "main") | Out-Null
 
-    Assert-Throws { Get-PackageRepositoryProperties -ExpectedCommit $detachedCommit -RepositoryRoot $provenanceTestRoot } `
+    Assert-Throws { Get-PackageRepositoryProperties -ExpectedCommit $detachedCommit -RepositoryRoot $provenanceTestRoot -RequireMainProvenance } `
         "a stale ancestor must not synthesize main provenance"
 
     Invoke-TestGit $provenanceTestRoot @("checkout", "-b", "feature") | Out-Null
@@ -125,12 +204,31 @@ try
     Invoke-TestGit $provenanceTestRoot @("add", "state.txt") | Out-Null
     Invoke-TestGit $provenanceTestRoot @("commit", "-m", "feature") | Out-Null
     $featureCommit = Get-RepositoryCommit -RepositoryRoot $provenanceTestRoot
-    Assert-Throws { Get-PackageRepositoryProperties -ExpectedCommit $featureCommit -RepositoryRoot $provenanceTestRoot } `
-        "a non-main feature commit must not synthesize main provenance"
+    $featureProperties = @(Get-PackageRepositoryProperties -ExpectedCommit $featureCommit -RepositoryRoot $provenanceTestRoot)
+    Assert-True ($featureProperties -contains "-p:RepositoryBranch=refs/heads/feature") `
+        "a feature candidate must retain its checked-out branch provenance"
+    Assert-True ($featureProperties -contains "-p:RepositoryCommit=$featureCommit") `
+        "a feature candidate must retain its exact checked-out commit provenance"
+    Assert-Throws { Get-PackageRepositoryProperties -ExpectedCommit $featureCommit -RepositoryRoot $provenanceTestRoot -RequireMainProvenance } `
+        "a non-main feature commit must remain ineligible for strict publication provenance"
+
+    $previousGithubRef = $env:GITHUB_REF
+    try
+    {
+        $env:GITHUB_REF = "refs/pull/42/merge"
+        $pullProperties = @(Get-PackageRepositoryProperties -ExpectedCommit $featureCommit -RepositoryRoot $provenanceTestRoot)
+        Assert-True ($pullProperties -contains "-p:RepositoryBranch=refs/pull/42/merge") `
+            "a pull-request merge candidate must retain the event ref in package metadata"
+    }
+    finally
+    {
+        if ($null -eq $previousGithubRef) { Remove-Item Env:GITHUB_REF -ErrorAction SilentlyContinue }
+        else { $env:GITHUB_REF = $previousGithubRef }
+    }
 
     Invoke-TestGit $provenanceTestRoot @("checkout", "--detach", "origin/main") | Out-Null
     $currentMainCommit = Get-RepositoryCommit -RepositoryRoot $provenanceTestRoot
-    $currentMainProperties = @(Get-PackageRepositoryProperties -ExpectedCommit $currentMainCommit -RepositoryRoot $provenanceTestRoot)
+    $currentMainProperties = @(Get-PackageRepositoryProperties -ExpectedCommit $currentMainCommit -RepositoryRoot $provenanceTestRoot -RequireMainProvenance)
     Assert-True (($currentMainProperties -join "`n") -match "-p:RepositoryCommit=$currentMainCommit") `
         "a detached checkout of current origin/main must retain exact provenance"
 
@@ -143,11 +241,14 @@ try
     Invoke-TestGit $withoutOrigin @("add", "state.txt") | Out-Null
     Invoke-TestGit $withoutOrigin @("commit", "-m", "no origin") | Out-Null
     $withoutOriginCommit = Get-RepositoryCommit -RepositoryRoot $withoutOrigin
-    Assert-Throws { Get-PackageRepositoryProperties -ExpectedCommit $withoutOriginCommit -RepositoryRoot $withoutOrigin } `
-        "a repository without an origin must fail closed"
+    $withoutOriginProperties = @(Get-PackageRepositoryProperties -ExpectedCommit $withoutOriginCommit -RepositoryRoot $withoutOrigin)
+    Assert-True ($withoutOriginProperties -contains "-p:RepositoryCommit=$withoutOriginCommit") `
+        "non-publishing artifact verification must work for a clean candidate without a remote"
+    Assert-Throws { Get-PackageRepositoryProperties -ExpectedCommit $withoutOriginCommit -RepositoryRoot $withoutOrigin -RequireMainProvenance } `
+        "strict publication provenance must fail closed without an origin"
 
     Invoke-TestGit $provenanceTestRoot @("remote", "set-url", "origin", (Join-Path $provenanceTestRoot "missing.git")) | Out-Null
-    Assert-Throws { Get-PackageRepositoryProperties -ExpectedCommit $currentMainCommit -RepositoryRoot $provenanceTestRoot } `
+    Assert-Throws { Get-PackageRepositoryProperties -ExpectedCommit $currentMainCommit -RepositoryRoot $provenanceTestRoot -RequireMainProvenance } `
         "a broken origin must fail closed"
 }
 finally

@@ -60,7 +60,10 @@ internal sealed class MetricBudgetState
     /// </summary>
     internal void OnInstrumentPublished(Instrument instrument, MeterListener listener)
     {
-        InstrumentIdentity identity = InstrumentIdentity.FromInstrument(instrument, options);
+        Meter meter = instrument.Meter;
+        string meterName = meter.Name;
+        string? meterVersion = meter.Version;
+        string instrumentName = instrument.Name;
 
         lock (sync)
         {
@@ -73,7 +76,7 @@ internal sealed class MetricBudgetState
             int firstMatch = -1;
             for (int i = 0; i < options.Rules.Length; i++)
             {
-                if (!options.Rules[i].Matches(identity))
+                if (!options.Rules[i].Matches(meterName, instrumentName))
                 {
                     continue;
                 }
@@ -97,23 +100,18 @@ internal sealed class MetricBudgetState
                 knownSelectorConflict = true;
             }
 
-            bool nameComponentsTooLong = !identity.HasNameComponentsAtMost(options.MaxInstrumentIdentityLength);
-            if (!identity.MetadataComplete || nameComponentsTooLong)
+            bool nameComponentsTooLong = !InstrumentIdentity.HasNameComponentsAtMost(
+                meterName,
+                meterVersion,
+                instrumentName,
+                options.MaxInstrumentIdentityLength);
+            if (nameComponentsTooLong)
             {
-                RememberUntrackedName(identity);
-                MarkKnownAccountsWithSameName(identity);
-                MarkMatchingRulesIncomplete(identity);
-                if (nameComponentsTooLong)
-                {
-                    instrumentIdentityLengthTrackingIncomplete = true;
-                    untrackedInstrumentIdentityLengths++;
-                }
-
-                if (!identity.MetadataComplete)
-                {
-                    staticMetadataTrackingIncomplete = true;
-                    RecordStaticMetadataFailures(identity.MetadataFailures);
-                }
+                RememberUntrackedName(meterName, instrumentName);
+                MarkKnownAccountsWithSameName(meterName, instrumentName);
+                MarkMatchingRulesIncomplete(meterName, instrumentName);
+                instrumentIdentityLengthTrackingIncomplete = true;
+                untrackedInstrumentIdentityLengths++;
 
                 if (matchCount > 1)
                 {
@@ -123,9 +121,27 @@ internal sealed class MetricBudgetState
                 return;
             }
 
+            InstrumentIdentity identity = InstrumentIdentity.FromInstrument(instrument, options);
+            if (!identity.MetadataComplete)
+            {
+                RememberUntrackedName(meterName, instrumentName);
+                MarkKnownAccountsWithSameName(meterName, instrumentName);
+                MarkMatchingRulesIncomplete(meterName, instrumentName);
+                staticMetadataTrackingIncomplete = true;
+                RecordStaticMetadataFailures(identity.MetadataFailures);
+
+                if (matchCount > 1)
+                {
+                    conflictTrackingIncomplete = true;
+                    untrackedConflicts++;
+                }
+
+                return;
+            }
+
             if (matchCount > 1)
             {
-                MarkMatchingRulesIncomplete(identity);
+                MarkMatchingRulesIncomplete(meterName, instrumentName);
                 if (!conflicts.ContainsKey(identity))
                 {
                     // A conflict record retains every matching rule index. Use the conflict bound as the
@@ -162,8 +178,8 @@ internal sealed class MetricBudgetState
                 ruleTrackingIncomplete[firstMatch] = true;
                 instrumentIdentityTrackingIncomplete = true;
                 untrackedInstrumentIdentities++;
-                RememberUntrackedName(identity);
-                MarkKnownAccountsWithSameName(identity);
+                RememberUntrackedName(meterName, instrumentName);
+                MarkKnownAccountsWithSameName(meterName, instrumentName);
                 return;
             }
 
@@ -177,7 +193,7 @@ internal sealed class MetricBudgetState
                 ruleTrackingIncomplete[firstMatch] = true;
                 instrumentInstanceTrackingIncomplete = true;
                 untrackedInstrumentInstances++;
-                MarkKnownAccountsWithSameName(identity);
+                MarkKnownAccountsWithSameName(meterName, instrumentName);
                 return;
             }
 
@@ -185,7 +201,7 @@ internal sealed class MetricBudgetState
             {
                 InstrumentAccount account = new InstrumentAccount(identity, firstMatch);
                 if (untrackedNameOnlyIdentityIndexOverflowed
-                    || untrackedNameOnlyIdentities.Contains(new InstrumentNameKey(identity)))
+                    || untrackedNameOnlyIdentities.Contains(new InstrumentNameKey(meterName, instrumentName)))
                 {
                     account.MarkInstrumentTrackingIncomplete();
                 }
@@ -379,11 +395,11 @@ internal sealed class MetricBudgetState
         }
     }
 
-    private void MarkMatchingRulesIncomplete(in InstrumentIdentity identity)
+    private void MarkMatchingRulesIncomplete(string meterName, string instrumentName)
     {
         for (int i = 0; i < options.Rules.Length; i++)
         {
-            if (options.Rules[i].Matches(identity))
+            if (options.Rules[i].Matches(meterName, instrumentName))
             {
                 ruleTrackingIncomplete[i] = true;
             }
@@ -453,9 +469,9 @@ internal sealed class MetricBudgetState
         }
     }
 
-    private void RememberUntrackedName(in InstrumentIdentity identity)
+    private void RememberUntrackedName(string meterName, string instrumentName)
     {
-        InstrumentNameKey key = new InstrumentNameKey(identity);
+        InstrumentNameKey key = new InstrumentNameKey(meterName, instrumentName);
         if (untrackedNameOnlyIdentities.Contains(key))
         {
             return;
@@ -464,8 +480,8 @@ internal sealed class MetricBudgetState
         // Keep the name-only ambiguity index bounded by the same identity admission budget and by the identity
         // component-length bound. If a meter or instrument name itself is too long, a later same-name identity
         // cannot be admitted either, so retaining it would add memory without changing any result.
-        if (identity.MeterName.Length <= options.MaxInstrumentIdentityLength
-            && identity.InstrumentName.Length <= options.MaxInstrumentIdentityLength)
+        if (meterName.Length <= options.MaxInstrumentIdentityLength
+            && instrumentName.Length <= options.MaxInstrumentIdentityLength)
         {
             if (untrackedNameOnlyIdentities.Count < options.MaxTrackedInstrumentIdentities)
             {
@@ -481,12 +497,12 @@ internal sealed class MetricBudgetState
         }
     }
 
-    private void MarkKnownAccountsWithSameName(in InstrumentIdentity identity)
+    private void MarkKnownAccountsWithSameName(string meterName, string instrumentName)
     {
         foreach (InstrumentAccount account in accounts.Values)
         {
-            if (string.Equals(account.Identity.MeterName, identity.MeterName, StringComparison.Ordinal)
-                && string.Equals(account.Identity.InstrumentName, identity.InstrumentName, StringComparison.Ordinal))
+            if (string.Equals(account.Identity.MeterName, meterName, StringComparison.Ordinal)
+                && string.Equals(account.Identity.InstrumentName, instrumentName, StringComparison.Ordinal))
             {
                 account.MarkInstrumentTrackingIncomplete();
             }
@@ -495,10 +511,10 @@ internal sealed class MetricBudgetState
 
     private readonly struct InstrumentNameKey : IEquatable<InstrumentNameKey>
     {
-        internal InstrumentNameKey(InstrumentIdentity identity)
+        internal InstrumentNameKey(string meterName, string instrumentName)
         {
-            MeterName = identity.MeterName;
-            InstrumentName = identity.InstrumentName;
+            MeterName = meterName;
+            InstrumentName = instrumentName;
         }
 
         private string MeterName { get; }

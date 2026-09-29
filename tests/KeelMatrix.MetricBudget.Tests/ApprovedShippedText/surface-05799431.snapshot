@@ -25,8 +25,10 @@ pwsh -NoProfile -File scripts/verify-package.ps1
 
 The solution intentionally excludes those two projects because their `NuGet.config` files map the package under test
 to `artifacts/packages`. The package gate performs deterministic archive inspection, clean-cache consumer and sample
-proof, and the transitive vulnerability audit. It first fetches `origin/main` and fails closed unless the checked-out
-`HEAD` is exactly that fetched commit; its pack step then supplies `refs/heads/main` and that exact commit explicitly.
+proof, and the transitive vulnerability audit. Ordinary artifact verification uses the exact checked-out candidate
+commit and its workflow/branch ref, so feature and pull-request builds exercise the proposed changes. The release
+workflow separately fetches `origin/main`, requires the checked-out `HEAD` to equal that commit, and passes the verified
+SHA to its pack step through a scoped workflow output.
 
 The environment assignment above is required for repository-owned development and validation runs. Keep it in the
 shell that invokes `dotnet`, or use the equivalent process-environment setting on another platform.

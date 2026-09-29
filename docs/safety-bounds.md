@@ -13,7 +13,7 @@ has to be bounded and honest. Every session applies explicit bounds to every ret
 | `MaxTrackedConflicts` | 1,024 | Ambiguous identity detail records retained; a conflict requiring more rule indexes than this is dropped, while the known invalid-configuration fact remains bounded and retained. |
 | `MaxTrackedTagKeysPerInstrument` | 256 | Distinct delivered tag keys retained per instrument identity. |
 | `MaxTagCount` | 64 | Delivered tags admitted from one measurement. |
-| `MaxInstrumentIdentityLength` | 256 | Length bound for meter name, meter version, and instrument name after selector matching. Oversized unselected identities are ignored; selected identities with overlong names are rejected. |
+| `MaxInstrumentIdentityLength` | 256 | Length bound for meter name, meter version, and instrument name after cheap selector matching and before full identity/static-metadata canonicalization. Oversized unselected identities are ignored; selected identities with overlong names are rejected without canonicalization. |
 | `MaxTagKeyLength` | 256 | Length of a delivered tag key admitted to identity construction. |
 | `MaxStaticMetadataTagCount` | 256 | Number of tags accepted from one meter or instrument static metadata collection. The effective bound is the lower of this option and the fixed 256 ceiling. |
 | `MaxStaticMetadataTagKeyLength` | 256 | Length of a key in meter or instrument static metadata. The effective bound is the lower of this option and the fixed 256 ceiling. |

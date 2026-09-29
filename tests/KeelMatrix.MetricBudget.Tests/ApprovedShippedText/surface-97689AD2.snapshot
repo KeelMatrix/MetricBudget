@@ -81,7 +81,9 @@ Notes that the implementation, the diagnostics, and this document share:
   key rejects the selected identity and marks the report incomplete. `MetricBudgetSafetyReport.StaticMetadataFailures`
   names the rejected dimension and effective bound; delivered-tag options never reject static metadata. The finite
   framework measurement-type token is bounded independently and never falls back to a name-only merge. Selector
-  matching still happens before identity admission, so rejected unselected instruments do not affect a scoped session.
+  matching and the name-length admission check happen before full identity/static-metadata canonicalization, so
+  rejected unselected instruments do not affect a scoped session and very large rejected names do not incur
+  proportional identity-hash work.
   A selected identity or physical instance rejected by an admission bound also makes any affected retained result
   incomplete. Focused assertions do not draw a pass conclusion from those results.
 

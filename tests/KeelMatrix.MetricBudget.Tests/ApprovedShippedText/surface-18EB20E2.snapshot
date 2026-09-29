@@ -128,9 +128,11 @@ Package validation, including archive inspection and clean package-backed smoke 
 pwsh -NoProfile -File scripts/verify-package.ps1
 ```
 
-The provenance-aware gate first fetches `origin/main` and fails closed unless the checked-out `HEAD` is exactly that
-commit. It then builds both archives with the exact commit and explicit `refs/heads/main` metadata, and restores both
-package-backed projects from `artifacts/packages`; neither references a project in this repository. See
+The package gate records the exact checked-out candidate commit and workflow/branch ref in both archives, so ordinary
+feature and pull-request verification tests the candidate being proposed. Release publication adds a separate strict
+provenance check that fetches `origin/main`, requires the checked-out `HEAD` to equal it, and passes that verified SHA
+through a scoped workflow output. Both package-backed projects restore from `artifacts/packages`; neither references a
+project in this repository. See
 [docs/DEV.md](docs/DEV.md) for the complete reproducible validation sequence.
 
 ## License

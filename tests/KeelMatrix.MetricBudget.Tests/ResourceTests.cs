@@ -179,6 +179,137 @@ public sealed class ResourceTests
                 + " microseconds per measurement.");
     }
 
+    [Fact]
+    public void VeryLargeSelectedMeterNameIsRejectedBeforeIdentityMaterialization()
+    {
+        string meterName = new string('m', 1_000_000);
+        AssertLargeRejectedNameHasBoundedPublicationWork(
+            nameof(VeryLargeSelectedMeterNameIsRejectedBeforeIdentityMaterialization),
+            meterName,
+            "1.0.0",
+            "requests",
+            selected: true,
+            publishBeforeStartup: true);
+    }
+
+    [Fact]
+    public void VeryLargeSelectedMeterVersionIsRejectedBeforeIdentityMaterialization()
+    {
+        AssertLargeRejectedNameHasBoundedPublicationWork(
+            nameof(VeryLargeSelectedMeterVersionIsRejectedBeforeIdentityMaterialization),
+            TestNames.Meter(nameof(VeryLargeSelectedMeterVersionIsRejectedBeforeIdentityMaterialization)),
+            new string('v', 1_000_000),
+            "requests",
+            selected: true,
+            publishBeforeStartup: true);
+    }
+
+    [Fact]
+    public void VeryLargeSelectedInstrumentNameIsRejectedBeforeIdentityMaterialization()
+    {
+        AssertLargeRejectedNameHasBoundedPublicationWork(
+            nameof(VeryLargeSelectedInstrumentNameIsRejectedBeforeIdentityMaterialization),
+            TestNames.Meter(nameof(VeryLargeSelectedInstrumentNameIsRejectedBeforeIdentityMaterialization)),
+            "1.0.0",
+            new string('i', 1_000_000),
+            selected: true,
+            publishBeforeStartup: true);
+    }
+
+    [Fact]
+    public void VeryLargeUnselectedIdentityIsIgnoredBeforeIdentityMaterialization()
+    {
+        AssertLargeRejectedNameHasBoundedPublicationWork(
+            nameof(VeryLargeUnselectedIdentityIsIgnoredBeforeIdentityMaterialization),
+            new string('u', 1_000_000),
+            "1.0.0",
+            "requests",
+            selected: false,
+            publishBeforeStartup: true);
+    }
+
+    [Fact]
+    public void VeryLargeSelectedIdentityPublishedDuringObservationIsRejectedWithBoundedWork()
+    {
+        AssertLargeRejectedNameHasBoundedPublicationWork(
+            nameof(VeryLargeSelectedIdentityPublishedDuringObservationIsRejectedWithBoundedWork),
+            TestNames.Meter(nameof(VeryLargeSelectedIdentityPublishedDuringObservationIsRejectedWithBoundedWork)),
+            "1.0.0",
+            new string('i', 1_000_000),
+            selected: true,
+            publishBeforeStartup: false);
+    }
+
+    private static void AssertLargeRejectedNameHasBoundedPublicationWork(
+        string testName,
+        string meterName,
+        string version,
+        string instrumentName,
+        bool selected,
+        bool publishBeforeStartup)
+    {
+        using Meter meter = new Meter(new MeterOptions(meterName) { Version = version });
+        Counter<long>? counter = publishBeforeStartup
+            ? meter.CreateCounter<long>(instrumentName)
+            : null;
+
+        MetricBudgetOptions options = new MetricBudgetOptions
+        {
+            MaxInstrumentIdentityLength = 64,
+        };
+        if (selected)
+        {
+            options.ForInstrument(meterName, instrumentName, budget => budget.MaxObservedSeries = 1);
+        }
+        else
+        {
+            options.ForInstrument(TestNames.Meter(testName + ".unselected"), "other", budget => budget.MaxObservedSeries = 1);
+        }
+
+        // Warm the listener/JIT path before measuring. The long input strings are allocated before this window,
+        // so this measures publication work rather than fixture construction.
+        using (Meter warmupMeter = new Meter(TestNames.Meter(testName + ".warmup")))
+        {
+            Counter<long> warmupCounter = warmupMeter.CreateCounter<long>("warmup");
+            MetricBudgetOptions warmupOptions = new MetricBudgetOptions();
+            warmupOptions.ForInstrument(warmupMeter.Name, "warmup", budget => budget.MaxObservedSeries = 1);
+            using MetricBudgetSession warmupSession = MetricBudgetSession.Start(warmupOptions);
+            warmupCounter.Add(1);
+            _ = warmupSession.Complete();
+        }
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+        long allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        using MetricBudgetSession session = MetricBudgetSession.Start(options);
+        if (!publishBeforeStartup)
+        {
+            counter = meter.CreateCounter<long>(instrumentName);
+        }
+
+        long allocatedAfter = GC.GetAllocatedBytesForCurrentThread();
+        MetricBudgetReport report = session.Complete();
+        long allocatedBytes = allocatedAfter - allocatedBefore;
+
+        Assert.True(
+            allocatedBytes < 512L * 1024,
+            testName + " publication allocated " + allocatedBytes.ToString(CultureInfo.InvariantCulture)
+                + " bytes for a one-million-character rejected or unselected identity.");
+        Assert.Empty(report.Rules[0].Instruments);
+        if (selected)
+        {
+            Assert.Equal(MetricBudgetOutcome.ObservationIncomplete, report.Outcome);
+            Assert.Equal(1, report.Safety.UntrackedInstrumentIdentityLengths);
+            Assert.True(report.Safety.InstrumentIdentityLengthTrackingIncomplete);
+        }
+        else
+        {
+            Assert.Equal(0, report.Safety.UntrackedInstrumentIdentityLengths);
+            Assert.False(report.Safety.InstrumentIdentityLengthTrackingIncomplete);
+        }
+    }
+
     private static long Measure()
     {
         GC.Collect();
