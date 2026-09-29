@@ -111,7 +111,14 @@ try
     $linkCreated = $false
     try
     {
-        New-Item -ItemType Junction -Path (Join-Path $linkRoot "artifacts") -Target $outsideArtifacts -Force | Out-Null
+        if ($IsWindows)
+        {
+            New-Item -ItemType Junction -Path (Join-Path $linkRoot "artifacts") -Target $outsideArtifacts -Force | Out-Null
+        }
+        else
+        {
+            New-Item -ItemType SymbolicLink -Path (Join-Path $linkRoot "artifacts") -Target $outsideArtifacts -Force | Out-Null
+        }
         $linkCreated = $true
     }
     catch
@@ -139,7 +146,14 @@ try
     New-Item -ItemType Directory -Path $childPackages,$childOutside -Force | Out-Null
     try
     {
-        New-Item -ItemType Junction -Path (Join-Path $childPackages "escape") -Target $childOutside -Force | Out-Null
+        if ($IsWindows)
+        {
+            New-Item -ItemType Junction -Path (Join-Path $childPackages "escape") -Target $childOutside -Force | Out-Null
+        }
+        else
+        {
+            New-Item -ItemType SymbolicLink -Path (Join-Path $childPackages "escape") -Target $childOutside -Force | Out-Null
+        }
     }
     catch
     {
@@ -157,8 +171,10 @@ finally
 }
 
 $provenanceTestRoot = Join-Path ([IO.Path]::GetTempPath()) ("metricbudget-package-provenance-tests-" + [Guid]::NewGuid().ToString("N"))
+$previousGithubRef = $env:GITHUB_REF
 try
 {
+    Remove-Item Env:GITHUB_REF -ErrorAction SilentlyContinue
     New-Item -ItemType Directory -Path $provenanceTestRoot -Force | Out-Null
     Invoke-TestGit $provenanceTestRoot @("init", "--initial-branch=main") | Out-Null
     Invoke-TestGit $provenanceTestRoot @("config", "user.email", "package-provenance-tests@example.invalid") | Out-Null
@@ -212,7 +228,7 @@ try
     Assert-Throws { Get-PackageRepositoryProperties -ExpectedCommit $featureCommit -RepositoryRoot $provenanceTestRoot -RequireMainProvenance } `
         "a non-main feature commit must remain ineligible for strict publication provenance"
 
-    $previousGithubRef = $env:GITHUB_REF
+    $previousPullGithubRef = $env:GITHUB_REF
     try
     {
         $env:GITHUB_REF = "refs/pull/42/merge"
@@ -222,8 +238,8 @@ try
     }
     finally
     {
-        if ($null -eq $previousGithubRef) { Remove-Item Env:GITHUB_REF -ErrorAction SilentlyContinue }
-        else { $env:GITHUB_REF = $previousGithubRef }
+        if ($null -eq $previousPullGithubRef) { Remove-Item Env:GITHUB_REF -ErrorAction SilentlyContinue }
+        else { $env:GITHUB_REF = $previousPullGithubRef }
     }
 
     Invoke-TestGit $provenanceTestRoot @("checkout", "--detach", "origin/main") | Out-Null
@@ -257,6 +273,9 @@ finally
     {
         Remove-Item -LiteralPath $provenanceTestRoot -Recurse -Force
     }
+
+    if ($null -eq $previousGithubRef) { Remove-Item Env:GITHUB_REF -ErrorAction SilentlyContinue }
+    else { $env:GITHUB_REF = $previousGithubRef }
 }
 
 $expectedProjects = @("src/lib/MyProject.csproj")

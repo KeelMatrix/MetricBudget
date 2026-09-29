@@ -49,7 +49,10 @@ function Assert-NoReparsePoint {
     }
 
     $item = Get-Item -LiteralPath $Path -Force
-    if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)
+    $hasReparseAttribute = ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0
+    $hasLinkType = $item.PSObject.Properties.Name -contains "LinkType" -and
+        -not [string]::IsNullOrWhiteSpace([string]$item.LinkType)
+    if ($hasReparseAttribute -or $hasLinkType)
     {
         throw "Package output cannot use a symbolic link, junction, or other reparse point: $Path"
     }
