@@ -27,8 +27,13 @@ The solution intentionally excludes those two projects because their `NuGet.conf
 to `artifacts/packages`. The package gate performs deterministic archive inspection, clean-cache consumer and sample
 proof, and the transitive vulnerability audit. Ordinary artifact verification uses the exact checked-out candidate
 commit and its workflow/branch ref, so feature and pull-request builds exercise the proposed changes. The release
-workflow separately fetches `origin/main`, requires the checked-out `HEAD` to equal that commit, and passes the verified
-SHA to its pack step through a scoped workflow output.
+workflow separately fetches `origin/main`, requires the checked-out `HEAD` to equal that commit, and invokes
+`scripts/verify-package.ps1 -RequireMainProvenance` so guarded output cleanup, packing, and inspection share one path.
+
+The package gate's clean-cache proof uses a disposable NuGet cache for the solution and package-backed consumers. After
+the proof passes, it restores and rebuilds the solution with the caller's normal package environment before deleting
+the disposable cache. It removes the package-backed consumer and sample `obj` assets instead of rehydrating them from an
+ambiguous global cache, so a successful gate does not leave generated assets pointing at deleted or stale package paths.
 
 The environment assignment above is required for repository-owned development and validation runs. Keep it in the
 shell that invokes `dotnet`, or use the equivalent process-environment setting on another platform.

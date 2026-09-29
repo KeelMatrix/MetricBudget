@@ -151,22 +151,10 @@ jobs:
       - name: Verify formatting
         run: dotnet format KeelMatrix.MetricBudget.sln --verify-no-changes --no-restore
 
-      - name: Clear release artifact directory
-        shell: pwsh
-        run: |
-          $packageDirectory = Join-Path $PWD 'artifacts/packages'
-          if (Test-Path -LiteralPath $packageDirectory) {
-              Get-ChildItem -LiteralPath $packageDirectory -Force | Remove-Item -Recurse -Force
-          }
-          else {
-              New-Item -ItemType Directory -Path $packageDirectory -Force | Out-Null
-          }
-
-      - name: Pack release artifacts
+      - name: Pack release artifacts and run the guarded package gate
         env:
           RELEASE_VERSION: ${{ steps.release-version.outputs.version }}
-          RELEASE_COMMIT: ${{ steps.release-provenance.outputs.commit }}
-        run: dotnet pack src/KeelMatrix.MetricBudget/KeelMatrix.MetricBudget.csproj --configuration Release --no-build --no-restore --include-symbols -p:SymbolPackageFormat=snupkg -p:Version=$env:RELEASE_VERSION -p:RepositoryBranch=refs/heads/main -p:RepositoryCommit=$env:RELEASE_COMMIT --output artifacts/packages
+        run: pwsh -NoProfile -File scripts/verify-package.ps1 -RequireMainProvenance -ExpectedVersion $env:RELEASE_VERSION
 
       - name: Run exact package gate
         shell: pwsh

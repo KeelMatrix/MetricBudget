@@ -679,6 +679,7 @@ function Invoke-CleanConsumerProof {
     $oldFallback = $env:NUGET_FALLBACK_PACKAGES
     $oldBuildServers = $env:DOTNET_CLI_DISABLE_BUILD_SERVERS
     $oldControlledTimeZone = $env:METRICBUDGET_CONTROLLED_TIME_ZONE
+    $cleanProofCompleted = $false
     try
     {
         $env:NUGET_PACKAGES = $packages
@@ -722,6 +723,7 @@ function Invoke-CleanConsumerProof {
         }
 
         Write-Output "CLEAN_CACHE_PROOF=PASS"
+        $cleanProofCompleted = $true
     }
     finally
     {
@@ -730,6 +732,42 @@ function Invoke-CleanConsumerProof {
         if ($null -eq $oldFallback) { Remove-Item Env:NUGET_FALLBACK_PACKAGES -ErrorAction SilentlyContinue } else { $env:NUGET_FALLBACK_PACKAGES = $oldFallback }
         if ($null -eq $oldBuildServers) { Remove-Item Env:DOTNET_CLI_DISABLE_BUILD_SERVERS -ErrorAction SilentlyContinue } else { $env:DOTNET_CLI_DISABLE_BUILD_SERVERS = $oldBuildServers }
         if ($null -eq $oldControlledTimeZone) { Remove-Item Env:METRICBUDGET_CONTROLLED_TIME_ZONE -ErrorAction SilentlyContinue } else { $env:METRICBUDGET_CONTROLLED_TIME_ZONE = $oldControlledTimeZone }
+
+        $assetRepairError = $null
+        if ($cleanProofCompleted)
+        {
+            try
+            {
+                # The clean proof intentionally writes assets against a disposable package cache. Rehydrate every
+                # affected project with the caller's package environment before the cache is deleted, so a successful
+                # gate never leaves the canonical checkout pointing at a path that no longer exists.
+                $cleanBuildProperties = @("-p:UseSharedCompilation=false", "-p:MSBuildNodeReuse=false")
+                $solutionRestoreArguments = @(
+                    "restore", $solutionPath, "--configfile", (Join-Path $repositoryRoot "NuGet.config"),
+                    "--force-evaluate", "--no-cache", "--disable-build-servers") + $cleanBuildProperties
+                Invoke-Dotnet -Step "Rehydrate solution assets after clean-cache proof" -Arguments $solutionRestoreArguments | Out-Null
+                Invoke-Dotnet -Step "Rebuild solution after clean-cache proof" -Arguments (@(
+                        "build", $solutionPath, "-c", "Release", "--no-restore", "--disable-build-servers") + $cleanBuildProperties) | Out-Null
+            }
+            catch
+            {
+                $assetRepairError = $_
+            }
+        }
+
+        # These projects consume the package just produced from a local feed. Their clean proof assets intentionally
+        # point at the disposable cache, and the caller's global cache may contain a different package with the same
+        # version. Remove those assets rather than rehydrating them against an ambiguous package source.
+        foreach ($project in @($packageConsumerProject, $sampleProject))
+        {
+            $obj = Join-Path (Split-Path -Parent $project) "obj"
+            if (Test-Path -LiteralPath $obj)
+            {
+                Remove-Item -LiteralPath $obj -Recurse -Force
+            }
+        }
+
+        $cleanupError = $null
         if (Test-Path -LiteralPath $scratch)
         {
             $removed = $false
@@ -748,8 +786,17 @@ function Invoke-CleanConsumerProof {
 
             if (-not $removed)
             {
-                throw "Could not clean the task-local cache directory '$scratch'."
+                $cleanupError = [System.InvalidOperationException]::new("Could not clean the task-local cache directory '$scratch'.")
             }
+        }
+
+        if ($null -ne $assetRepairError)
+        {
+            throw $assetRepairError
+        }
+        if ($null -ne $cleanupError)
+        {
+            throw $cleanupError
         }
     }
 }

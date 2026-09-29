@@ -159,8 +159,14 @@ try {
         "manual release path must invoke the repository validator."
     Assert-True ($releaseWorkflow.Contains('& pwsh -NoProfile -File scripts/validate-release.ps1 @validatorArguments')) `
         "tag and manual release paths must share one repository validator invocation."
+    Assert-True ($releaseWorkflow.Contains('pwsh -NoProfile -File scripts/verify-package.ps1 -RequireMainProvenance -ExpectedVersion $env:RELEASE_VERSION')) `
+        "release packaging must use the guarded package gate for cleanup, packing, and inspection."
+    Assert-True ($releaseWorkflow -notmatch '(?s)Clear release artifact directory.*?Get-ChildItem.*?Remove-Item') `
+        "release packaging must not directly recursively delete the package output directory."
+    Assert-True ($releaseWorkflow -notmatch '(?m)^\s*run:\s*dotnet pack\b') `
+        "release packaging must not bypass the package gate with a raw dotnet pack command."
 
-    Write-Output "RELEASE_VALIDATION_TEST=PASS cases=14"
+    Write-Output "RELEASE_VALIDATION_TEST=PASS cases=17"
 }
 finally {
     if (Test-Path -LiteralPath $testRoot) {
