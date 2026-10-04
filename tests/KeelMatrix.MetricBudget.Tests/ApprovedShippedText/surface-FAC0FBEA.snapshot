@@ -579,93 +579,17 @@
             never produce the same series identity.
             </remarks>
         </member>
-        <member name="T:KeelMatrix.MetricBudget.Internal.MetricBudgetTelemetryOutcome">
-            <summary>
-            Coarse outcome reported by the anonymous verification signal.
-            </summary>
-        </member>
-        <member name="T:KeelMatrix.MetricBudget.Internal.MetricBudgetTelemetryOsFamily">
-            <summary>
-            Coarse operating-system family reported by the anonymous verification signal.
-            </summary>
-        </member>
-        <member name="T:KeelMatrix.MetricBudget.Internal.MetricBudgetTelemetrySignal">
-            <summary>
-            The complete set of aggregate fields a completed verification may ever report.
-            </summary>
-            <remarks>
-            <para>
-            This type is the allowlist. It is deliberately closed: every field is a coarse value derived from a count, an
-            enum, a target framework, or the package version. It has no member that can carry a meter name, instrument
-            name, tag key, tag value, metric value, URL, application name, or file path, and it has no free-form
-            dictionary a caller could extend.
-            </para>
-            <para>
-            <c>KeelMatrix.Telemetry</c> 0.1.1 exposes activation and heartbeat events with its own fixed schema and no
-            product-specific fields, so the aggregate signal is currently used to decide activation and heartbeat
-            semantics and to prove the allowlist, not to extend the transmitted payload.
-            </para>
-            </remarks>
-        </member>
-        <member name="M:KeelMatrix.MetricBudget.Internal.MetricBudgetTelemetrySignal.Create(KeelMatrix.MetricBudget.MetricBudgetReport)">
-            <summary>
-            Creates the signal for a completed verification that observed at least one selected instrument.
-            </summary>
-        </member>
-        <member name="M:KeelMatrix.MetricBudget.Internal.MetricBudgetTelemetrySignal.IsAllowedFieldName(System.String)">
-            <summary>
-            Reports whether a field name may carry verification data.
-            </summary>
-            <param name="fieldName">Candidate field name.</param>
-            <returns><see langword="true"/> when the name is on the allowlist.</returns>
-        </member>
-        <member name="M:KeelMatrix.MetricBudget.Internal.MetricBudgetTelemetrySignal.ToFields">
-            <summary>
-            Projects the signal onto its fields. Every name is on the allowlist and every value is coarse.
-            </summary>
-        </member>
-        <member name="M:KeelMatrix.MetricBudget.Internal.MetricBudgetTelemetrySignal.Describe">
-            <summary>
-            Describes the signal as semicolon-separated <c>name=value</c> pairs.
-            </summary>
-        </member>
-        <member name="T:KeelMatrix.MetricBudget.Internal.IMetricBudgetTelemetrySink">
-            <summary>
-            Receives the coarse verification signal.
-            </summary>
-        </member>
-        <member name="T:KeelMatrix.MetricBudget.Internal.KeelMatrixTelemetrySink">
-            <summary>
-            Default sink: the shared KeelMatrix telemetry client.
-            </summary>
-            <remarks>
-            The first completed verification that observed at least one instrument requests activation and heartbeat
-            eligibility; later completions request heartbeat eligibility. The shared client suppresses a duplicate activation,
-            suppresses a heartbeat in the activation week, and emits at most one heartbeat per project and ISO week. The
-            client is created lazily on first use, so installing, restoring, or loading the assembly never reports anything.
-            </remarks>
-        </member>
-        <member name="M:KeelMatrix.MetricBudget.Internal.KeelMatrixTelemetrySink.#ctor">
-            <summary>Creates a sink backed by the shared KeelMatrix telemetry client.</summary>
-        </member>
-        <member name="M:KeelMatrix.MetricBudget.Internal.KeelMatrixTelemetrySink.#ctor(System.Action,System.Action)">
-            <summary>Creates a sink with injectable request actions for isolated behavior tests.</summary>
-            <param name="trackActivation">Action that requests activation eligibility.</param>
-            <param name="trackHeartbeat">Action that requests heartbeat eligibility.</param>
-        </member>
         <member name="T:KeelMatrix.MetricBudget.Internal.MetricBudgetTelemetry">
             <summary>
-            Telemetry boundary for completed verifications.
+            Requests the shared activation and heartbeat signals for an eligible completed verification.
             </summary>
             <remarks>
-            Telemetry is best effort and never a dependency of a verification: every failure is swallowed, and no caller
-            changes a report because of it.
+            Product eligibility is checked by <see cref="M:KeelMatrix.MetricBudget.MetricBudgetSession.Complete"/>. The shared telemetry client owns
+            opt-out handling, event deduplication and cadence, identity, delivery, and failure handling.
             </remarks>
         </member>
-        <member name="M:KeelMatrix.MetricBudget.Internal.MetricBudgetTelemetry.SetSinkForTests(KeelMatrix.MetricBudget.Internal.IMetricBudgetTelemetrySink)">
-            <summary>
-            Replaces the sink so a test can inspect the signal without touching the shared client.
-            </summary>
+        <member name="M:KeelMatrix.MetricBudget.Internal.MetricBudgetTelemetry.SetClientForTests(KeelMatrix.MetricBudget.Internal.IMetricBudgetTelemetryClient)">
+            <summary>Replaces the client so tests can inspect signal requests without touching the shared client.</summary>
         </member>
         <member name="T:KeelMatrix.MetricBudget.MetricBudgetBudget">
             <summary>

@@ -17,7 +17,7 @@ cardinality production can produce, and it is not an observability-cost estimate
   - `Internal/MetricBudgetState.cs` and `Internal/InstrumentAccount.cs` - the single writer path for every counter,
     flag, and map.
   - `Internal/ReportBuilder.cs` - the outcome ladder; nothing-verified must never become a pass.
-  - `Internal/Telemetry.cs` - the closed field allowlist and the shared telemetry sink.
+  - `Internal/Telemetry.cs` - the small shared-client adapter and test seam.
 - `tests/KeelMatrix.MetricBudget.Tests` - behavior, edge, concurrency, safety, telemetry, ASP.NET Core integration,
   and resource tests. Exercises both target frameworks.
 - `tests/KeelMatrix.MetricBudget.PackageConsumer` - isolated smoke test that consumes the built `.nupkg` from a
@@ -76,14 +76,14 @@ either package-backed consumer. A plain solution build therefore never depends o
   measurement type, meter tags, and instrument tags; `Meter.Scope` is explicitly excluded. Complete retained
   identities expose a privacy-safe `IdentityDiscriminator`; static metadata uses dedicated safety bounds and reports
   rejected dimensions instead of reusing delivered-tag limits.
-- **Telemetry.** Only the allowlisted aggregate fields may ever be attached, activation means a completed
-  verification that observed at least one selected instrument, and telemetry failure must never change a result.
-  Tests, local development, the sample, and the package-consumer smoke test run with
-  `KEELMATRIX_NO_TELEMETRY=1`; `tests.runsettings`, the two program entry points, `docs/DEV.md`, and the package gate
-  enforce the setting. The local `keelmatrix.telemetry.json` override is ignored and untracked; root `.env` files are
-  also not tracked.
-  Telemetry must not contain meter names, instrument names, tag keys, tag values, metric values, URLs, application
-  or repository names, budget text, exception messages, stack traces, or file paths.
+- **Telemetry.** A completed verification that observed at least one selected instrument requests shared activation
+  and heartbeat signals. The product supplies no event fields; the shared client owns opt-out handling, activation
+  deduplication, heartbeat cadence, identity, delivery, and failure handling. Tests, local development, the sample,
+  and the package-consumer smoke test run with `KEELMATRIX_NO_TELEMETRY=1`; `tests.runsettings`, the two program
+  entry points, `docs/DEV.md`, and the package gate enforce the setting. The local `keelmatrix.telemetry.json`
+  override is ignored and untracked; root `.env` files are also not tracked. Telemetry must not contain meter names,
+  instrument names, tag keys, tag values, metric values, URLs, application or repository names, budget text,
+  exception messages, stack traces, or file paths.
 - **Packaging.** The package ships only the library assembly, XML docs, README, icon, license, symbols, and
   SourceLink. No probe, test, sample, generated report, or local-only file may be packed.
 

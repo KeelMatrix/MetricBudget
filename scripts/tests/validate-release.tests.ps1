@@ -58,6 +58,8 @@ function Write-Changelog {
 }
 
 function Reset-Fixtures {
+    param([string] $Version = "0.1.0")
+
     foreach ($relativePath in @(
         "Directory.Build.props",
         "Directory.Packages.props",
@@ -73,6 +75,27 @@ function Reset-Fixtures {
         $destination = Join-Path $testRoot $relativePath
         New-Item -ItemType Directory -Path ([IO.Path]::GetDirectoryName($destination)) -Force | Out-Null
         Copy-Item -LiteralPath $source -Destination $destination -Force
+    }
+
+    $propsPath = Join-Path $testRoot "Directory.Build.props"
+    $props = [IO.File]::ReadAllText($propsPath) -replace '<Version>[^<]+</Version>', "<Version>$Version</Version>"
+    [IO.File]::WriteAllText($propsPath, $props, $utf8NoBom)
+
+    $projectPath = Join-Path $testRoot "src/KeelMatrix.MetricBudget/KeelMatrix.MetricBudget.csproj"
+    $project = [IO.File]::ReadAllText($projectPath)
+    $project = $project -replace '<AssemblyVersion>[^<]+</AssemblyVersion>', ("<AssemblyVersion>" + $Version + ".0</AssemblyVersion>")
+    $project = $project -replace '<FileVersion>[^<]+</FileVersion>', ("<FileVersion>" + $Version + ".0</FileVersion>")
+    [IO.File]::WriteAllText($projectPath, $project, $utf8NoBom)
+
+    $packagesPath = Join-Path $testRoot "Directory.Packages.props"
+    $packages = [IO.File]::ReadAllText($packagesPath)
+    $packages = $packages -replace '(?<=<PackageVersion Include="KeelMatrix\.MetricBudget" Version=")\[[^]]+\](?=" />)', "[$Version]"
+    [IO.File]::WriteAllText($packagesPath, $packages, $utf8NoBom)
+
+    foreach ($readmePath in @("README.md", "src/KeelMatrix.MetricBudget/README.md")) {
+        $path = Join-Path $testRoot $readmePath
+        $readme = [IO.File]::ReadAllText($path) -replace '(?<=dotnet add package KeelMatrix\.MetricBudget --version )[^\s`]+', $Version
+        [IO.File]::WriteAllText($path, $readme, $utf8NoBom)
     }
 }
 

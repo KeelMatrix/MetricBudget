@@ -89,7 +89,7 @@ if (-not [string]::IsNullOrWhiteSpace($Tag))
 {
     if ($Tag -notmatch '^v(?<version>\d+\.\d+\.\d+)$')
     {
-        Fail "Tag format mismatch: '$Tag' must match v<major>.<minor>.<patch>, for example v0.1.0."
+        Fail "Tag format mismatch: '$Tag' must match v<major>.<minor>.<patch>, for example v0.1.1."
     }
 
     $tagVersion = $Matches.version

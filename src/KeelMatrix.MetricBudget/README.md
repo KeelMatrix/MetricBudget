@@ -7,7 +7,7 @@ observability backend.
 ## Install
 
 ```text
-dotnet add package KeelMatrix.MetricBudget --version 0.1.0
+dotnet add package KeelMatrix.MetricBudget --version 0.1.1
 ```
 
 The package has no OpenTelemetry dependency. It works with libraries that emit `System.Diagnostics.Metrics`
@@ -76,8 +76,8 @@ and tag keys, but never prints tag or metric values.
 ## Supported targets
 
 The package ships `net8.0` and `netstandard2.0` assets. The repository verifies the latter through a .NET Framework
-`net472` host using `System.Diagnostics.DiagnosticSource` 8.0.1. Core verification is offline; the package's optional
-anonymous telemetry and opt-out rules are documented in
+`net472` host using `System.Diagnostics.DiagnosticSource` 8.0.1. Core verification is offline; the package's shared
+activation eligibility and privacy boundary are documented in
 [privacy-and-telemetry.md](https://github.com/KeelMatrix/MetricBudget/blob/main/docs/privacy-and-telemetry.md).
 
 ## Documentation
@@ -89,7 +89,7 @@ anonymous telemetry and opt-out rules are documented in
 - [troubleshooting.md](https://github.com/KeelMatrix/MetricBudget/blob/main/docs/troubleshooting.md) - recurring
   outcomes and diagnostic guidance.
 - [privacy-and-telemetry.md](https://github.com/KeelMatrix/MetricBudget/blob/main/docs/privacy-and-telemetry.md) -
-  report data boundary and telemetry behavior.
+  report data boundary and shared telemetry behavior.
 - [DEV.md](https://github.com/KeelMatrix/MetricBudget/blob/main/docs/DEV.md) - repository validation commands.
 
 Source and the full documentation set are available at

@@ -157,7 +157,7 @@ public sealed class MetricBudgetSession : IDisposable
         if (completed.ObservedInstrumentCount > 0)
         {
             // Activation means a completed verification that observed at least one selected instrument.
-            MetricBudgetTelemetry.ReportCompleted(MetricBudgetTelemetrySignal.Create(completed));
+            MetricBudgetTelemetry.ReportCompleted();
         }
 
         return completed;

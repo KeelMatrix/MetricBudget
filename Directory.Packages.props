@@ -10,7 +10,7 @@
     <PackageVersion Include="KeelMatrix.Telemetry" Version="[0.1.1]" />
 
     <!-- Consumed only by the isolated package-consumer smoke test and package-backed sample. -->
-    <PackageVersion Include="KeelMatrix.MetricBudget" Version="[0.1.0]" />
+    <PackageVersion Include="KeelMatrix.MetricBudget" Version="[0.1.1]" />
 
     <!-- Build-only dependencies: API baselines, SourceLink, and the test toolchain. -->
     <PackageVersion Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" Version="3.3.4" />
