@@ -16,11 +16,11 @@
     <!-- The SDK defaults Authors to the assembly name, so the brand identity is set explicitly. -->
     <Authors>KeelMatrix</Authors>
     <Description>Verify observed metric cardinality in .NET tests and CI. Observe the metric series the exercised workload actually emits, count the distinct values each tag key produced, and fail when an instrument exceeds an explicit observed-series or per-tag distinct-value budget.</Description>
-    <PackageTags>metrics;cardinality;opentelemetry;system-diagnostics-metrics;testing;ci;observability</PackageTags>
+    <PackageTags>metrics;cardinality;opentelemetry;system-diagnostics-metrics;testing;ci;observability;keelmatrix-public-product;keelmatrix-primary</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageIcon>icon.png</PackageIcon>
-    <PackageProjectUrl>https://github.com/KeelMatrix/MetricBudget#readme</PackageProjectUrl>
+    <PackageProjectUrl>https://github.com/KeelMatrix/MetricBudget</PackageProjectUrl>
   </PropertyGroup>
 
   <ItemGroup>

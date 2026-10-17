@@ -125,6 +125,10 @@ jobs:
               throw "Resolved .NET SDK '$resolved' does not match the global.json pin '$expected'."
           }
 
+      - name: Test website package metadata contract
+        shell: pwsh
+        run: pwsh -NoProfile -File scripts/tests/validate-website-metadata.tests.ps1
+
       - name: Assert release telemetry opt-out
         shell: pwsh
         run: |

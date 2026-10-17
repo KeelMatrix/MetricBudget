@@ -13,6 +13,8 @@ dotnet restore KeelMatrix.MetricBudget.sln --configfile NuGet.config --force-eva
 dotnet build KeelMatrix.MetricBudget.sln -c Release --no-restore
 dotnet test tests/KeelMatrix.MetricBudget.Tests/KeelMatrix.MetricBudget.Tests.csproj -c Release --framework net8.0 --no-build --no-restore
 dotnet test tests/KeelMatrix.MetricBudget.Tests/KeelMatrix.MetricBudget.Tests.csproj -c Release --framework net472 --no-build --no-restore
+pwsh -NoProfile -File scripts/validate-website-metadata.ps1
+pwsh -NoProfile -File scripts/tests/validate-website-metadata.tests.ps1
 dotnet format KeelMatrix.MetricBudget.sln --verify-no-changes --no-restore
 pwsh -NoProfile -File scripts/tests/verify-package.tests.ps1
 ```
@@ -43,9 +45,11 @@ shell that invokes `dotnet`, or use the equivalent process-environment setting o
 `.github/workflows/ci.yml` runs for pushes to `main`, pull requests targeting `main`, and manual dispatches. Its
 matrix covers `windows-latest` and `ubuntu-latest`, and every job sets `KEELMATRIX_NO_TELEMETRY=1`. Each matrix leg
 restores with the committed `NuGet.config`, builds the solution in Release, runs the vulnerability-gate regressions
-and `net8.0` tests, verifies formatting, and runs `scripts/verify-package.ps1`. The package gate packs the library, inspects both archives, runs
-the clean-cache package-consumer and sample smoke tests, and audits transitive dependencies. Windows additionally
-runs the `net472` test host against the `netstandard2.0` asset; that host is not available on Linux.
+and `net8.0` tests, runs the website metadata regressions, verifies formatting, and runs
+`scripts/verify-package.ps1`. The package gate enforces the repository manifest and source tags, packs the library,
+inspects both archives, runs the clean-cache package-consumer and sample smoke tests, and audits transitive
+dependencies. Windows additionally runs the `net472` test host against the `netstandard2.0` asset; that host is
+not available on Linux.
 
 ## Closed documentation guard
 
@@ -92,7 +96,8 @@ text together with its deliberately approved snapshots. For a normal release ver
 release version `0.1.0`, that validator also requires `PublicAPI.Unshipped.txt` to be header-only and rejects
 substantive content under `Unreleased`. The tag and manual-dispatch release paths pass through this same validator,
 and `scripts/tests/validate-release.tests.ps1` covers the positive and negative release-contract controls. Ordinary
-test runs never regenerate snapshots.
+test runs never regenerate snapshots. Both CI and the release validation job run the website metadata regressions;
+the package gate checks evaluated source metadata and the packed archive tags, project URL, and README metadata.
 
 ## Development evidence
 

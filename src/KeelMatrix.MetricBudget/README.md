@@ -1,8 +1,8 @@
 # KeelMatrix.MetricBudget
 
-Catch high-cardinality .NET metrics in tests and CI. `KeelMatrix.MetricBudget` observes the metric series and tag
-values emitted by the workload you run and checks them against explicit budgets, without a collector, exporter, or
-observability backend.
+Verify observed metric cardinality in .NET tests and CI. `KeelMatrix.MetricBudget` observes the metric series and tag
+values emitted by the workload you run and checks them against explicit observed-series or per-tag distinct-value
+budgets, without a collector, exporter, or observability backend.
 
 ## Install
 

@@ -71,6 +71,10 @@ jobs:
           }
           Write-Output "SDK_VERSION_CHECK=PASS"
 
+      - name: Test website package metadata contract
+        shell: pwsh
+        run: pwsh -NoProfile -File scripts/tests/validate-website-metadata.tests.ps1
+
       - name: Assert CI telemetry opt-out
         shell: pwsh
         run: |

@@ -2,7 +2,7 @@
 
 Verify observed metric cardinality in .NET tests and CI. Run your normal workload, observe the metric series it
 actually emits and how many distinct values each tag carried, and fail when an instrument identity exceeds an explicit
-observed-series or per-instrument-identity distinct-value budget - without a collector, exporter, or observability backend.
+observed-series or per-tag distinct-value budget - without a collector, exporter, or observability backend.
 
 The package is `KeelMatrix.MetricBudget`.
 

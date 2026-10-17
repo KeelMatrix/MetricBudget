@@ -237,7 +237,7 @@ function Invoke-Dotnet {
 function Get-RepositoryCommit {
     param([Parameter(Mandatory = $true)][string] $RepositoryRoot)
 
-    $output = @(& git -C $RepositoryRoot rev-parse --verify 'HEAD^{commit}' 2>&1)
+    $output = @(& git -C $RepositoryRoot rev-parse --verify HEAD 2>&1)
     if ($LASTEXITCODE -ne 0)
     {
         throw "Could not resolve the package repository HEAD commit: $($output -join ' ')"
@@ -284,7 +284,7 @@ function Get-VerifiedMainCommit {
         throw "Could not fetch authoritative origin/main for package provenance: $($fetchOutput -join ' ')"
     }
 
-    $mainOutput = @(& git -C $RepositoryRoot rev-parse --verify 'refs/remotes/origin/main^{commit}' 2>&1)
+    $mainOutput = @(& git -C $RepositoryRoot rev-parse --verify refs/remotes/origin/main 2>&1)
     if ($LASTEXITCODE -ne 0)
     {
         throw "Could not resolve the fetched authoritative origin/main commit: $($mainOutput -join ' ')"
@@ -523,10 +523,10 @@ function Assert-PackageMetadata {
     Assert-Equal (Get-NuspecValue $metadata "authors") "KeelMatrix" "Package authors mismatch."
     Assert-Equal (Get-NuspecValue $metadata "license") "MIT" "Package license mismatch."
     Assert-Equal (Get-NuspecValue $metadata "description") "Verify observed metric cardinality in .NET tests and CI. Observe the metric series the exercised workload actually emits, count the distinct values each tag key produced, and fail when an instrument exceeds an explicit observed-series or per-tag distinct-value budget." "Package description mismatch."
-    Assert-Equal (Get-NuspecValue $metadata "tags") "metrics cardinality opentelemetry system-diagnostics-metrics testing ci observability" "Package tags mismatch."
+    Assert-Equal (Get-NuspecValue $metadata "tags") "metrics cardinality opentelemetry system-diagnostics-metrics testing ci observability keelmatrix-public-product keelmatrix-primary" "Package tags mismatch."
     Assert-Equal (Get-NuspecValue $metadata "readme") "README.md" "Package README metadata mismatch."
     Assert-Equal (Get-NuspecValue $metadata "icon") "icon.png" "Package icon metadata mismatch."
-    Assert-Equal (Get-NuspecValue $metadata "projectUrl") "https://github.com/KeelMatrix/MetricBudget#readme" "Package project URL mismatch."
+    Assert-Equal (Get-NuspecValue $metadata "projectUrl") "https://github.com/KeelMatrix/MetricBudget" "Package project URL mismatch."
     $repository = $metadata.SelectSingleNode("./*[local-name()='repository']")
     if ($null -eq $repository)
     {
@@ -585,9 +585,9 @@ function Assert-SymbolPackageMetadata {
     $metadata = Get-NuspecMetadata $ArchivePath
     Assert-Equal (Get-NuspecValue $metadata "id") "KeelMatrix.MetricBudget" "Symbols package id mismatch."
     Assert-Equal (Get-NuspecValue $metadata "version") $ExpectedVersion "Symbols package version mismatch."
-    Assert-Equal (Get-NuspecValue $metadata "projectUrl") "https://github.com/KeelMatrix/MetricBudget#readme" "Symbols package project URL mismatch."
+    Assert-Equal (Get-NuspecValue $metadata "projectUrl") "https://github.com/KeelMatrix/MetricBudget" "Symbols package project URL mismatch."
     Assert-Equal (Get-NuspecValue $metadata "description") "Verify observed metric cardinality in .NET tests and CI. Observe the metric series the exercised workload actually emits, count the distinct values each tag key produced, and fail when an instrument exceeds an explicit observed-series or per-tag distinct-value budget." "Symbols package description mismatch."
-    Assert-Equal (Get-NuspecValue $metadata "tags") "metrics cardinality opentelemetry system-diagnostics-metrics testing ci observability" "Symbols package tags mismatch."
+    Assert-Equal (Get-NuspecValue $metadata "tags") "metrics cardinality opentelemetry system-diagnostics-metrics testing ci observability keelmatrix-public-product keelmatrix-primary" "Symbols package tags mismatch."
 
     $packageType = $metadata.SelectSingleNode("./*[local-name()='packageTypes']/*[local-name()='packageType']")
     if ($null -eq $packageType)
@@ -1165,6 +1165,8 @@ if ($FunctionsOnly)
 {
     return
 }
+
+& (Join-Path $PSScriptRoot "validate-website-metadata.ps1")
 
 $expectedCommit = if ($RequireMainProvenance)
 {

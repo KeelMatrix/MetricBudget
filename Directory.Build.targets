@@ -7,7 +7,7 @@
     <RepositoryUrl Condition="'$(RepositoryUrl)' == ''">https://github.com/KeelMatrix/MetricBudget</RepositoryUrl>
     <RepositoryType Condition="'$(RepositoryType)' == ''">git</RepositoryType>
     <PackageLicenseExpression Condition="'$(PackageLicenseExpression)' == ''">MIT</PackageLicenseExpression>
-    <PackageProjectUrl Condition="'$(PackageProjectUrl)' == ''">https://github.com/KeelMatrix/MetricBudget#readme</PackageProjectUrl>
+    <PackageProjectUrl Condition="'$(PackageProjectUrl)' == ''">https://github.com/KeelMatrix/MetricBudget</PackageProjectUrl>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
     <IncludeSymbols>true</IncludeSymbols>
