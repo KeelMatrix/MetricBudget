@@ -62,12 +62,27 @@ jobs:
       - name: Verify resolved .NET SDK
         shell: pwsh
         run: |
-          $expected = ([string](Get-Content -Raw global.json | ConvertFrom-Json).sdk.version).Trim()
+          $sdk = Get-Content -Raw global.json | ConvertFrom-Json
+          $expected = ([string]$sdk.sdk.version).Trim()
           $resolved = (& dotnet --version).Trim()
           Write-Output "Resolved .NET SDK: $resolved"
           Write-Output "global.json SDK pin: $expected"
-          if ($resolved -ne $expected) {
-              throw "Resolved .NET SDK '$resolved' does not match the global.json pin '$expected'."
+          $expectedVersion = [version]::Parse($expected)
+          $resolvedVersion = [version]::Parse($resolved)
+          $isCompatible = switch ([string]$sdk.sdk.rollForward) {
+              "disable" { $resolvedVersion -eq $expectedVersion; break }
+              "latestPatch" {
+                  $sameFeatureBand = [math]::Floor($resolvedVersion.Build / 100) -eq [math]::Floor($expectedVersion.Build / 100)
+                  ($resolvedVersion.Major -eq $expectedVersion.Major) -and
+                      ($resolvedVersion.Minor -eq $expectedVersion.Minor) -and
+                      $sameFeatureBand -and
+                      ($resolvedVersion -ge $expectedVersion)
+                  break
+              }
+              default { throw "Unsupported global.json SDK rollForward policy '$($sdk.sdk.rollForward)'." }
+          }
+          if (-not $isCompatible) {
+              throw "Resolved .NET SDK '$resolved' is outside the global.json version '$expected' and rollForward policy '$($sdk.sdk.rollForward)'."
           }
           Write-Output "SDK_VERSION_CHECK=PASS"
 
