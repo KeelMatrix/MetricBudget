@@ -535,7 +535,8 @@ function Assert-PackageMetadata {
 
     Assert-Equal $repository.GetAttribute("type") "git" "Repository type mismatch."
     Assert-Equal $repository.GetAttribute("url") "https://github.com/KeelMatrix/MetricBudget" "Repository URL mismatch."
-    Assert-Equal $repository.GetAttribute("branch") "refs/heads/main" "Repository branch mismatch."
+    $expectedRepositoryBranch = if ($RequireMainProvenance) { "refs/heads/main" } else { Get-RepositoryBranch -RepositoryRoot $repositoryRoot }
+    Assert-Equal $repository.GetAttribute("branch") $expectedRepositoryBranch "Repository branch mismatch."
     Assert-Equal $repository.GetAttribute("commit") $ExpectedCommit "Repository commit mismatch."
 
     $dependencies = $metadata.SelectSingleNode("./*[local-name()='dependencies']")
@@ -604,7 +605,8 @@ function Assert-SymbolPackageMetadata {
 
     Assert-Equal $repository.GetAttribute("type") "git" "Symbols repository type mismatch."
     Assert-Equal $repository.GetAttribute("url") "https://github.com/KeelMatrix/MetricBudget" "Symbols repository URL mismatch."
-    Assert-Equal $repository.GetAttribute("branch") "refs/heads/main" "Symbols repository branch mismatch."
+    $expectedRepositoryBranch = if ($RequireMainProvenance) { "refs/heads/main" } else { Get-RepositoryBranch -RepositoryRoot $repositoryRoot }
+    Assert-Equal $repository.GetAttribute("branch") $expectedRepositoryBranch "Symbols repository branch mismatch."
     Assert-Equal $repository.GetAttribute("commit") $ExpectedCommit "Symbols repository commit mismatch."
 }
 
